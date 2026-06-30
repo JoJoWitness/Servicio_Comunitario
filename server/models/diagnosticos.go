@@ -1,0 +1,135 @@
+package models
+
+import (
+	"context"
+	"log"
+	"server/config"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type Diagnosticos struct {
+	Id          int    `json:"id"`
+	Diagnostico string `json:"diagnostico"`
+	Resumen     string `json:"resumen"`
+}
+
+func (u *Diagnosticos) Get(db *pgxpool.Pool) error {
+	query := `
+		SELECT 
+			diagnostico,
+			resumen
+		FROM 
+		    diagnosticos 
+		WHERE 
+		    id = @id
+	`
+
+	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	if err != nil {
+		log.Printf("Error getting diagnostico: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (u *Diagnosticos) Create(db *pgxpool.Pool) error {
+	query := `
+	INSERT INTO Diagnosticos 
+		(diagnostico, resumen) 
+	VALUES 
+		(@diagnostico, @resumen);
+	`
+	args := pgx.NamedArgs{
+		"diagnostico": u.Diagnostico,
+		"resumen":     u.Resumen,
+	}
+
+	_, err := db.Exec(context.Background(), query, args)
+	if err != nil {
+		log.Printf("Error creating diagostico: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (u *Diagnosticos) Update(db *pgxpool.Pool) error {
+	query := `
+		UPDATE 
+			Diagnosticos
+		SET 
+			diagnostico = @diagnostico,
+			resumen = @resumen
+		WHERE 
+			id = @id;
+	`
+	args := pgx.NamedArgs{
+		"id":          u.Id,
+		"diagnostico": u.Diagnostico,
+		"resumen":     u.Resumen,
+	}
+
+	_, err := db.Exec(context.Background(), query, args)
+	if err != nil {
+		log.Printf("Error updating diagnostico: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (u *Diagnosticos) Delete(db *pgxpool.Pool) error {
+	query := `
+		DELETE FROM
+			Diagnosticos
+		WHERE 
+			id = @id;
+	`
+
+	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	if err != nil {
+		log.Printf("Error deleting diagnostico: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func GetAllDiagnosticos() ([]Diagnosticos, error) {
+	query := `	
+		SELECT 
+			id,
+			diagnostico,
+			resumen
+		FROM 
+		    diagnosticos;
+	`
+
+	rows, err := config.PsqlDB.Query(context.Background(), query)
+	if err != nil {
+		log.Printf("Error getting all diagnosticos: %v\n", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var diagnosticos []Diagnosticos
+	for rows.Next() {
+		var u Diagnosticos
+		err := rows.Scan(&u.Id, &u.Diagnostico, &u.Resumen)
+		if err != nil {
+			log.Printf("Error scanning diagnostico row: %v\n", err)
+			return nil, err
+		}
+		diagnosticos = append(diagnosticos, u)
+	}
+
+	if rows.Err() != nil {
+		log.Printf("Error iterating diagnostico rows: %v\n", rows.Err())
+		return nil, rows.Err()
+	}
+
+	return diagnosticos, nil
+}

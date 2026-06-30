@@ -1,0 +1,7 @@
+.git
+tmp
+app/tmp
+build-errors.log
+main
+.env
+*.md

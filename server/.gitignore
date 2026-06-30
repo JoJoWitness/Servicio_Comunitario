@@ -1,0 +1,7 @@
+.env
+
+build-errors.log
+main
+
+tmp
+app/tmp
