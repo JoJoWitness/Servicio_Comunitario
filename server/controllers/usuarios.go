@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"server/config"
 	"server/controllers/auth"
-	notas2 "server/models/notas"
 	users2 "server/models/usuarios"
 	"server/utils"
 
@@ -42,6 +41,36 @@ func LoadSampleUsers() {
 		}
 
 	}
+}
+func CreateUser(w http.ResponseWriter, r *http.Request) {
+	var user users2.Usuarios
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		log.Printf("Error decoding request body: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Request body is not valid JSON"))
+		return
+	}
+
+	hashedPassword, err := utils.HashPassword(user.Contrasena)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Something went wrong"))
+		return
+	}
+
+	user.Contrasena = hashedPassword
+
+	err = user.Create(config.PsqlDB)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to create user"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Add("Status-Code", "201")
+	json.NewEncoder(w).Encode(user)
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
@@ -177,73 +206,4 @@ func GetUserData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
 	json.NewEncoder(w).Encode(userData)
-}
-
-func GetNotasFromMedic(w http.ResponseWriter, r *http.Request) {
-	session, err := auth.GetSessionCookie(w, r)
-	if err != nil {
-		log.Println("Unable to get cookie ", err)
-		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
-		return
-	}
-
-	var notas []notas2.Notas
-	notas, err = notas2.GetNotasFromMedic(session.UserID)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			log.Printf("Error no notas found: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("No notas found"))
-			return
-		}
-		log.Printf("Error getting notas: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Unable to get notas"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(notas)
-
-}
-
-func GetNotasFromMedicDates(w http.ResponseWriter, r *http.Request) {
-
-	session, err := auth.GetSessionCookie(w, r)
-	if err != nil {
-		log.Println("Unable to get cookie ", err)
-		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
-		return
-	}
-
-	var userNotasDates users2.UsuarioNotasDates
-	if err := json.NewDecoder(r.Body).Decode(&userNotasDates); err != nil {
-		log.Printf("Error decoding request body: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Request body is not valid JSON"))
-		return
-	}
-
-	userID := session.UserID
-	from := userNotasDates.From
-	to := userNotasDates.To
-
-	notas, err := notas2.GetNotasFromMedicDates(userID, from, to)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			log.Printf("Error no notas found: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("No notas found"))
-			return
-		}
-		log.Printf("Error getting notas: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Unable to get notas"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(notas)
 }

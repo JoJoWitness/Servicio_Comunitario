@@ -3,16 +3,12 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"server/config"
-	notas2 "server/models/notas"
 	models "server/models/pacientes"
-	users2 "server/models/usuarios"
 
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5"
 )
 
 func GetPaciente(w http.ResponseWriter, r *http.Request) {
@@ -134,65 +130,4 @@ func GetAllPacientes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
 	json.NewEncoder(w).Encode(pacientes)
-}
-
-func GetNotasFromPaciente(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var paciente models.Pacientes
-	paciente.ID = id
-
-	var notas []notas2.Notas
-	notas, err := notas2.GetNotasFromPaciente(paciente.ID)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			log.Printf("Error no notas found: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("No notas found"))
-			return
-		}
-		log.Printf("Error getting notas: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Unable to get notas"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(notas)
-
-}
-
-func GetNotasFromPacienteDates(w http.ResponseWriter, r *http.Request) {
-
-	var userNotasDates users2.UsuarioNotasDates
-	if err := json.NewDecoder(r.Body).Decode(&userNotasDates); err != nil {
-		log.Printf("Error decoding request body: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Request body is not valid JSON"))
-		return
-	}
-
-	userID := userNotasDates.ID
-	from := userNotasDates.From
-	to := userNotasDates.To
-
-	notas, err := notas2.GetNotasFromPacienteDates(userID, from, to)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			log.Printf("Error no notas found: %v", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("No notas found"))
-			return
-		}
-		log.Printf("Error getting notas: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Unable to get notas"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(notas)
 }

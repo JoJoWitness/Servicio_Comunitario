@@ -6,16 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	"server/controllers"
 	"server/controllers/auth"
-	tracking "server/controllers/ws"
 
 	"github.com/gorilla/mux"
 )
 
 func Init(router *mux.Router) {
 	api := router.PathPrefix("").Subrouter()
-	ws := router.PathPrefix("/ws").Subrouter()
 	authentication := router.PathPrefix("/auth/").Subrouter()
 
 	//Middlewares
@@ -29,19 +26,12 @@ func Init(router *mux.Router) {
 	// authentication.HandleFunc("/logout", auth.Logout) //TODO
 
 	// Rest API routes
-	api.PathPrefix("/users").Handler(UserRoutes())      //Done (1)
-	api.PathPrefix("/routes").Handler(RouteRoutes())    //Done
-	api.PathPrefix("/units").Handler(UnitsRoutes())     //Done
-	api.PathPrefix("/records").Handler(RecordsRoutes()) //Done (1)
-	api.PathPrefix("/stops").Handler(StopsRoutes())     //Done
-
-	// Websocket routes
-	hub := tracking.NewHub()
-	go hub.Run()
-	ws.Handle("/token", auth.Users(http.HandlerFunc(controllers.TokenWebsocket)))
-	ws.HandleFunc("/tracking/{token}", func(w http.ResponseWriter, r *http.Request) {
-		tracking.ServerWs(hub, w, r)
-	})
+	api.PathPrefix("/usuarios").Handler(UserRoutes())
+	api.PathPrefix("/pacientes").Handler(PacientesRoutes())
+	api.PathPrefix("/notas").Handler(NotasRoutes())
+	api.PathPrefix("/diagnosticos").Handler(DiagnosticosRoutes())
+	api.PathPrefix("/procedimientos").Handler(ProcedimientosRoutes())
+	api.PathPrefix("/tecnicas").Handler(TecnicasRoutes())
 
 	// Health check
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

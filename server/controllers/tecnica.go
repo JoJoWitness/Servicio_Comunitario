@@ -125,7 +125,7 @@ func DeleteTecnica(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("tecnica deleted"))
 }
 
-func GetAlltecnicas(w http.ResponseWriter, r *http.Request) {
+func GetAllTecnicas(w http.ResponseWriter, r *http.Request) {
 	tecnicas, err := models.GetAllTecnicas()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

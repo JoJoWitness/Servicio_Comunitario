@@ -102,7 +102,7 @@ func UpdateProcedimiento(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(procedimiento)
 }
 
-func Deleteprocedimiento(w http.ResponseWriter, r *http.Request) {
+func DeleteProcedimiento(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
@@ -125,7 +125,7 @@ func Deleteprocedimiento(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("procedimiento deleted"))
 }
 
-func GetAllprocedimientos(w http.ResponseWriter, r *http.Request) {
+func GetAllProcedimientos(w http.ResponseWriter, r *http.Request) {
 	procedimientos, err := models.GetAllProcedimientos()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

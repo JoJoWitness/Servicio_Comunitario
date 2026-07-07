@@ -125,7 +125,7 @@ func DeleteDiagnostico(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("diagnostico deleted"))
 }
 
-func GetAlldiagnosticos(w http.ResponseWriter, r *http.Request) {
+func GetAllDiagnosticos(w http.ResponseWriter, r *http.Request) {
 	diagnosticos, err := models.GetAllDiagnosticos()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
