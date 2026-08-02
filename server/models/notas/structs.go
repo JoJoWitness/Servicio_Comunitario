@@ -23,5 +23,5 @@ type Notas struct {
 	ID_Paciente            int                 `json:"Id_paciente"`
 	Medico_Encargado       string              `json:"medico_encargado"`
 	Eliminado              bool                `json:"eliminado"`
-	Medicos                []usuarios.Usuarios `json:"mdicos"`
+	Medicos                []usuarios.Usuarios `json:"medicos"`
 }

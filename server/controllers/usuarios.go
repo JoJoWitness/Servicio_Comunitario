@@ -9,6 +9,8 @@ import (
 	users2 "server/models/usuarios"
 	"server/utils"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -60,6 +62,16 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user.Contrasena = hashedPassword
 
+	if user.ID == "" {
+		id, err := uuid.NewV7()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Something went wrong"))
+			return
+		}
+		user.ID = id.String()
+	}
+
 	err = user.Create(config.PsqlDB)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -74,17 +86,13 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
-	session, err := auth.GetSessionCookie(w, r)
-	if err != nil {
-		log.Println("Unable to get cookie ", err)
-		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
-		return
-	}
+	vars := mux.Vars(r)
+	id := vars["id"]
 
 	var user users2.Usuarios
-	user.ID = session.UserID
+	user.ID = id
 
-	err = user.Get(config.PsqlDB)
+	err := user.Get(config.PsqlDB)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			log.Printf("Error no user found: %v", err)
@@ -104,12 +112,8 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
-	session, err := auth.GetSessionCookie(w, r)
-	if err != nil {
-		log.Println("Unable to get cookie ", err)
-		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
-		return
-	}
+	vars := mux.Vars(r)
+	id := vars["id"]
 
 	var user users2.Usuarios
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -119,14 +123,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.ID = session.UserID
-
-	err = user.Get(config.PsqlDB)
-	if err == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("User does not exist"))
-		return
-	}
+	user.ID = id
 
 	hashedPassword, err := utils.HashPassword(user.Contrasena)
 	if err != nil {
@@ -150,16 +147,12 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	session, err := auth.GetSessionCookie(w, r)
-	if err != nil {
-		log.Println("Unable to get cookie ", err)
-		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
-		return
-	}
+	vars := mux.Vars(r)
+	id := vars["id"]
 
 	var user users2.Usuarios
-	user.ID = session.UserID
-	err = user.Delete(config.PsqlDB)
+	user.ID = id
+	err := user.Delete(config.PsqlDB)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to delete user"))

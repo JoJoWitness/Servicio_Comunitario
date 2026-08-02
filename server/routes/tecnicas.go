@@ -14,11 +14,11 @@ func TecnicasRoutes() http.Handler {
 	p := r.PathPrefix("").Subrouter()
 	p.Use(auth.Admins)
 
-	r.HandleFunc("/tecnicas/{id}", controllers.GetTecnica).Methods("GET") // TODO: retrieve data from session
+	r.HandleFunc("/tecnicas", controllers.GetAllTecnicas).Methods("GET")
 	r.HandleFunc("/tecnicas", controllers.CreateTecnica).Methods("POST")
-	r.HandleFunc("/tecnicas", controllers.UpdateTecnica).Methods("PUT")
-	r.HandleFunc("/tecnicas", controllers.DeleteTecnica).Methods("DELETE")
-	r.HandleFunc("/tecnicas", controllers.GetAllTecnicas).Methods("GET") //TODO Discuss if this is necessary
+	r.HandleFunc("/tecnicas/{id}", controllers.GetTecnica).Methods("GET")
+	r.HandleFunc("/tecnicas/{id}", controllers.UpdateTecnica).Methods("PUT")
+	r.HandleFunc("/tecnicas/{id}", controllers.DeleteTecnica).Methods("DELETE")
 
 	return r
 }

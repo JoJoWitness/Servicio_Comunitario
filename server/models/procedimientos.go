@@ -17,16 +17,17 @@ type Procedimientos struct {
 
 func (u *Procedimientos) Get(db *pgxpool.Pool) error {
 	query := `
-		SELECT 
+		SELECT
 			intervencion,
 			resumen
-		FROM 
-		    Procedimientos 
-		WHERE 
+		FROM
+		    Procedimientos
+		WHERE
 		    id = @id
 	`
 
-	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	err := row.Scan(&u.Intervencion, &u.Resumen)
 	if err != nil {
 		log.Printf("Error getting intervencion: %v\n", err)
 		return err

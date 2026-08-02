@@ -16,15 +16,16 @@ type Tecnica struct {
 
 func (u *Tecnica) Get(db *pgxpool.Pool) error {
 	query := `
-		SELECT 
+		SELECT
 			tecnica
-		FROM 
-		    tecnica 
-		WHERE 
+		FROM
+		    tecnica
+		WHERE
 		    id = @id
 	`
 
-	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	err := row.Scan(&u.Tecnica)
 	if err != nil {
 		log.Printf("Error getting technique: %v\n", err)
 		return err
@@ -55,11 +56,11 @@ func (u *Tecnica) Create(db *pgxpool.Pool) error {
 
 func (u *Tecnica) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
+		UPDATE
 			tecnica
-		SET 
-			tecnica = @tecnica,
-		WHERE 
+		SET
+			tecnica = @tecnica
+		WHERE
 			id = @id;
 	`
 	args := pgx.NamedArgs{

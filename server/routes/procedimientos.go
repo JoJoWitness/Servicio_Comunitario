@@ -14,11 +14,11 @@ func ProcedimientosRoutes() http.Handler {
 	p := r.PathPrefix("").Subrouter()
 	p.Use(auth.Admins)
 
-	r.HandleFunc("/procedimientos/{id}", controllers.GetProcedimiento).Methods("GET") // TODO: retrieve data from session
+	r.HandleFunc("/procedimientos", controllers.GetAllProcedimientos).Methods("GET")
 	r.HandleFunc("/procedimientos", controllers.CreateProcedimiento).Methods("POST")
-	r.HandleFunc("/procedimientos", controllers.UpdateProcedimiento).Methods("PUT")
-	r.HandleFunc("/procedimientos", controllers.DeleteProcedimiento).Methods("DELETE")
-	r.HandleFunc("/procedimientos", controllers.GetAllProcedimientos).Methods("GET") //TODO Discuss if this is necessary
+	r.HandleFunc("/procedimientos/{id}", controllers.GetProcedimiento).Methods("GET")
+	r.HandleFunc("/procedimientos/{id}", controllers.UpdateProcedimiento).Methods("PUT")
+	r.HandleFunc("/procedimientos/{id}", controllers.DeleteProcedimiento).Methods("DELETE")
 
 	return r
 }

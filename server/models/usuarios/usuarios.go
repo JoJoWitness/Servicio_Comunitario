@@ -39,7 +39,7 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 	}
 
 	row := db.QueryRow(context.Background(), query, args)
-	err := row.Scan(&u.ID, &u.Nombres, &u.Apellidos, &u.Correo, &u.Rol, &u.Contrasena)
+	err := row.Scan(&u.ID, &u.Correo, &u.Nombres, &u.Apellidos, &u.Rol, &u.Contrasena)
 	if err != nil {
 		log.Printf("Error scanning usuarios: %v", err)
 		return err
@@ -49,13 +49,14 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 
 func (u *Usuarios) Create(db *pgxpool.Pool) error {
 	query := `
-		INSERT INTO users 
-			(correo, nombres, apellidos, rol, contrasena) 
-		VALUES 
-			(@correo, @nombres, @apellidos, @rol, @contrasena)
+		INSERT INTO usuarios
+			(id, correo, nombres, apellidos, rol, contrasena)
+		VALUES
+			(@id, @correo, @nombres, @apellidos, @rol, @contrasena)
 	`
 
 	args := pgx.NamedArgs{
+		"id":         u.ID,
 		"correo":     u.Correo,
 		"nombres":    u.Nombres,
 		"apellidos":  u.Apellidos,
@@ -77,13 +78,12 @@ func (u *Usuarios) Update(db *pgxpool.Pool) error {
 		UPDATE 
 			usuarios
 		SET 
-			correo = @correo, 
+			correo = @correo,
 			nombres = @nombres,
-			apellidos = @apellidos.
+			apellidos = @apellidos,
 			rol = @rol,
 			contrasena = @contrasena
-
-		WHERE 
+		WHERE
 			id = @id;
 	`
 	args := pgx.NamedArgs{
@@ -124,14 +124,14 @@ func (u *Usuarios) Delete(db *pgxpool.Pool) error {
 }
 
 func GetAllMedics() ([]Usuarios, error) {
-	query := `	
-		SELECT 
-			u.name,
-			u.email
-		FROM 
-			users u
+	query := `
+		SELECT
+			u.nombres,
+			u.correo
+		FROM
+			usuarios u
 		WHERE
-			is_deleted = FALSE and u.role = 'medico';
+			u.eliminado = FALSE and u.rol = 'medico';
 	`
 	rows, err := config.PsqlDB.Query(context.Background(), query)
 	if err != nil {
@@ -158,13 +158,13 @@ func GetAllMedics() ([]Usuarios, error) {
 
 func (u *UsuarioData) Get(db *pgxpool.Pool) error {
 	query := `
-		SELECT 
+		SELECT
 			u.nombres,
 			u.apellidos,
 			u.correo,
-			u.rol,
+			u.rol
 		FROM
-			users u
+			usuarios u
 		WHERE
 			u.id = @id;
 	`

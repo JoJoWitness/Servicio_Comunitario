@@ -13,11 +13,10 @@ import (
 func GetNotasFromMedic(id string) ([]Notas, error) {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
+			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intervencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestia, n.id_paciente, n.medico_encargado, n.eliminado
 		FROM notas n
-		JOIN notas ON equipo_quirurgico.id eq = notas.id n
-		JOIN usuarios ON equipo_quirurgico.id_usuario = usuarios.id u
-		WHERE u.id = @id;
+		JOIN equipo_quirurgico eq ON eq.id_nota = n.id
+		WHERE eq.id_usuario = @id;
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id})
@@ -36,6 +35,13 @@ func GetNotasFromMedic(id string) ([]Notas, error) {
 			return records, err
 		}
 		records = append(records, r)
+	}
+
+	for i := range records {
+		records[i].Medicos, err = getMedicos(config.PsqlDB, records[i].ID)
+		if err != nil {
+			return records, err
+		}
 	}
 
 	return records, nil
@@ -44,15 +50,14 @@ func GetNotasFromMedic(id string) ([]Notas, error) {
 func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, error) {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
+			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intervencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestia, n.id_paciente, n.medico_encargado, n.eliminado
 		FROM notas n
-		JOIN notas ON equipo_quirurgico.id eq = notas.id n
-		JOIN usuarios ON equipo_quirurgico.id_usuario = usuarios.id u
-		WHERE u.id = @id
+		JOIN equipo_quirurgico eq ON eq.id_nota = n.id
+		WHERE eq.id_usuario = @id
 		AND n.fecha_comienzo BETWEEN @from AND @to;
 	`
 
-	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id})
+	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id, "from": from, "to": to})
 	if err != nil {
 		log.Printf("\n\nError getting records: %v", err)
 		return nil, err
@@ -70,10 +75,17 @@ func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, e
 		records = append(records, r)
 	}
 
+	for i := range records {
+		records[i].Medicos, err = getMedicos(config.PsqlDB, records[i].ID)
+		if err != nil {
+			return records, err
+		}
+	}
+
 	return records, nil
 }
 
-func GetNotasFromPaciente(id string) ([]Notas, error) {
+func GetNotasFromPaciente(id int) ([]Notas, error) {
 	query := `
 		SELECT
 			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
@@ -99,10 +111,17 @@ func GetNotasFromPaciente(id string) ([]Notas, error) {
 		records = append(records, r)
 	}
 
+	for i := range records {
+		records[i].Medicos, err = getMedicos(config.PsqlDB, records[i].ID)
+		if err != nil {
+			return records, err
+		}
+	}
+
 	return records, nil
 }
 
-func GetNotasFromPacienteDates(id string, from time.Time, to time.Time) ([]Notas, error) {
+func GetNotasFromPacienteDates(id int, from time.Time, to time.Time) ([]Notas, error) {
 	query := `
 		SELECT
 			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
@@ -111,7 +130,7 @@ func GetNotasFromPacienteDates(id string, from time.Time, to time.Time) ([]Notas
 		AND n.fecha_comienzo BETWEEN @from AND @to;
 	`
 
-	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id})
+	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id, "from": from, "to": to})
 	if err != nil {
 		log.Printf("\n\nError getting records: %v", err)
 		return nil, err
@@ -127,6 +146,13 @@ func GetNotasFromPacienteDates(id string, from time.Time, to time.Time) ([]Notas
 			return records, err
 		}
 		records = append(records, r)
+	}
+
+	for i := range records {
+		records[i].Medicos, err = getMedicos(config.PsqlDB, records[i].ID)
+		if err != nil {
+			return records, err
+		}
 	}
 
 	return records, nil

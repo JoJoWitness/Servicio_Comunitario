@@ -1,9 +1,7 @@
 BEGIN;
-    DROP TABLE IF EXISTS public."Equipo_Quirurgico" CASCADE;
-    DROP TABLE IF EXISTS public."Nota_Operatoria" CASCADE;
-    DROP TABLE IF EXISTS public."Diagnosticos" CASCADE;
-    DROP TABLE IF EXISTS public."Procedimientos" CASCADE;
-    DROP TABLE IF EXISTS public."Intervencion" CASCADE;
-    DROP TABLE IF EXISTS public."Usuarios" CASCADE;
-    DROP TABLE IF EXISTS public."Paciente" CASCADE;
+    DROP TABLE IF EXISTS equipo_quirurgico CASCADE;
+    DROP TABLE IF EXISTS notas CASCADE;
+    DROP TABLE IF EXISTS admins CASCADE;
+    DROP TABLE IF EXISTS pacientes CASCADE;
+    DROP TABLE IF EXISTS usuarios CASCADE;
 END;

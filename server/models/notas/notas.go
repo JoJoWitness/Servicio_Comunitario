@@ -3,13 +3,39 @@ package notas
 import (
 	"context"
 	"log"
-	"time"
 
 	"server/config"
+	"server/models/usuarios"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// getMedicos trae el equipo quirúrgico (médicos) de una nota.
+func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
+	query := `
+		SELECT u.id, u.correo, u.nombres, u.apellidos, u.rol
+		FROM equipo_quirurgico eq
+		JOIN usuarios u ON u.id = eq.id_usuario
+		WHERE eq.id_nota = @id;
+	`
+
+	rows, err := db.Query(context.Background(), query, pgx.NamedArgs{"id": notaID})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	medicos := []usuarios.Usuarios{}
+	for rows.Next() {
+		var u usuarios.Usuarios
+		if err := rows.Scan(&u.ID, &u.Correo, &u.Nombres, &u.Apellidos, &u.Rol); err != nil {
+			return nil, err
+		}
+		medicos = append(medicos, u)
+	}
+	return medicos, rows.Err()
+}
 
 func (n *Notas) Get(db *pgxpool.Pool) error {
 	query := `
@@ -23,6 +49,12 @@ func (n *Notas) Get(db *pgxpool.Pool) error {
 	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado)
 	if err != nil {
 		log.Printf("\n\nError getting nota: %v", err)
+		return err
+	}
+
+	n.Medicos, err = getMedicos(db, n.ID)
+	if err != nil {
+		log.Printf("\n\nError getting medicos for nota: %v", err)
 		return err
 	}
 
@@ -53,18 +85,26 @@ func GetAllNotas(db *pgxpool.Pool) ([]Notas, error) {
 		}
 		records = append(records, r)
 	}
+	if err := rows.Err(); err != nil {
+		return records, err
+	}
+
+	for i := range records {
+		records[i].Medicos, err = getMedicos(db, records[i].ID)
+		if err != nil {
+			return records, err
+		}
+	}
 	return records, nil
 }
 
 func CheckNotasDate(id int) error {
-	now := time.Now().UTC()
-	date := now.Format("2006-01-02")
+	query := `SELECT 1 FROM notas WHERE id = @id AND created_at::date = CURRENT_DATE;`
 
-	query := `SELECT * FROM records WHERE id = @id AND date = @date;`
-
-	_, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id, "date": date})
+	var one int
+	err := config.PsqlDB.QueryRow(context.Background(), query, pgx.NamedArgs{"id": id}).Scan(&one)
 	if err != nil {
-		log.Printf("\n\nRecord is not from today: %v", err)
+		log.Printf("\n\nNota is not from today or not found: %v", err)
 		return err
 	}
 	return nil

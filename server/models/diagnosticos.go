@@ -17,16 +17,17 @@ type Diagnosticos struct {
 
 func (u *Diagnosticos) Get(db *pgxpool.Pool) error {
 	query := `
-		SELECT 
+		SELECT
 			diagnostico,
 			resumen
-		FROM 
-		    diagnosticos 
-		WHERE 
+		FROM
+		    diagnosticos
+		WHERE
 		    id = @id
 	`
 
-	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": u.Id})
+	err := row.Scan(&u.Diagnostico, &u.Resumen)
 	if err != nil {
 		log.Printf("Error getting diagnostico: %v\n", err)
 		return err

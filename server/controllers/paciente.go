@@ -100,14 +100,6 @@ func DeletePaciente(w http.ResponseWriter, r *http.Request) {
 	paciente.ID = id
 	err := paciente.Delete(config.PsqlDB)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("param {:id} must be an integer"))
-		return
-	}
-
-	paciente.ID = id
-	err = paciente.Delete(config.PsqlDB)
-	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to delete paciente"))
 		return

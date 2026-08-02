@@ -14,11 +14,11 @@ func PacientesRoutes() http.Handler {
 	p := r.PathPrefix("").Subrouter()
 	p.Use(auth.Admins)
 
-	r.HandleFunc("/pacientes/id/{id}", controllers.GetPaciente).Methods("GET") // TODO: retrieve data from session
+	r.HandleFunc("/pacientes", controllers.GetAllPacientes).Methods("GET")
 	r.HandleFunc("/pacientes", controllers.CreatePaciente).Methods("POST")
-	r.HandleFunc("/pacientes", controllers.UpdatePaciente).Methods("PUT")
-	r.HandleFunc("/pacientes", controllers.DeletePaciente).Methods("DELETE")
-	r.HandleFunc("/pacientes", controllers.GetAllPacientes).Methods("GET") //TODO Discuss if this is necessary
+	r.HandleFunc("/pacientes/{id}", controllers.GetPaciente).Methods("GET")
+	r.HandleFunc("/pacientes/{id}", controllers.UpdatePaciente).Methods("PUT")
+	r.HandleFunc("/pacientes/{id}", controllers.DeletePaciente).Methods("DELETE")
 
 	return r
 }

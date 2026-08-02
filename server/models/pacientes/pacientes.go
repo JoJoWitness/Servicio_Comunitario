@@ -16,7 +16,7 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 	}
 
 	query := `
-		SELECT 
+		SELECT
 		    id,
 		    historia_medica,
 			numero_identificacion,
@@ -25,7 +25,8 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 			fecha_nacimiento,
 			telefono,
 			direccion,
-		FROM 
+			eliminado
+		FROM
 		    pacientes
 		WHERE TRUE
 	`

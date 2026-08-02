@@ -1,0 +1,725 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-07-21T02:31:27.000Z",
+  "__export_source": "claude-code:servicio-comunitario",
+  "resources": [
+    {
+      "_id": "wrk_servicio_comunitario",
+      "_type": "workspace",
+      "parentId": null,
+      "name": "Servicio Comunitario API",
+      "description": "Endpoints del servidor (Go/mux). Base: {{ _.base_url }}",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base_servicio",
+      "_type": "environment",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:8080"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url"
+        ]
+      },
+      "metaSortKey": 1784601087586
+    },
+    {
+      "_id": "fld_auth",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Auth",
+      "environment": {},
+      "metaSortKey": 100
+    },
+    {
+      "_id": "req_login",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Login",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/login",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 200,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"correo\": \"ryuk@test.com\",\n  \"contrasena\": \"ryuk2026\"\n}"
+      }
+    },
+    {
+      "_id": "req_signup",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "SignUp (paso 1: solicitar)",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/signup/confirmation",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 300,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"correo\": \"nuevo@test.com\",\n  \"nombres\": \"Nuevo\",\n  \"apellidos\": \"Medico\",\n  \"rol\": \"medico\",\n  \"contrasena\": \"secreto123\"\n}"
+      }
+    },
+    {
+      "_id": "req_signup2",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "SignUp (paso 2: confirmar, sin body)",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/signup/TOKEN_DEL_CORREO",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 400,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_validate",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Validate Session",
+      "method": "GET",
+      "url": "{{ _.base_url }}/auth/validateUser",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 500,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_logout",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Logout",
+      "method": "GET",
+      "url": "{{ _.base_url }}/auth/logout",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 600,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_usr",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Usuarios",
+      "environment": {},
+      "metaSortKey": 700
+    },
+    {
+      "_id": "req_usr_all",
+      "_type": "request",
+      "parentId": "fld_usr",
+      "name": "Get All Medics",
+      "method": "GET",
+      "url": "{{ _.base_url }}/usuarios",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 800,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_usr_create",
+      "_type": "request",
+      "parentId": "fld_usr",
+      "name": "Create User",
+      "method": "POST",
+      "url": "{{ _.base_url }}/usuarios",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 900,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"correo\": \"nuevo@test.com\",\n  \"nombres\": \"Nuevo\",\n  \"apellidos\": \"Medico\",\n  \"rol\": \"medico\",\n  \"contrasena\": \"secreto123\"\n}"
+      }
+    },
+    {
+      "_id": "req_usr_get",
+      "_type": "request",
+      "parentId": "fld_usr",
+      "name": "Get User by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/usuarios/41297e8a-5864-4dc5-bfa7-c51c6a0a8bea",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 1000,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_usr_update",
+      "_type": "request",
+      "parentId": "fld_usr",
+      "name": "Update User by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/usuarios/41297e8a-5864-4dc5-bfa7-c51c6a0a8bea",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 1100,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"correo\": \"actualizado@test.com\",\n  \"nombres\": \"Nombre\",\n  \"apellidos\": \"Apellido\",\n  \"rol\": \"medico\",\n  \"contrasena\": \"nuevaPass123\"\n}"
+      }
+    },
+    {
+      "_id": "req_usr_delete",
+      "_type": "request",
+      "parentId": "fld_usr",
+      "name": "Delete User by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/usuarios/41297e8a-5864-4dc5-bfa7-c51c6a0a8bea",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 1200,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_pac",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Pacientes",
+      "environment": {},
+      "metaSortKey": 1300
+    },
+    {
+      "_id": "req_pac_all",
+      "_type": "request",
+      "parentId": "fld_pac",
+      "name": "Get All Pacientes",
+      "method": "GET",
+      "url": "{{ _.base_url }}/pacientes",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 1400,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_pac_create",
+      "_type": "request",
+      "parentId": "fld_pac",
+      "name": "Create Paciente",
+      "method": "POST",
+      "url": "{{ _.base_url }}/pacientes",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 1500,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"dx_pre_operatorio\": \"Historia medica del paciente\",\n  \"numero_identificacion\": \"V-12345678\",\n  \"tipo_documento\": \"V\",\n  \"nombre\": \"Juan Perez\",\n  \"genero\": \"M\",\n  \"fecha_nacimiento\": \"1990-05-20T00:00:00Z\",\n  \"telefono\": \"0414-1234567\",\n  \"dirrecion\": \"Av. Principal, San Cristobal\",\n  \"eliminado\": false\n}"
+      }
+    },
+    {
+      "_id": "req_pac_get",
+      "_type": "request",
+      "parentId": "fld_pac",
+      "name": "Get Paciente by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/pacientes/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 1600,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_pac_update",
+      "_type": "request",
+      "parentId": "fld_pac",
+      "name": "Update Paciente by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/pacientes/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 1700,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"dx_pre_operatorio\": \"Historia medica del paciente\",\n  \"numero_identificacion\": \"V-12345678\",\n  \"tipo_documento\": \"V\",\n  \"nombre\": \"Juan Perez\",\n  \"genero\": \"M\",\n  \"fecha_nacimiento\": \"1990-05-20T00:00:00Z\",\n  \"telefono\": \"0414-1234567\",\n  \"dirrecion\": \"Av. Principal, San Cristobal\",\n  \"eliminado\": false\n}"
+      }
+    },
+    {
+      "_id": "req_pac_delete",
+      "_type": "request",
+      "parentId": "fld_pac",
+      "name": "Delete Paciente by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/pacientes/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 1800,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_not",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Notas",
+      "environment": {},
+      "metaSortKey": 1900
+    },
+    {
+      "_id": "req_not_medics",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Notas from Medic (sesion)",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/medics",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2000,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_medics_d",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Notas from Medic + dates",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/medics/dates",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 2100,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"from\": \"2025-08-01T00:00:00Z\",\n  \"to\": \"2026-07-31T23:59:59Z\"\n}"
+      }
+    },
+    {
+      "_id": "req_not_pac",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Notas from Paciente by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/pacientes/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2200,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_pac_d",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Notas from Paciente + dates",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/pacientes/dates",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 2300,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"id\": \"1\",\n  \"from\": \"2025-08-01T00:00:00Z\",\n  \"to\": \"2026-07-31T23:59:59Z\"\n}"
+      }
+    },
+    {
+      "_id": "req_not_create",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Create Nota",
+      "method": "POST",
+      "url": "{{ _.base_url }}/notas",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 2400,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"dx_pre_operatorio\": \"Apendicitis aguda\",\n  \"dx_post_operatorio\": \"Apendicitis perforada\",\n  \"intervencion_realizado\": \"Apendicectomia\",\n  \"fecha_comienzo\": \"2026-07-20T00:00:00Z\",\n  \"fecha_culminacion\": \"2026-07-20T00:00:00Z\",\n  \"hora_comienzo\": \"2026-07-20T08:00:00Z\",\n  \"hora_culminacion\": \"2026-07-20T09:30:00Z\",\n  \"resumen_intervencion\": \"Procedimiento sin complicaciones\",\n  \"pabellon\": \"Quirofano 2\",\n  \"es_electiva\": false,\n  \"es_emergencia\": true,\n  \"tuvo_biopsia\": true,\n  \"anestia\": \"General\",\n  \"Id_paciente\": 1,\n  \"medico_encargado\": \"6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7\",\n  \"eliminado\": false\n}"
+      }
+    },
+    {
+      "_id": "req_not_get",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Get Nota by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2500,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_update",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Update Nota by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/notas/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 2600,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"dx_pre_operatorio\": \"Apendicitis aguda\",\n  \"dx_post_operatorio\": \"Apendicitis perforada\",\n  \"intervencion_realizado\": \"Apendicectomia\",\n  \"fecha_comienzo\": \"2026-07-20T00:00:00Z\",\n  \"fecha_culminacion\": \"2026-07-20T00:00:00Z\",\n  \"hora_comienzo\": \"2026-07-20T08:00:00Z\",\n  \"hora_culminacion\": \"2026-07-20T09:30:00Z\",\n  \"resumen_intervencion\": \"Procedimiento sin complicaciones\",\n  \"pabellon\": \"Quirofano 2\",\n  \"es_electiva\": false,\n  \"es_emergencia\": true,\n  \"tuvo_biopsia\": true,\n  \"anestia\": \"General\",\n  \"Id_paciente\": 1,\n  \"medico_encargado\": \"6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7\",\n  \"eliminado\": false\n}"
+      }
+    },
+    {
+      "_id": "req_not_delete",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Delete Nota by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/notas/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2700,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_dx",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Diagnosticos",
+      "environment": {},
+      "metaSortKey": 2800
+    },
+    {
+      "_id": "req_dx_all",
+      "_type": "request",
+      "parentId": "fld_dx",
+      "name": "Get All Diagnosticos",
+      "method": "GET",
+      "url": "{{ _.base_url }}/diagnosticos",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2900,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_dx_create",
+      "_type": "request",
+      "parentId": "fld_dx",
+      "name": "Create Diagnostico",
+      "method": "POST",
+      "url": "{{ _.base_url }}/diagnosticos",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 3000,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"diagnostico\": \"Hipertension arterial\",\n  \"resumen\": \"Paciente con presion elevada sostenida\"\n}"
+      }
+    },
+    {
+      "_id": "req_dx_get",
+      "_type": "request",
+      "parentId": "fld_dx",
+      "name": "Get Diagnostico by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/diagnosticos/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 3100,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_dx_update",
+      "_type": "request",
+      "parentId": "fld_dx",
+      "name": "Update Diagnostico by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/diagnosticos/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 3200,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"diagnostico\": \"Hipertension arterial controlada\",\n  \"resumen\": \"Resumen actualizado\"\n}"
+      }
+    },
+    {
+      "_id": "req_dx_delete",
+      "_type": "request",
+      "parentId": "fld_dx",
+      "name": "Delete Diagnostico by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/diagnosticos/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 3300,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_proc",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Procedimientos",
+      "environment": {},
+      "metaSortKey": 3400
+    },
+    {
+      "_id": "req_proc_all",
+      "_type": "request",
+      "parentId": "fld_proc",
+      "name": "Get All Procedimientos",
+      "method": "GET",
+      "url": "{{ _.base_url }}/procedimientos",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 3500,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_proc_create",
+      "_type": "request",
+      "parentId": "fld_proc",
+      "name": "Create Procedimiento",
+      "method": "POST",
+      "url": "{{ _.base_url }}/procedimientos",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 3600,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"intervencion\": \"Colecistectomia laparoscopica\",\n  \"resumen\": \"Extraccion de vesicula por via laparoscopica\"\n}"
+      }
+    },
+    {
+      "_id": "req_proc_get",
+      "_type": "request",
+      "parentId": "fld_proc",
+      "name": "Get Procedimiento by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/procedimientos/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 3700,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_proc_update",
+      "_type": "request",
+      "parentId": "fld_proc",
+      "name": "Update Procedimiento by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/procedimientos/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 3800,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"intervencion\": \"Colecistectomia abierta\",\n  \"resumen\": \"Resumen actualizado\"\n}"
+      }
+    },
+    {
+      "_id": "req_proc_delete",
+      "_type": "request",
+      "parentId": "fld_proc",
+      "name": "Delete Procedimiento by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/procedimientos/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 3900,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "fld_tec",
+      "_type": "request_group",
+      "parentId": "wrk_servicio_comunitario",
+      "name": "Tecnicas",
+      "environment": {},
+      "metaSortKey": 4000
+    },
+    {
+      "_id": "req_tec_all",
+      "_type": "request",
+      "parentId": "fld_tec",
+      "name": "Get All Tecnicas",
+      "method": "GET",
+      "url": "{{ _.base_url }}/tecnicas",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 4100,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_tec_create",
+      "_type": "request",
+      "parentId": "fld_tec",
+      "name": "Create Tecnica",
+      "method": "POST",
+      "url": "{{ _.base_url }}/tecnicas",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 4200,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"tecnica\": \"Sutura continua\"\n}"
+      }
+    },
+    {
+      "_id": "req_tec_get",
+      "_type": "request",
+      "parentId": "fld_tec",
+      "name": "Get Tecnica by id",
+      "method": "GET",
+      "url": "{{ _.base_url }}/tecnicas/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 4300,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_tec_update",
+      "_type": "request",
+      "parentId": "fld_tec",
+      "name": "Update Tecnica by id",
+      "method": "PUT",
+      "url": "{{ _.base_url }}/tecnicas/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "metaSortKey": 4400,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"tecnica\": \"Sutura discontinua\"\n}"
+      }
+    },
+    {
+      "_id": "req_tec_delete",
+      "_type": "request",
+      "parentId": "fld_tec",
+      "name": "Delete Tecnica by id",
+      "method": "DELETE",
+      "url": "{{ _.base_url }}/tecnicas/1",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 4500,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    }
+  ]
+}

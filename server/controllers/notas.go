@@ -8,7 +8,6 @@ import (
 	"server/config"
 	"server/controllers/auth"
 	notas2 "server/models/notas"
-	models "server/models/pacientes"
 	users2 "server/models/usuarios"
 	"strconv"
 
@@ -101,12 +100,14 @@ func UpdateNota(w http.ResponseWriter, r *http.Request) {
 func DeleteNota(w http.ResponseWriter, r *http.Request) {
 	var notas notas2.Notas
 
-	if err := json.NewDecoder(r.Body).Decode(&notas.ID); err != nil {
-		fmt.Printf("Error decoding request body: %v", err)
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Request body is not valid JSON"))
+		w.Write([]byte("param {:id} must be an integer"))
 		return
 	}
+	notas.ID = id
 
 	// Checking if use was added in current day
 	if err := notas2.CheckNotasDate(notas.ID); err != nil {
@@ -115,7 +116,7 @@ func DeleteNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := notas.Delete(config.PsqlDB)
+	err = notas.Delete(config.PsqlDB)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to delete notas"))
@@ -196,13 +197,15 @@ func GetNotasFromMedicDates(w http.ResponseWriter, r *http.Request) {
 }
 func GetNotasFromPaciente(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var paciente models.Pacientes
-	paciente.ID = id
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("param {:id} must be an integer"))
+		return
+	}
 
 	var notas []notas2.Notas
-	notas, err := notas2.GetNotasFromPaciente(paciente.ID)
+	notas, err = notas2.GetNotasFromPaciente(id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			log.Printf("Error no notas found: %v", err)
@@ -232,11 +235,16 @@ func GetNotasFromPacienteDates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := userNotasDates.ID
+	pacienteID, err := strconv.Atoi(userNotasDates.ID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("id must be an integer"))
+		return
+	}
 	from := userNotasDates.From
 	to := userNotasDates.To
 
-	notas, err := notas2.GetNotasFromPacienteDates(userID, from, to)
+	notas, err := notas2.GetNotasFromPacienteDates(pacienteID, from, to)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			log.Printf("Error no notas found: %v", err)

@@ -23,7 +23,7 @@ func Init(router *mux.Router) {
 	authentication.HandleFunc("/login", auth.Login)
 	authentication.HandleFunc("/signup/{token}", auth.SignUp).Methods("POST")
 	authentication.HandleFunc("/validateUser", auth.ValidateSession)
-	// authentication.HandleFunc("/logout", auth.Logout) //TODO
+	authentication.HandleFunc("/logout", auth.Logout)
 
 	// Rest API routes
 	api.PathPrefix("/usuarios").Handler(UserRoutes())
