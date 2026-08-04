@@ -13,10 +13,13 @@ import (
 func GetNotasFromMedic(id string) ([]Notas, error) {
 	query := `
 		SELECT
-			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intervencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestia, n.id_paciente, n.medico_encargado, n.eliminado
-		FROM notas n
-		JOIN equipo_quirurgico eq ON eq.id_nota = n.id
-		WHERE eq.id_usuario = @id;
+			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intevencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
+		FROM "Nota_Operatoria" n
+		WHERE (
+			n.id_medico_encargado::text = @id
+			OR EXISTS (SELECT 1 FROM "Equipo_Quirurgico" eq WHERE eq.id_nota_operatoria = n.id AND eq.id_medico::text = @id)
+		)
+		AND n.eliminado = FALSE;
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id})
@@ -50,10 +53,13 @@ func GetNotasFromMedic(id string) ([]Notas, error) {
 func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, error) {
 	query := `
 		SELECT
-			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intervencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestia, n.id_paciente, n.medico_encargado, n.eliminado
-		FROM notas n
-		JOIN equipo_quirurgico eq ON eq.id_nota = n.id
-		WHERE eq.id_usuario = @id
+			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intevencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
+		FROM "Nota_Operatoria" n
+		WHERE (
+			n.id_medico_encargado::text = @id
+			OR EXISTS (SELECT 1 FROM "Equipo_Quirurgico" eq WHERE eq.id_nota_operatoria = n.id AND eq.id_medico::text = @id)
+		)
+		AND n.eliminado = FALSE
 		AND n.fecha_comienzo BETWEEN @from AND @to;
 	`
 
@@ -85,12 +91,13 @@ func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, e
 	return records, nil
 }
 
-func GetNotasFromPaciente(id int) ([]Notas, error) {
+func GetNotasFromPaciente(id string) ([]Notas, error) {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
-		FROM notas n
-		WHERE n.id_paciente = @id;
+			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado
+		FROM "Nota_Operatoria" n
+		WHERE n.id_paciente::text = @id
+		AND n.eliminado = FALSE;
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query, pgx.NamedArgs{"id": id})
@@ -121,12 +128,13 @@ func GetNotasFromPaciente(id int) ([]Notas, error) {
 	return records, nil
 }
 
-func GetNotasFromPacienteDates(id int, from time.Time, to time.Time) ([]Notas, error) {
+func GetNotasFromPacienteDates(id string, from time.Time, to time.Time) ([]Notas, error) {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intervencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestia, id_paciente, medico_encargado, eliminado
-		FROM notas n
-		WHERE n.id_paciente = @id
+			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado
+		FROM "Nota_Operatoria" n
+		WHERE n.id_paciente::text = @id
+		AND n.eliminado = FALSE
 		AND n.fecha_comienzo BETWEEN @from AND @to;
 	`
 

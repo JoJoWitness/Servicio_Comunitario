@@ -11,7 +11,6 @@ import (
 	"server/models/usuarios"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"server/config"
@@ -43,7 +42,18 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	SessionCookie(user.ID, w)
+	SessionCookie(user.ID, user.Rol, w)
+
+	// El cliente necesita el rol para saber a qué pantalla entrar: el médico a
+	// "Mis notas", la secretaria a la vista global del servicio.
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(usuarios.UsuarioData{
+		ID:        user.ID,
+		Nombres:   user.Nombres,
+		Apellidos: user.Apellidos,
+		Correo:    user.Correo,
+		Rol:       user.Rol,
+	})
 }
 
 func authenticate(password string, email string) (user *usuarios.Usuarios, codeStatus int, error error) {
@@ -57,6 +67,12 @@ func authenticate(password string, email string) (user *usuarios.Usuarios, codeS
 		return nil, http.StatusUnauthorized, errors.New("unauthorize access, email not found")
 	}
 
+	// Una cuenta dada de baja no entra (HU-21). Se responde igual que con
+	// credenciales inválidas para no revelar que la cuenta existió.
+	if loginAttempt.Eliminado {
+		return nil, http.StatusUnauthorized, errors.New("unauthorize access, email not found")
+	}
+
 	err = bcrypt.CompareHashAndPassword([]byte(loginAttempt.Contrasena), []byte(password))
 	if err != nil {
 		return nil, http.StatusUnauthorized, errors.New("unauthorize access, wrong password")
@@ -65,25 +81,12 @@ func authenticate(password string, email string) (user *usuarios.Usuarios, codeS
 	return &loginAttempt, http.StatusOK, nil
 }
 
-func SessionCookie(id string, w http.ResponseWriter) {
-	var a usuarios.Admin
-	var session Session
-
-	session.UserID = id
-	a.UserID = id
-	err := a.Get(config.PsqlDB)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			session.Role = "user"
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal server error while checking permissions"))
-			return
-		}
-		session.Role = "user"
-	} else {
-		session.Role = a.Role
-	}
+// SessionCookie abre una sesión y la entrega como cookie. El rol es el de
+// usuarios.rol ('admin' | 'medico' | 'secretaria'): es lo que leen los
+// middlewares de autorización, así que tiene que salir de ahí y no de la tabla
+// admins, que solo distingue administradores.
+func SessionCookie(id string, rol string, w http.ResponseWriter) {
+	session := Session{UserID: id, Role: rol}
 
 	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {

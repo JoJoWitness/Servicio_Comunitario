@@ -22,9 +22,9 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 		    nombres,
 			apellidos,
 		    rol,
-		    contrasena
-		FROM 
-		    usuarios
+		    contrasena,
+		    eliminado
+		FROM "Usuarios"
 		WHERE TRUE
 	`
 
@@ -39,7 +39,7 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 	}
 
 	row := db.QueryRow(context.Background(), query, args)
-	err := row.Scan(&u.ID, &u.Correo, &u.Nombres, &u.Apellidos, &u.Rol, &u.Contrasena)
+	err := row.Scan(&u.ID, &u.Correo, &u.Nombres, &u.Apellidos, &u.Rol, &u.Contrasena, &u.Eliminado)
 	if err != nil {
 		log.Printf("Error scanning usuarios: %v", err)
 		return err
@@ -49,7 +49,7 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 
 func (u *Usuarios) Create(db *pgxpool.Pool) error {
 	query := `
-		INSERT INTO usuarios
+		INSERT INTO "Usuarios"
 			(id, correo, nombres, apellidos, rol, contrasena)
 		VALUES
 			(@id, @correo, @nombres, @apellidos, @rol, @contrasena)
@@ -75,8 +75,7 @@ func (u *Usuarios) Create(db *pgxpool.Pool) error {
 
 func (u *Usuarios) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			usuarios
+		UPDATE "Usuarios"
 		SET 
 			correo = @correo,
 			nombres = @nombres,
@@ -104,10 +103,37 @@ func (u *Usuarios) Update(db *pgxpool.Pool) error {
 	return nil
 }
 
+// UpdateContrasena cambia solo la contraseña. Update() reescribe todos los
+// campos, así que no sirve para esto: borraría correo, nombres y rol.
+// Recibe el hash ya calculado, nunca la contraseña en texto plano.
+func (u *Usuarios) UpdateContrasena(db *pgxpool.Pool, hash string) error {
+	query := `
+		UPDATE "Usuarios"
+		SET
+			contrasena = @contrasena
+		WHERE
+			id = @id
+			AND eliminado = FALSE;
+	`
+
+	tag, err := db.Exec(context.Background(), query,
+		pgx.NamedArgs{"id": u.ID, "contrasena": hash})
+	if err != nil {
+		log.Printf("Error updating contrasena: %v\n", err)
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errors.New("usuario no encontrado o dado de baja")
+	}
+
+	u.Contrasena = hash
+	return nil
+}
+
 func (u *Usuarios) Delete(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			usuarios
+		UPDATE "Usuarios"
 		SET 
 			eliminado = TRUE 
 		WHERE 
@@ -124,14 +150,19 @@ func (u *Usuarios) Delete(db *pgxpool.Pool) error {
 }
 
 func GetAllMedics() ([]Usuarios, error) {
+	// El id es lo que se manda en `equipo` al crear una nota (HU-15), así que
+	// tiene que venir en la lista.
 	query := `
 		SELECT
+			u.id,
 			u.nombres,
+			u.apellidos,
 			u.correo
-		FROM
-			usuarios u
+		FROM "Usuarios" u
 		WHERE
-			u.eliminado = FALSE and u.rol = 'medico';
+			u.eliminado = FALSE and u.rol = 'medico'
+		ORDER BY
+			u.apellidos, u.nombres;
 	`
 	rows, err := config.PsqlDB.Query(context.Background(), query)
 	if err != nil {
@@ -140,11 +171,11 @@ func GetAllMedics() ([]Usuarios, error) {
 	}
 	defer rows.Close()
 
-	var users []Usuarios
+	users := []Usuarios{}
 	for rows.Next() {
 		var user Usuarios
 
-		err := rows.Scan(&user.Nombres, &user.Correo)
+		err := rows.Scan(&user.ID, &user.Nombres, &user.Apellidos, &user.Correo)
 		if err != nil {
 			log.Printf("Error scanning user: %v", user)
 			log.Printf("Error fetching users: %v", err)
@@ -163,8 +194,7 @@ func (u *UsuarioData) Get(db *pgxpool.Pool) error {
 			u.apellidos,
 			u.correo,
 			u.rol
-		FROM
-			usuarios u
+		FROM "Usuarios" u
 		WHERE
 			u.id = @id;
 	`

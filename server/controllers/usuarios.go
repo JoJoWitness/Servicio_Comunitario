@@ -80,6 +80,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// El hash nunca sale en una respuesta.
+	user.Contrasena = ""
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "201")
 	json.NewEncoder(w).Encode(user)
@@ -105,6 +108,9 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to get user"))
 		return
 	}
+
+	// El hash nunca sale en una respuesta.
+	user.Contrasena = ""
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
@@ -140,6 +146,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to update user"))
 		return
 	}
+
+	// El hash nunca sale en una respuesta.
+	user.Contrasena = ""
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "201")

@@ -20,8 +20,7 @@ func (u *Procedimientos) Get(db *pgxpool.Pool) error {
 		SELECT
 			intervencion,
 			resumen
-		FROM
-		    Procedimientos
+		FROM "Procedimientos"
 		WHERE
 		    id = @id
 	`
@@ -38,7 +37,7 @@ func (u *Procedimientos) Get(db *pgxpool.Pool) error {
 
 func (u *Procedimientos) Create(db *pgxpool.Pool) error {
 	query := `
-	INSERT INTO Procedimientos 
+	INSERT INTO "Procedimientos" 
 		(intervencion, resumen) 
 	VALUES 
 		(@intervencion, @resumen);
@@ -59,8 +58,7 @@ func (u *Procedimientos) Create(db *pgxpool.Pool) error {
 
 func (u *Procedimientos) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			Procedimientos
+		UPDATE "Procedimientos"
 		SET 
 			intervencion = @intervencion,
 			resumen = @resumen
@@ -84,8 +82,7 @@ func (u *Procedimientos) Update(db *pgxpool.Pool) error {
 
 func (u *Procedimientos) Delete(db *pgxpool.Pool) error {
 	query := `
-		DELETE FROM
-			Procedimientos
+		DELETE FROM "Procedimientos"
 		WHERE 
 			id = @id;
 	`
@@ -105,8 +102,7 @@ func GetAllProcedimientos() ([]Procedimientos, error) {
 			id,
 			intervencion,
 			resumen
-		FROM 
-		    procedimientos;
+		FROM "Procedimientos";
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query)

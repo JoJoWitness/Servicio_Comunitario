@@ -11,14 +11,14 @@ import (
 func ProcedimientosRoutes() http.Handler {
 	r := mux.NewRouter()
 
-	p := r.PathPrefix("").Subrouter()
-	p.Use(auth.Admins)
-
+	// Lectura: el catálogo alimenta el autocompletado de la nota (HU-19).
 	r.HandleFunc("/procedimientos", controllers.GetAllProcedimientos).Methods("GET")
-	r.HandleFunc("/procedimientos", controllers.CreateProcedimiento).Methods("POST")
 	r.HandleFunc("/procedimientos/{id}", controllers.GetProcedimiento).Methods("GET")
-	r.HandleFunc("/procedimientos/{id}", controllers.UpdateProcedimiento).Methods("PUT")
-	r.HandleFunc("/procedimientos/{id}", controllers.DeleteProcedimiento).Methods("DELETE")
+
+	// Mantenimiento del catálogo: solo admin (HU-20).
+	r.Handle("/procedimientos", auth.Admins(http.HandlerFunc(controllers.CreateProcedimiento))).Methods("POST")
+	r.Handle("/procedimientos/{id}", auth.Admins(http.HandlerFunc(controllers.UpdateProcedimiento))).Methods("PUT")
+	r.Handle("/procedimientos/{id}", auth.Admins(http.HandlerFunc(controllers.DeleteProcedimiento))).Methods("DELETE")
 
 	return r
 }

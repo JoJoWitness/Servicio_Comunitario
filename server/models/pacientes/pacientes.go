@@ -6,9 +6,26 @@ import (
 	"log"
 	"server/config"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// columnas de "Paciente", en el orden en que las escanean Get y GetAllPacientes.
+// Ojo con dos nombres del esquema: la cédula es `numero_identifiacion` (con el
+// typo) y el teléfono es `numero_telefono`.
+const columnas = `
+	id,
+	historia_medica,
+	numero_identifiacion,
+	tipo_documento,
+	nombre,
+	genero,
+	fecha_nacimiento,
+	numero_telefono,
+	direccion,
+	eliminado
+`
 
 func (u *Pacientes) Get(db *pgxpool.Pool) error {
 	if u.ID == "" && u.Historia_Medica == "" {
@@ -16,25 +33,16 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 	}
 
 	query := `
-		SELECT
-		    id,
-		    historia_medica,
-			numero_identificacion,
-		    nombre,
-			genero,
-			fecha_nacimiento,
-			telefono,
-			direccion,
-			eliminado
-		FROM
-		    pacientes
-		WHERE TRUE
+		SELECT ` + columnas + `
+		FROM "Paciente"
+		WHERE eliminado = FALSE
 	`
 
 	args := pgx.NamedArgs{}
 
 	if u.ID != "" {
-		query += " AND id = @id"
+		// Como texto para que un UUID mal formado no aborte la consulta.
+		query += " AND id::text = @id"
 		args["id"] = u.ID
 	} else if u.Historia_Medica != "" {
 		query += " AND historia_medica = @historia_medica"
@@ -42,7 +50,7 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 	}
 
 	row := db.QueryRow(context.Background(), query, args)
-	err := row.Scan(&u.ID, &u.Historia_Medica, &u.Numero_Indentificacion, &u.Nombre, &u.Genero, &u.Fecha_Nacimiento, &u.Telefono, &u.Direccion, &u.Eliminado)
+	err := row.Scan(&u.ID, &u.Historia_Medica, &u.Numero_Indentificacion, &u.Tipo_Documento, &u.Nombre, &u.Genero, &u.Fecha_Nacimiento, &u.Telefono, &u.Direccion, &u.Eliminado)
 	if err != nil {
 		log.Printf("Error scanning pacientes: %v", err)
 		return err
@@ -51,22 +59,34 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 }
 
 func (u *Pacientes) Create(db *pgxpool.Pool) error {
+	// El id es UUID y la tabla no lo genera sola: lo pone el servidor.
+	if u.ID == "" {
+		id, err := uuid.NewV7()
+		if err != nil {
+			log.Printf("Error generating paciente id: %v\n", err)
+			return err
+		}
+		u.ID = id.String()
+	}
+
+	// `eliminado` no se escribe: la baja es exclusiva de Delete.
 	query := `
-		INSERT INTO pacientes 
-			(historia_medica, numero_identificacion, nombre, genero, fecha_nacimiento, telefono, direccion, eliminado) 
-		VALUES 
-			(@historia_medica, @numero_identificacion, @nombre, @genero, @fecha_nacimiento, @telefono, @direccion, @eliminado)
+		INSERT INTO "Paciente"
+			(id, historia_medica, numero_identifiacion, tipo_documento, nombre, genero, fecha_nacimiento, numero_telefono, direccion)
+		VALUES
+			(@id, @historia_medica, @numero_identificacion, @tipo_documento, @nombre, @genero, @fecha_nacimiento, @telefono, @direccion)
 	`
 
 	args := pgx.NamedArgs{
+		"id":                    u.ID,
 		"historia_medica":       u.Historia_Medica,
 		"numero_identificacion": u.Numero_Indentificacion,
+		"tipo_documento":        u.Tipo_Documento,
 		"nombre":                u.Nombre,
 		"genero":                u.Genero,
 		"fecha_nacimiento":      u.Fecha_Nacimiento,
 		"telefono":              u.Telefono,
 		"direccion":             u.Direccion,
-		"eliminado":             u.Eliminado,
 	}
 
 	_, err := db.Exec(context.Background(), query, args)
@@ -80,23 +100,25 @@ func (u *Pacientes) Create(db *pgxpool.Pool) error {
 
 func (u *Pacientes) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			pacientes
-		SET 
+		UPDATE "Paciente"
+		SET
 			historia_medica = @historia_medica,
-			numero_identificacion = @numero_identificacion,
+			numero_identifiacion = @numero_identificacion,
+			tipo_documento = @tipo_documento,
 			nombre = @nombre,
 			genero = @genero,
 			fecha_nacimiento = @fecha_nacimiento,
-			telefono = @telefono,
+			numero_telefono = @telefono,
 			direccion = @direccion
-		WHERE 
-			id = @id;
+		WHERE
+			id::text = @id
+			AND eliminado = FALSE;
 	`
 	args := pgx.NamedArgs{
 		"id":                    u.ID,
 		"historia_medica":       u.Historia_Medica,
 		"numero_identificacion": u.Numero_Indentificacion,
+		"tipo_documento":        u.Tipo_Documento,
 		"nombre":                u.Nombre,
 		"genero":                u.Genero,
 		"fecha_nacimiento":      u.Fecha_Nacimiento,
@@ -115,12 +137,11 @@ func (u *Pacientes) Update(db *pgxpool.Pool) error {
 
 func (u *Pacientes) Delete(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			pacientes
-		SET 
-			eliminado = TRUE 
-		WHERE 
-			id = @id;
+		UPDATE "Paciente"
+		SET
+			eliminado = TRUE
+		WHERE
+			id::text = @id;
 	`
 
 	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{"id": u.ID})
@@ -133,20 +154,11 @@ func (u *Pacientes) Delete(db *pgxpool.Pool) error {
 }
 
 func GetAllPacientes() ([]Pacientes, error) {
-	query := `	
-		SELECT 
-			id,
-			historia_medica,
-			numero_identificacion,
-			nombre,
-			genero,
-			fecha_nacimiento,
-			telefono,
-			direccion
-		FROM 
-			pacientes
-		WHERE
-			eliminado = FALSE;
+	query := `
+		SELECT ` + columnas + `
+		FROM "Paciente"
+		WHERE eliminado = FALSE
+		ORDER BY nombre;
 	`
 	rows, err := config.PsqlDB.Query(context.Background(), query)
 	if err != nil {
@@ -155,11 +167,11 @@ func GetAllPacientes() ([]Pacientes, error) {
 	}
 	defer rows.Close()
 
-	var pacientes []Pacientes
+	pacientes := []Pacientes{}
 	for rows.Next() {
 		var paciente Pacientes
 
-		err := rows.Scan(&paciente.ID, &paciente.Historia_Medica, &paciente.Numero_Indentificacion, &paciente.Nombre, &paciente.Genero, &paciente.Fecha_Nacimiento, &paciente.Telefono, &paciente.Direccion)
+		err := rows.Scan(&paciente.ID, &paciente.Historia_Medica, &paciente.Numero_Indentificacion, &paciente.Tipo_Documento, &paciente.Nombre, &paciente.Genero, &paciente.Fecha_Nacimiento, &paciente.Telefono, &paciente.Direccion, &paciente.Eliminado)
 		if err != nil {
 			log.Printf("Error scanning paciente: %v", paciente)
 			log.Printf("Error fetching pacientes: %v", err)
@@ -168,5 +180,5 @@ func GetAllPacientes() ([]Pacientes, error) {
 		pacientes = append(pacientes, paciente)
 	}
 
-	return pacientes, nil
+	return pacientes, rows.Err()
 }

@@ -159,7 +159,7 @@ func createUser(user *usuarios.Usuarios, w http.ResponseWriter) {
 		return
 	}
 
-	SessionCookie(newAccount.ID, w)
+	SessionCookie(newAccount.ID, newAccount.Rol, w)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "201")

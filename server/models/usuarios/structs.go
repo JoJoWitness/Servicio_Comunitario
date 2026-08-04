@@ -26,9 +26,3 @@ type UsuarioNotasDates struct {
 	From time.Time `json:"from"`
 	To   time.Time `json:"to"`
 }
-type Admin struct {
-	UserID    string    `json:"user_id"`
-	Role      string    `json:"role"`
-	RouteID   *int      `json:"route_id"`
-	CreatedAt time.Time `json:"createdAt"`
-}

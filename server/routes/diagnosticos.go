@@ -11,14 +11,14 @@ import (
 func DiagnosticosRoutes() http.Handler {
 	r := mux.NewRouter()
 
-	p := r.PathPrefix("").Subrouter()
-	p.Use(auth.Admins)
-
+	// Lectura: el catálogo alimenta el autocompletado de la nota (HU-19).
 	r.HandleFunc("/diagnosticos", controllers.GetAllDiagnosticos).Methods("GET")
-	r.HandleFunc("/diagnosticos", controllers.CreateDiagnostico).Methods("POST")
 	r.HandleFunc("/diagnosticos/{id}", controllers.GetDiagnostico).Methods("GET")
-	r.HandleFunc("/diagnosticos/{id}", controllers.UpdateDiagnostico).Methods("PUT")
-	r.HandleFunc("/diagnosticos/{id}", controllers.DeleteDiagnostico).Methods("DELETE")
+
+	// Mantenimiento del catálogo: solo admin (HU-20).
+	r.Handle("/diagnosticos", auth.Admins(http.HandlerFunc(controllers.CreateDiagnostico))).Methods("POST")
+	r.Handle("/diagnosticos/{id}", auth.Admins(http.HandlerFunc(controllers.UpdateDiagnostico))).Methods("PUT")
+	r.Handle("/diagnosticos/{id}", auth.Admins(http.HandlerFunc(controllers.DeleteDiagnostico))).Methods("DELETE")
 
 	return r
 }

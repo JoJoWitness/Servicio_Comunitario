@@ -1,113 +1,175 @@
 # API Endpoints
 
-Base URL: `http://localhost:8080` (default port `8080`, override with `PORT`)
+Todas las rutas son **relativas** a la base del servidor. El puerto por defecto es `8080`
+y se cambia con la variable `PORT`.
 
-All routes are registered in `server/routes/`. Global middleware: `corsMiddleware`.
-The `/auth/*` routes are public. Everything under the REST API (`/usuarios`, `/pacientes`,
-`/notas`, `/diagnosticos`, `/procedimientos`, `/tecnicas`) is protected by the `auth.Users`
-middleware, and each resource subrouter additionally wires `auth.Admins`.
+Las rutas se registran en `server/routes/`. Middleware global: `corsMiddleware`.
+Las rutas `/auth/*` son públicas. Todo el REST API (`/usuarios`, `/pacientes`, `/notas`,
+`/diagnosticos`, `/procedimientos`, `/tecnicas`) exige sesión vía `auth.Users`, y cada
+handler de escritura va envuelto en el middleware de rol que le corresponde.
+
+## Permisos por rol
+
+El rol sale de `"Usuarios".rol` y viaja en la sesión. Sin sesión: `401`. Con sesión pero sin
+privilegios: `403`.
+
+| Recurso                                         | Lectura                | Escritura                            |
+|-------------------------------------------------|------------------------|--------------------------------------|
+| `/notas` (vista global)                         | secretaria, admin      | —                                    |
+| `/notas` (resto)                                | cualquiera autenticado | medico, admin                        |
+| `/pacientes`                                    | cualquiera autenticado | medico, admin (`DELETE`: solo admin) |
+| `/usuarios/me`, `/usuarios/me/password`         | el propio usuario      | el propio usuario                    |
+| `/usuarios` (lista)                             | cualquiera autenticado | admin                                |
+| `/usuarios/{id}`                                | admin                  | admin                                |
+| `/diagnosticos`, `/procedimientos`, `/tecnicas` | cualquiera autenticado | admin                                |
+
+Además de estos middlewares, `PUT`/`DELETE` de una nota exigen que el médico haya
+participado en ella: que sea el `id_medico_encargado` o que esté en `"Equipo_Quirurgico"`.
+El admin queda exento. Un médico que no participó recibe `403`; una nota inexistente o dada
+de baja, `404`.
 
 ---
 
 ## System
 
-| Method | URL                             | Handler | Notes                         |
-|--------|---------------------------------|---------|-------------------------------|
-| GET    | `http://localhost:8080/health`  | inline  | Health check                  |
-| GET    | `http://localhost:8080/stream`  | inline  | Stream/websocket check (TODO) |
+| Method | URL       | Handler | Notes                         |
+|--------|-----------|---------|-------------------------------|
+| GET    | `/health` | inline  | Health check                  |
+| GET    | `/stream` | inline  | Stream/websocket check (TODO) |
 
 ## Authentication (`/auth`) — public
 
-| Method | URL                                          | Handler                | Notes                     |
-|--------|----------------------------------------------|------------------------|---------------------------|
-| ANY    | `http://localhost:8080/auth/login`           | `auth.Login`           | Login (setea cookie `session_id`) |
-| POST   | `http://localhost:8080/auth/signup/{token}`  | `auth.SignUp`          | Sign up con token de invitación |
-| ANY    | `http://localhost:8080/auth/validateUser`    | `auth.ValidateSession` | Valida la sesión actual   |
-| ANY    | `http://localhost:8080/auth/logout`          | `auth.Logout`          | Cierra sesión y limpia la cookie |
+| Method | URL                    | Handler                | Notes                             |
+|--------|------------------------|------------------------|-----------------------------------|
+| ANY    | `/auth/login`          | `auth.Login`           | Login (setea cookie `session_id`) |
+| POST   | `/auth/signup/{token}` | `auth.SignUp`          | Sign up con token de invitación   |
+| ANY    | `/auth/validateUser`   | `auth.ValidateSession` | Valida la sesión actual           |
+| ANY    | `/auth/logout`         | `auth.Logout`          | Cierra sesión y limpia la cookie  |
 
-## Usuarios (`/usuarios`) — requires Users + Admins
+## Usuarios (`/usuarios`) — lista abierta a autenticados, resto solo admin
 
-| Method | URL                                          | Handler                    |
-|--------|----------------------------------------------|----------------------------|
-| GET    | `http://localhost:8080/usuarios`             | `controllers.GetAllMedics` |
-| POST   | `http://localhost:8080/usuarios`             | `controllers.CreateUser`   |
-| GET    | `http://localhost:8080/usuarios/{id}`        | `controllers.GetUser`      |
-| PUT    | `http://localhost:8080/usuarios/{id}`        | `controllers.UpdateUser`   |
-| DELETE | `http://localhost:8080/usuarios/{id}`        | `controllers.DeleteUser`   |
+| Method | URL                     | Handler                    |
+|--------|-------------------------|----------------------------|
+| GET    | `/usuarios/me`          | `controllers.GetUserData`  |
+| PUT    | `/usuarios/me/password` | `auth.ChangePassword`      |
+| GET    | `/usuarios`             | `controllers.GetAllMedics` |
+| POST   | `/usuarios`             | `controllers.CreateUser`   |
+| GET    | `/usuarios/{id}`        | `controllers.GetUser`      |
+| PUT    | `/usuarios/{id}`        | `controllers.UpdateUser`   |
+| DELETE | `/usuarios/{id}`        | `controllers.DeleteUser`   |
 
-## Pacientes (`/pacientes`) — requires Users + Admins
+## Pacientes (`/pacientes`) — lectura autenticada, escritura solo médicos
 
-| Method | URL                                           | Handler                       |
-|--------|-----------------------------------------------|-------------------------------|
-| GET    | `http://localhost:8080/pacientes`             | `controllers.GetAllPacientes` |
-| POST   | `http://localhost:8080/pacientes`             | `controllers.CreatePaciente`  |
-| GET    | `http://localhost:8080/pacientes/{id}`        | `controllers.GetPaciente`     |
-| PUT    | `http://localhost:8080/pacientes/{id}`        | `controllers.UpdatePaciente`  |
-| DELETE | `http://localhost:8080/pacientes/{id}`        | `controllers.DeletePaciente`  |
+| Method | URL               | Handler                       |
+|--------|-------------------|-------------------------------|
+| GET    | `/pacientes`      | `controllers.GetAllPacientes` |
+| POST   | `/pacientes`      | `controllers.CreatePaciente`  |
+| GET    | `/pacientes/{id}` | `controllers.GetPaciente`     |
+| PUT    | `/pacientes/{id}` | `controllers.UpdatePaciente`  |
+| DELETE | `/pacientes/{id}` | `controllers.DeletePaciente`  |
 
-## Notas (`/notas`) — requires Users + Admins
+## Notas (`/notas`)
 
-| Method | URL                                                  | Handler                                 |
-|--------|------------------------------------------------------|-----------------------------------------|
-| GET    | `http://localhost:8080/notas/medics`                 | `controllers.GetNotasFromMedic`         |
-| GET    | `http://localhost:8080/notas/medics/dates`           | `controllers.GetNotasFromMedicDates`    |
-| GET    | `http://localhost:8080/notas/pacientes/{id}`         | `controllers.GetNotasFromPaciente`      |
-| GET    | `http://localhost:8080/notas/pacientes/dates`        | `controllers.GetNotasFromPacienteDates` |
-| POST   | `http://localhost:8080/notas`                        | `controllers.CreateNota`                |
-| GET    | `http://localhost:8080/notas/{id}`                   | `controllers.GetNota`                   |
-| PUT    | `http://localhost:8080/notas/{id}`                   | `controllers.UpdateNota`                |
-| DELETE | `http://localhost:8080/notas/{id}`                   | `controllers.DeleteNota`                |
+| Method | URL                      | Handler                                      |
+|--------|--------------------------|----------------------------------------------|
+| GET    | `/notas`                 | `controllers.GetAllNotas` (secretaria/admin) |
+| GET    | `/notas/medics`          | `controllers.GetNotasFromMedic`              |
+| GET    | `/notas/medics/dates`    | `controllers.GetNotasFromMedicDates`         |
+| GET    | `/notas/pacientes/{id}`  | `controllers.GetNotasFromPaciente`           |
+| GET    | `/notas/pacientes/dates` | `controllers.GetNotasFromPacienteDates`      |
+| POST   | `/notas`                 | `controllers.CreateNota`                     |
+| GET    | `/notas/{id}`            | `controllers.GetNota`                        |
+| PUT    | `/notas/{id}`            | `controllers.UpdateNota`                     |
+| DELETE | `/notas/{id}`            | `controllers.DeleteNota`                     |
 
-## Diagnósticos (`/diagnosticos`) — requires Users + Admins
+## Diagnósticos (`/diagnosticos`) — lectura autenticada, escritura solo admin
 
-| Method | URL                                              | Handler                          |
-|--------|--------------------------------------------------|----------------------------------|
-| GET    | `http://localhost:8080/diagnosticos`             | `controllers.GetAllDiagnosticos` |
-| POST   | `http://localhost:8080/diagnosticos`             | `controllers.CreateDiagnostico`  |
-| GET    | `http://localhost:8080/diagnosticos/{id}`        | `controllers.GetDiagnostico`     |
-| PUT    | `http://localhost:8080/diagnosticos/{id}`        | `controllers.UpdateDiagnostico`  |
-| DELETE | `http://localhost:8080/diagnosticos/{id}`        | `controllers.DeleteDiagnostico`  |
+| Method | URL                  | Handler                          |
+|--------|----------------------|----------------------------------|
+| GET    | `/diagnosticos`      | `controllers.GetAllDiagnosticos` |
+| POST   | `/diagnosticos`      | `controllers.CreateDiagnostico`  |
+| GET    | `/diagnosticos/{id}` | `controllers.GetDiagnostico`     |
+| PUT    | `/diagnosticos/{id}` | `controllers.UpdateDiagnostico`  |
+| DELETE | `/diagnosticos/{id}` | `controllers.DeleteDiagnostico`  |
 
-## Procedimientos (`/procedimientos`) — requires Users + Admins
+## Procedimientos (`/procedimientos`) — lectura autenticada, escritura solo admin
 
-| Method | URL                                                | Handler                            |
-|--------|----------------------------------------------------|------------------------------------|
-| GET    | `http://localhost:8080/procedimientos`             | `controllers.GetAllProcedimientos` |
-| POST   | `http://localhost:8080/procedimientos`             | `controllers.CreateProcedimiento`  |
-| GET    | `http://localhost:8080/procedimientos/{id}`        | `controllers.GetProcedimiento`     |
-| PUT    | `http://localhost:8080/procedimientos/{id}`        | `controllers.UpdateProcedimiento`  |
-| DELETE | `http://localhost:8080/procedimientos/{id}`        | `controllers.DeleteProcedimiento`  |
+| Method | URL                    | Handler                            |
+|--------|------------------------|------------------------------------|
+| GET    | `/procedimientos`      | `controllers.GetAllProcedimientos` |
+| POST   | `/procedimientos`      | `controllers.CreateProcedimiento`  |
+| GET    | `/procedimientos/{id}` | `controllers.GetProcedimiento`     |
+| PUT    | `/procedimientos/{id}` | `controllers.UpdateProcedimiento`  |
+| DELETE | `/procedimientos/{id}` | `controllers.DeleteProcedimiento`  |
 
-## Técnicas (`/tecnicas`) — requires Users + Admins
+## Técnicas (`/tecnicas`) — lectura autenticada, escritura solo admin
 
-| Method | URL                                          | Handler                     |
-|--------|----------------------------------------------|-----------------------------|
-| GET    | `http://localhost:8080/tecnicas`             | `controllers.GetAllTecnicas`|
-| POST   | `http://localhost:8080/tecnicas`             | `controllers.CreateTecnica` |
-| GET    | `http://localhost:8080/tecnicas/{id}`        | `controllers.GetTecnica`    |
-| PUT    | `http://localhost:8080/tecnicas/{id}`        | `controllers.UpdateTecnica` |
-| DELETE | `http://localhost:8080/tecnicas/{id}`        | `controllers.DeleteTecnica` |
+| Method | URL              | Handler                      |
+|--------|------------------|------------------------------|
+| GET    | `/tecnicas`      | `controllers.GetAllTecnicas` |
+| POST   | `/tecnicas`      | `controllers.CreateTecnica`  |
+| GET    | `/tecnicas/{id}` | `controllers.GetTecnica`     |
+| PUT    | `/tecnicas/{id}` | `controllers.UpdateTecnica`  |
+| DELETE | `/tecnicas/{id}` | `controllers.DeleteTecnica`  |
 
 ---
 
-## Not mounted / TODO
+## Sin montar
 
-- `AdminRoutes()` (`server/routes/admin.go`) exists but is **not registered** in `routes.Init`, and its handlers are commented out (`GetCoordinatorsByRoute`, `GetAllAdmins`).
+- `AdminRoutes()` (`server/routes/admin.go`) no está registrado en `routes.Init` y su cuerpo
+  está comentado. Quedó sin propósito: la tabla `admins` desapareció del esquema y el rol de
+  administrador se lee de `"Usuarios".rol`. Se puede borrar el archivo.
 
 ---
 
 # Request Bodies
 
 Bodies JSON para los endpoints que consumen `body`. Los nombres de campo son
-exactamente los tags JSON de los structs (incluidos typos como `dirrecion`,
-`dx_pre_operatorio`, `mdicos`, `anestia` — el server decodifica por esos nombres).
+exactamente los tags JSON de los structs.
+
+> **Esquema.** Las tablas son `"Paciente"`, `"Usuarios"`, `"Nota_Operatoria"`,
+> `"Equipo_Quirurgico"`, `"Diagnosticos"`, `"Procedimientos"` e `"Intervencion"`: van entre
+> comillas dobles porque llevan mayúsculas. Algunos nombres JSON del API no coinciden con la
+> columna (`anestia` → `anestesia`, `resumen_intervencion` → `resumen_intevencion`,
+> `medico_encargado` → `id_medico_encargado`, `diagnostico` → `procedimientos`).
+>
+> **`Id_paciente` es un UUID**, no un entero: el paciente lo genera el servidor al crearlo.
+>
+> **`hora_comienzo` y `hora_culminacion` son `TIME`** (hora del día). Se leen y escriben como
+> RFC3339, pero la parte de fecha no significa nada — la fecha real vive en `fecha_comienzo`.
 
 > **Content-Type:** `application/json` en todos.
 > Fechas/horas de tipo `time.Time` van en **RFC3339** (ej. `2026-07-20T14:30:00Z`).
 
 ## Usuarios
 
-### `POST http://localhost:8080/usuarios` — CreateUser
+### `GET /usuarios/me` — GetUserData
+**Sin body.** Devuelve el perfil de la sesión actual: `id`, `nombres`, `apellidos`, `correo`
+y `rol`. Nunca incluye la contraseña.
+
+### `PUT /usuarios/me/password` — ChangePassword
+Cambia **la contraseña propia**, exigiendo la actual (HU-04). Para que un admin le cambie la
+contraseña a otro está `PUT /usuarios/{id}`.
+```json
+{
+  "contrasena_actual": "roma2026",
+  "contrasena_nueva": "nuevaClave2026"
+}
+```
+
+| Caso | Respuesta |
+|---|---|
+| Cambio correcto | `200 contrasena actualizada` |
+| `contrasena_actual` no coincide | `403` |
+| Nueva de menos de 8 caracteres | `400` |
+| Nueva igual a la actual | `400` |
+| Sin sesión | `401` |
+| Cuenta dada de baja | `401`, y se revocan sus sesiones |
+
+Al cambiarla, **las demás sesiones del usuario se invalidan** y la actual sobrevive: si la
+contraseña se cambió porque alguien más la sabía, esa otra sesión debe caerse.
+
+### `POST /usuarios` — CreateUser
 El server hashea `contrasena` antes de guardar.
 ```json
 {
@@ -119,7 +181,7 @@ El server hashea `contrasena` antes de guardar.
 }
 ```
 
-### `PUT http://localhost:8080/usuarios/{id}` — UpdateUser
+### `PUT /usuarios/{id}` — UpdateUser
 El `id` (UUID) va en el **URL**. En el body mandas los campos a actualizar.
 ```json
 {
@@ -135,43 +197,72 @@ El `id` (UUID) va en el **URL**. En el body mandas los campos a actualizar.
 
 ## Pacientes
 
-### `POST http://localhost:8080/pacientes` — CreatePaciente
+### `POST /pacientes` — CreatePaciente
+**No mandes `id`**: es un UUID que genera el servidor y lo devuelve en la respuesta.
+`tipo_documento` y `genero` son de **un solo carácter** (`V`/`E`, `M`/`F`).
 ```json
 {
-  "id": "PAC-001",
-  "dx_pre_operatorio": "Historia médica del paciente",
+  "historia_medica": "HC-2026001",
   "numero_identificacion": "V-12345678",
-  "tipo_documento": "CI",
+  "tipo_documento": "V",
   "nombre": "Juan Pérez",
   "genero": "M",
   "fecha_nacimiento": "1990-05-20T00:00:00Z",
   "telefono": "0414-1234567",
-  "dirrecion": "Av. Principal, San Cristóbal",
-  "eliminado": false
+  "direccion": "Av. Principal, San Cristóbal"
 }
 ```
 
-### `PUT http://localhost:8080/pacientes/{id}` — UpdatePaciente
-El `id` va en el **URL**. Mismo shape que POST en el body (sin `id`).
+### `PUT /pacientes/{id}` — UpdatePaciente
+El `id` (UUID) va en el **URL**. Mismo shape que el POST, sin `id`.
 ```json
 {
-  "dx_pre_operatorio": "Historia médica actualizada",
+  "historia_medica": "HC-2026001",
   "numero_identificacion": "V-12345678",
-  "tipo_documento": "CI",
+  "tipo_documento": "V",
   "nombre": "Juan Pérez",
   "genero": "M",
   "fecha_nacimiento": "1990-05-20T00:00:00Z",
   "telefono": "0414-7654321",
-  "dirrecion": "Nueva dirección",
-  "eliminado": false
+  "direccion": "Nueva dirección"
 }
 ```
 
-> `DELETE /pacientes/{id}` **no lleva body** — usa el `id` del URL.
+> `historia_medica` y `numero_identificacion` son **únicos** en la base.
+> Si la `historia_medica` ya existe, el server responde `400 paciente already exists`.
+> Con `numero_identificacion` repetida **no** hay ese chequeo previo: lo rechaza la
+> restricción UNIQUE y sale como `500`.
+>
+> `eliminado` no se manda nunca — la baja es exclusiva del `DELETE`, y es **lógica**.
+
+> `DELETE /pacientes/{id}` **no lleva body** — usa el `id` del URL. Solo admin.
 
 ## Notas
 
-### `POST http://localhost:8080/notas` — CreateNota
+### `GET /notas` — GetAllNotas
+Todas las notas vigentes (`eliminado = FALSE`) del servicio, de la más reciente a la más
+antigua. **Sin body.** Solo secretaria y admin; el médico usa `/notas/medics`.
+
+Filtros opcionales por query string, combinables:
+
+| Param         | Ejemplo                          | Significado                                                |
+|---------------|----------------------------------|------------------------------------------------------------|
+| `medico`      | `?medico=6c6f6076-...`           | notas donde ese médico es encargado **o** parte del equipo |
+| `paciente`    | `?paciente=a0000000-...`         | notas de ese paciente (UUID)                               |
+| `from` / `to` | `?from=2025-08-01&to=2025-08-31` | rango sobre `fecha_comienzo` (`YYYY-MM-DD` o RFC3339)      |
+
+```
+GET /notas?medico=6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7&from=2025-08-01&to=2026-07-31
+```
+
+### `GET /notas/{id}` — GetNota
+**Sin body.** Devuelve la nota completa con su `medicos` (equipo quirúrgico). Si la nota no
+existe o fue dada de baja, responde `404`.
+
+### `POST /notas` — CreateNota
+`medico_encargado` es opcional: si no se manda, se usa el usuario de la sesión.
+`equipo` es la lista de UUID del equipo quirúrgico; el encargado se agrega solo, no hace
+falta repetirlo. Si algún UUID no corresponde a un médico activo, responde `400`.
 ```json
 {
   "dx_pre_operatorio": "Apendicitis aguda",
@@ -187,16 +278,21 @@ El `id` va en el **URL**. Mismo shape que POST en el body (sin `id`).
   "es_emergencia": true,
   "tuvo_biopsia": true,
   "anestia": "General",
-  "Id_paciente": 1,
+  "Id_paciente": "a0000000-0000-4000-8000-000000000001",
   "medico_encargado": "6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7",
-  "eliminado": false
+  "equipo": [
+    "422fcc07-fcf9-441f-9565-0d05516a54f3",
+    "257991b4-2438-45a4-8008-cbff46c5debd"
+  ]
 }
 ```
-> El equipo de médicos (`medicos`) se llena solo en las respuestas `GET` (viene de
-> `equipo_quirurgico`); no se envía al crear/actualizar.
+> `equipo` es lo que se **escribe**: los UUID del equipo quirúrgico. `medicos` es lo que se
+> **lee** en los `GET`: los datos completos de cada médico, traídos de `"Equipo_Quirurgico"`.
+> La respuesta del `POST`/`PUT` ya trae `medicos` actualizado.
+> `eliminado` no se manda: la baja es exclusiva del `DELETE`.
 
-### `PUT http://localhost:8080/notas/{id}` — UpdateNota
-El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota **creada el mismo día** (columna `created_at`).
+### `PUT /notas/{id}` — UpdateNota
+El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota dentro de los **7 días calendario** siguientes a su registro (columna `created_at`; ver `notas.PlazoEdicionDias`). Fuera de plazo: `403`.
 ```json
 {
   "dx_pre_operatorio": "Apendicitis aguda",
@@ -212,44 +308,52 @@ El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una
   "es_emergencia": true,
   "tuvo_biopsia": true,
   "anestia": "General",
-  "Id_paciente": 1,
+  "Id_paciente": "a0000000-0000-4000-8000-000000000001",
   "medico_encargado": "6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7",
-  "eliminado": false
+  "equipo": [
+    "422fcc07-fcf9-441f-9565-0d05516a54f3",
+    "257991b4-2438-45a4-8008-cbff46c5debd"
+  ]
 }
 ```
-> El equipo de médicos (`medicos`) se llena solo en las respuestas `GET` (viene de
-> `equipo_quirurgico`); no se envía al crear/actualizar.
+> `equipo` es lo que se **escribe**: los UUID del equipo quirúrgico. `medicos` es lo que se
+> **lee** en los `GET`: los datos completos de cada médico, traídos de `"Equipo_Quirurgico"`.
+> La respuesta del `POST`/`PUT` ya trae `medicos` actualizado.
+> `eliminado` no se manda: la baja es exclusiva del `DELETE`.
 
-### `DELETE http://localhost:8080/notas/{id}` — DeleteNota
-**Sin body.** El `id` va en el URL. Igual que el PUT, solo borra notas creadas el mismo día.
+### `DELETE /notas/{id}` — DeleteNota
+**Sin body.** El `id` va en el URL. Igual que el PUT, solo aplica dentro de los **7 días**
+siguientes al registro.
 
-### `GET http://localhost:8080/notas/medics/dates` — GetNotasFromMedicDates
-El `id` del médico sale de la sesión; solo mandas el rango de fechas en el body.
-```json
-{
-  "from": "2025-08-01T00:00:00Z",
-  "to": "2026-07-31T23:59:59Z"
-}
+La baja es **lógica**: la fila y su equipo quirúrgico se conservan en la base y solo se
+marca `eliminado = TRUE`. Una nota operatoria es parte de la historia clínica. A partir de
+ahí desaparece de toda consulta y responde `404`; un `PUT` posterior **no la resucita**
+(`eliminado` no se escribe ni en el `POST` ni en el `PUT`).
+
+### `GET /notas/medics/dates` — GetNotasFromMedicDates
+**Sin body.** El `id` del médico sale de la sesión; el rango va en el query string.
+`from` y `to` son obligatorios (`YYYY-MM-DD` o RFC3339); si falta alguno, `400`.
+```
+GET /notas/medics/dates?from=2025-08-01&to=2026-07-31
 ```
 
-### `GET http://localhost:8080/notas/pacientes/{id}` — GetNotasFromPaciente
-El `id` del paciente va en el **URL**. Sin body.
+### `GET /notas/pacientes/{id}` — GetNotasFromPaciente
+El `id` (UUID) del paciente va en el **URL**. Sin body. Un paciente sin notas devuelve `[]`.
 
-### `GET http://localhost:8080/notas/pacientes/dates` — GetNotasFromPacienteDates
-El `id` del paciente va en el body (más el rango).
-```json
-{
-  "id": "1",
-  "from": "2025-08-01T00:00:00Z",
-  "to": "2026-07-31T23:59:59Z"
-}
+### `GET /notas/pacientes/dates` — GetNotasFromPacienteDates
+**Sin body.** Todo va en el query string: `id`, `from` y `to`, los tres obligatorios.
+```
+GET /notas/pacientes/dates?id=a0000000-0000-4000-8000-000000000001&from=2025-08-01&to=2026-07-31
 ```
 
-> `GET /notas/medics` no lleva body.
+> `GET /notas/medics` no lleva body ni parámetros.
+
+> **Ningún `GET` de la API lleva body.** Los rangos de fechas van siempre en el query
+> string, porque `fetch` y buena parte de los clientes HTTP descartan el body de un `GET`.
 
 ## Diagnósticos
 
-### `POST http://localhost:8080/diagnosticos` — CreateDiagnostico
+### `POST /diagnosticos` — CreateDiagnostico
 ```json
 {
   "diagnostico": "Hipertensión arterial",
@@ -257,7 +361,7 @@ El `id` del paciente va en el body (más el rango).
 }
 ```
 
-### `PUT http://localhost:8080/diagnosticos/{id}` — UpdateDiagnostico
+### `PUT /diagnosticos/{id}` — UpdateDiagnostico
 El `id` va en el **URL** (el body ya no lo necesita).
 ```json
 {
@@ -268,7 +372,7 @@ El `id` va en el **URL** (el body ya no lo necesita).
 
 ## Procedimientos
 
-### `POST http://localhost:8080/procedimientos` — CreateProcedimiento
+### `POST /procedimientos` — CreateProcedimiento
 ```json
 {
   "intervencion": "Colecistectomía laparoscópica",
@@ -276,7 +380,7 @@ El `id` va en el **URL** (el body ya no lo necesita).
 }
 ```
 
-### `PUT http://localhost:8080/procedimientos/{id}` — UpdateProcedimiento
+### `PUT /procedimientos/{id}` — UpdateProcedimiento
 El `id` va en el **URL** (el body ya no lo necesita).
 ```json
 {
@@ -287,14 +391,14 @@ El `id` va en el **URL** (el body ya no lo necesita).
 
 ## Técnicas
 
-### `POST http://localhost:8080/tecnicas` — CreateTecnica
+### `POST /tecnicas` — CreateTecnica
 ```json
 {
   "tecnica": "Sutura continua"
 }
 ```
 
-### `PUT http://localhost:8080/tecnicas/{id}` — UpdateTecnica
+### `PUT /tecnicas/{id}` — UpdateTecnica
 El `id` va en el **URL** (el body ya no lo necesita).
 ```json
 {
@@ -304,8 +408,22 @@ El `id` va en el **URL** (el body ya no lo necesita).
 
 ## Auth
 
-### `POST http://localhost:8080/auth/login` — Login
-Decodifica un `Usuarios`, pero solo usa `correo` y `contrasena`. Si es válido, setea la cookie `session_id`.
+### `POST /auth/login` — Login
+Decodifica un `Usuarios`, pero solo usa `correo` y `contrasena`. Si es válido, setea la
+cookie `session_id` y responde con los datos del usuario —**incluido el `rol`**, que el
+cliente necesita para saber a qué pantalla entrar. La contraseña nunca sale en la respuesta.
+
+```json
+{
+  "id": "3e61b05e-ff66-485b-86a6-3b8143f0bce8",
+  "nombres": "Canela",
+  "apellidos": "Cenelita",
+  "correo": "canela@test.com",
+  "rol": "secretaria"
+}
+```
+
+Request:
 ```json
 {
   "correo": "ryuk@test.com",
@@ -317,8 +435,13 @@ Decodifica un `Usuarios`, pero solo usa `correo` y `contrasena`. Si es válido, 
 > `ryuk@test.com` / `ryuk2026` (admin) · `roma@test.com` / `roma2026` (medico) ·
 > `oso@test.com` / `oso2026` (medico) · `lobo@test.com` / `lobo2026` (medico) ·
 > `canela@test.com` / `canela2026` (secretaria).
+>
+> **Pacientes de prueba**: 10, con UUID predecibles
+> `a0000000-0000-4000-8000-000000000001` … `-000000000010`, e historias `HC-2025001` … `HC-2025010`.
+> Los datos se recargan en cada arranque del servidor, así que las 30 notas quedan siempre
+> dentro del plazo de edición.
 
-### `POST http://localhost:8080/auth/signup/{token}` — SignUp
+### `POST /auth/signup/{token}` — SignUp
 El `{token}` es un **path param**. Tiene dos modos según su valor:
 
 - **Paso 1 — solicitar registro** → usa el token literal `confirmation` en la URL
@@ -337,10 +460,10 @@ El `{token}` es un **path param**. Tiene dos modos según su valor:
   (`/auth/signup/<token_generado>`). En este modo **no se manda body**: el server
   recupera al usuario de la caché con ese token, crea la cuenta y setea la sesión.
 
-### `GET/POST http://localhost:8080/auth/validateUser` — ValidateSession
+### `GET/POST /auth/validateUser` — ValidateSession
 **Sin body.** Lee la cookie `session_id`. Responde `200` si la sesión es válida, `401` si no.
 
-### `GET/POST http://localhost:8080/auth/logout` — Logout
+### `GET/POST /auth/logout` — Logout
 **Sin body.** Lee la cookie `session_id`, la elimina de la caché de sesiones y limpia la cookie del navegador. Siempre responde `200`.
 
 ## Notas de implementación
@@ -349,13 +472,23 @@ El `{token}` es un **path param**. Tiene dos modos según su valor:
   (usuarios, pacientes, notas, diagnosticos, procedimientos, tecnicas). El `GET` de lista y
   el `POST` usan `/{recurso}` sin id. En notas, las rutas específicas (`/notas/medics`,
   `/notas/pacientes/{id}`, `.../dates`) se registran **antes** del comodín `/notas/{id}`.
-- **Regla de edición de notas**: `PUT`/`DELETE` de notas solo funcionan si la nota se
-  **creó el mismo día** (se agregó la columna `created_at DEFAULT NOW()`). Como los datos
-  de prueba se cargan en cada arranque, quedan editables el día que corras el server.
+- **Regla de edición de notas**: `PUT`/`DELETE` de notas solo funcionan dentro de los
+  **7 días calendario** siguientes al registro (columna `created_at DEFAULT NOW()`). El
+  plazo vive en una sola constante, `notas.PlazoEdicionDias`, y el mensaje de error se
+  arma con ella. Como los datos de prueba se cargan en cada arranque, quedan editables.
+
+- **Autorización**: cada handler de escritura se envuelve individualmente
+  (`r.Handle(path, auth.Medicos(http.HandlerFunc(h)))`) en vez de usar un subrouter con
+  `Use`. El patrón anterior —crear `p := r.PathPrefix("").Subrouter()` con `p.Use(...)` y
+  registrar los handlers sobre `r`— no aplicaba el middleware a nada.
+
+- **Código de estado**: los handlers escriben una cabecera propia `Status-Code: 201`, pero
+  el **status HTTP real es `200`** en casi todas las escrituras. El cliente debe mirar el
+  status de la respuesta, no esa cabecera.
 
 ### Pendiente (no crítico)
 
-- **`auth.Admins` no está aplicado**: en cada archivo de `routes/` se crea un subrouter
-  `p := r.PathPrefix("").Subrouter(); p.Use(auth.Admins)`, pero los handlers se registran
-  sobre `r`, no sobre `p`. Ese middleware de admin **no protege nada** hoy; solo aplica
-  `auth.Users` (heredado del subrouter `api`).
+- Las tablas de catálogo ya existen (`"Diagnosticos"`, `"Procedimientos"`, `"Intervencion"`)
+  y sus endpoints funcionan, pero `"Nota_Operatoria"` sigue guardando el diagnóstico y la
+  intervención como **texto libre**, sin FK. Falta decidir si además debe validarse contra
+  el catálogo.

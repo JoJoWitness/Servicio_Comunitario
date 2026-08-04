@@ -11,17 +11,16 @@ import (
 
 type Diagnosticos struct {
 	Id          int    `json:"id"`
-	Diagnostico string `json:"diagnostico"`
+	Diagnostico string `json:"diagnostico"` // columna `procedimientos` en el esquema
 	Resumen     string `json:"resumen"`
 }
 
 func (u *Diagnosticos) Get(db *pgxpool.Pool) error {
 	query := `
 		SELECT
-			diagnostico,
+			procedimientos,
 			resumen
-		FROM
-		    diagnosticos
+		FROM "Diagnosticos"
 		WHERE
 		    id = @id
 	`
@@ -38,8 +37,8 @@ func (u *Diagnosticos) Get(db *pgxpool.Pool) error {
 
 func (u *Diagnosticos) Create(db *pgxpool.Pool) error {
 	query := `
-	INSERT INTO Diagnosticos 
-		(diagnostico, resumen) 
+	INSERT INTO "Diagnosticos" 
+		(procedimientos, resumen) 
 	VALUES 
 		(@diagnostico, @resumen);
 	`
@@ -59,10 +58,9 @@ func (u *Diagnosticos) Create(db *pgxpool.Pool) error {
 
 func (u *Diagnosticos) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE 
-			Diagnosticos
+		UPDATE "Diagnosticos"
 		SET 
-			diagnostico = @diagnostico,
+			procedimientos = @diagnostico,
 			resumen = @resumen
 		WHERE 
 			id = @id;
@@ -84,8 +82,7 @@ func (u *Diagnosticos) Update(db *pgxpool.Pool) error {
 
 func (u *Diagnosticos) Delete(db *pgxpool.Pool) error {
 	query := `
-		DELETE FROM
-			Diagnosticos
+		DELETE FROM "Diagnosticos"
 		WHERE 
 			id = @id;
 	`
@@ -103,10 +100,9 @@ func GetAllDiagnosticos() ([]Diagnosticos, error) {
 	query := `	
 		SELECT 
 			id,
-			diagnostico,
+			procedimientos,
 			resumen
-		FROM 
-		    diagnosticos;
+		FROM "Diagnosticos";
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query)
@@ -121,14 +117,14 @@ func GetAllDiagnosticos() ([]Diagnosticos, error) {
 		var u Diagnosticos
 		err := rows.Scan(&u.Id, &u.Diagnostico, &u.Resumen)
 		if err != nil {
-			log.Printf("Error scanning diagnostico row: %v\n", err)
+			log.Printf("Error scanning procedimientos row: %v\n", err)
 			return nil, err
 		}
 		diagnosticos = append(diagnosticos, u)
 	}
 
 	if rows.Err() != nil {
-		log.Printf("Error iterating diagnostico rows: %v\n", rows.Err())
+		log.Printf("Error iterating procedimientos rows: %v\n", rows.Err())
 		return nil, rows.Err()
 	}
 

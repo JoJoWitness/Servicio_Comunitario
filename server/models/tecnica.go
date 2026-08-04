@@ -17,9 +17,8 @@ type Tecnica struct {
 func (u *Tecnica) Get(db *pgxpool.Pool) error {
 	query := `
 		SELECT
-			tecnica
-		FROM
-		    tecnica
+			"Intervencion"
+		FROM "Intervencion"
 		WHERE
 		    id = @id
 	`
@@ -36,7 +35,7 @@ func (u *Tecnica) Get(db *pgxpool.Pool) error {
 
 func (u *Tecnica) Create(db *pgxpool.Pool) error {
 	query := `
-	INSERT INTO tecnica 
+	INSERT INTO "Intervencion" 
 		(tecnica) 
 	VALUES 
 		(@tecnica);
@@ -56,8 +55,7 @@ func (u *Tecnica) Create(db *pgxpool.Pool) error {
 
 func (u *Tecnica) Update(db *pgxpool.Pool) error {
 	query := `
-		UPDATE
-			tecnica
+		UPDATE "Intervencion"
 		SET
 			tecnica = @tecnica
 		WHERE
@@ -79,8 +77,7 @@ func (u *Tecnica) Update(db *pgxpool.Pool) error {
 
 func (u *Tecnica) Delete(db *pgxpool.Pool) error {
 	query := `
-		DELETE FROM
-			tecnica
+		DELETE FROM "Intervencion"
 		WHERE 
 			id = @id;
 	`
@@ -98,9 +95,8 @@ func GetAllTecnicas() ([]Tecnica, error) {
 	query := `	
 		SELECT 
 			id,
-			tecnica
-		FROM 
-		    tecnica;
+			"Intervencion"
+		FROM "Intervencion";
 	`
 
 	rows, err := config.PsqlDB.Query(context.Background(), query)

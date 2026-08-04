@@ -11,14 +11,14 @@ import (
 func PacientesRoutes() http.Handler {
 	r := mux.NewRouter()
 
-	p := r.PathPrefix("").Subrouter()
-	p.Use(auth.Admins)
-
+	// Lectura: cualquier usuario autenticado necesita buscar al paciente (HU-05).
 	r.HandleFunc("/pacientes", controllers.GetAllPacientes).Methods("GET")
-	r.HandleFunc("/pacientes", controllers.CreatePaciente).Methods("POST")
 	r.HandleFunc("/pacientes/{id}", controllers.GetPaciente).Methods("GET")
-	r.HandleFunc("/pacientes/{id}", controllers.UpdatePaciente).Methods("PUT")
-	r.HandleFunc("/pacientes/{id}", controllers.DeletePaciente).Methods("DELETE")
+
+	// Escritura: solo médicos. La secretaria consulta, no modifica.
+	r.Handle("/pacientes", auth.Medicos(http.HandlerFunc(controllers.CreatePaciente))).Methods("POST")
+	r.Handle("/pacientes/{id}", auth.Medicos(http.HandlerFunc(controllers.UpdatePaciente))).Methods("PUT")
+	r.Handle("/pacientes/{id}", auth.Admins(http.HandlerFunc(controllers.DeletePaciente))).Methods("DELETE")
 
 	return r
 }
