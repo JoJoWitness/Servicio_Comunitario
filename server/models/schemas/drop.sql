@@ -1,4 +1,5 @@
 BEGIN;
+    DROP TABLE IF EXISTS "Procedimiento_Tecnica" CASCADE;
     DROP TABLE IF EXISTS "Equipo_Quirurgico" CASCADE;
     DROP TABLE IF EXISTS "Nota_Operatoria" CASCADE;
     DROP TABLE IF EXISTS "Paciente" CASCADE;

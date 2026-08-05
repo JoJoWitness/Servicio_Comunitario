@@ -19,6 +19,11 @@ func NotasRoutes() http.Handler {
 	// Lectura clínica: cualquier usuario autenticado. El médico consulta el
 	// historial del paciente antes de operar (HU-07) y la secretaria responde
 	// consultas (HU-17); /notas/medics ya se filtra sola por la sesión (HU-11).
+	// Exportación del record quirúrgico: cada médico baja el suyo en .xlsx, con
+	// el rango de fechas que elija. El handler se ata a la sesión, así que la
+	// ruta no necesita más permiso que estar autenticado; solo el admin puede
+	// pedir el de otro médico con ?medico=.
+	r.HandleFunc("/notas/medics/export", controllers.ExportNotasMedico).Methods("GET")
 	r.HandleFunc("/notas/medics/dates", controllers.GetNotasFromMedicDates).Methods("GET")
 	r.HandleFunc("/notas/medics", controllers.GetNotasFromMedic).Methods("GET")
 	r.HandleFunc("/notas/pacientes/dates", controllers.GetNotasFromPacienteDates).Methods("GET")

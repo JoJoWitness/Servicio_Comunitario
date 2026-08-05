@@ -27,6 +27,9 @@ func main() {
 
 	models.DropDB(config.PsqlDB)
 	models.InitDB(config.PsqlDB)
+	// El catálogo va antes que los datos de muestra: las notas de prueba usan
+	// sus diagnósticos y procedimientos.
+	models.LoadSeed(config.PsqlDB)
 	models.LoadSampleData(config.PsqlDB)
 
 	router := mux.NewRouter()

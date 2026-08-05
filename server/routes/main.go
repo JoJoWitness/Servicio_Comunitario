@@ -56,6 +56,9 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, hx-request, hx-current-url")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		// El nombre del archivo de las descargas (.xlsx) viaja aquí; sin
+		// exponerlo, el navegador se lo oculta al frontend.
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == http.MethodOptions {

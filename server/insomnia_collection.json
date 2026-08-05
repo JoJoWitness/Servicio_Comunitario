@@ -18,7 +18,7 @@
       "parentId": "wrk_servicio_comunitario",
       "name": "Base Environment",
       "data": {
-        "base_url": "http://localhost:8080"
+        "base_url": "https://servicio-comunitario-7ye5.onrender.com"
       },
       "dataPropertyOrder": {
         "&": [
@@ -26,6 +26,36 @@
         ]
       },
       "metaSortKey": 1784601087586
+    },
+    {
+      "_id": "env_render_servicio",
+      "_type": "environment",
+      "parentId": "env_base_servicio",
+      "name": "Render (deploy)",
+      "data": {
+        "base_url": "https://servicio-comunitario-7ye5.onrender.com"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url"
+        ]
+      },
+      "metaSortKey": 1
+    },
+    {
+      "_id": "env_local_servicio",
+      "_type": "environment",
+      "parentId": "env_base_servicio",
+      "name": "Local (8080)",
+      "data": {
+        "base_url": "http://localhost:8080"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "base_url"
+        ]
+      },
+      "metaSortKey": 2
     },
     {
       "_id": "fld_auth",
@@ -328,20 +358,91 @@
       "name": "Notas from Medic + dates",
       "method": "GET",
       "url": "{{ _.base_url }}/notas/medics/dates",
-      "headers": [
+      "headers": [],
+      "parameters": [
         {
-          "name": "Content-Type",
-          "value": "application/json"
+          "name": "from",
+          "value": "2025-08-01",
+          "disabled": false
+        },
+        {
+          "name": "to",
+          "value": "2026-07-31",
+          "disabled": false
         }
       ],
-      "parameters": [],
       "metaSortKey": 2100,
       "settingStoreCookies": true,
-      "settingSendCookies": true,
-      "body": {
-        "mimeType": "application/json",
-        "text": "{\n  \"from\": \"2025-08-01T00:00:00Z\",\n  \"to\": \"2026-07-31T23:59:59Z\"\n}"
-      }
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_export",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Export Record Quirurgico (xlsx)",
+      "description": "Descarga el record quirurgico del medico de la sesion en .xlsx.\nEl rango es opcional (YYYY-MM-DD o RFC3339); `to` incluye el dia completo.\nInsomnia muestra la respuesta como binario: usar \"Save response to file\" y abrirla con Excel/LibreOffice.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/medics/export",
+      "headers": [],
+      "parameters": [
+        {
+          "name": "from",
+          "value": "2026-01-01",
+          "disabled": false
+        },
+        {
+          "name": "to",
+          "value": "2026-12-31",
+          "disabled": false
+        }
+      ],
+      "metaSortKey": 2140,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_export_full",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Export Record Quirurgico completo (xlsx)",
+      "description": "Sin `from` ni `to`: baja el historial completo del medico de la sesion.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/medics/export",
+      "headers": [],
+      "parameters": [],
+      "metaSortKey": 2150,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
+    },
+    {
+      "_id": "req_not_export_admin",
+      "_type": "request",
+      "parentId": "fld_not",
+      "name": "Export Record de otro medico (solo admin)",
+      "description": "Solo el admin puede exportar el record de otro medico. Con sesion de medico o secretaria devuelve 403: cada medico exporta lo suyo.",
+      "method": "GET",
+      "url": "{{ _.base_url }}/notas/medics/export",
+      "headers": [],
+      "parameters": [
+        {
+          "name": "medico",
+          "value": "UUID_DEL_MEDICO",
+          "disabled": false
+        },
+        {
+          "name": "from",
+          "value": "2026-01-01",
+          "disabled": true
+        },
+        {
+          "name": "to",
+          "value": "2026-12-31",
+          "disabled": true
+        }
+      ],
+      "metaSortKey": 2160,
+      "settingStoreCookies": true,
+      "settingSendCookies": true
     },
     {
       "_id": "req_not_pac",
@@ -363,20 +464,27 @@
       "name": "Notas from Paciente + dates",
       "method": "GET",
       "url": "{{ _.base_url }}/notas/pacientes/dates",
-      "headers": [
+      "headers": [],
+      "parameters": [
         {
-          "name": "Content-Type",
-          "value": "application/json"
+          "name": "id",
+          "value": "UUID_DEL_PACIENTE",
+          "disabled": false
+        },
+        {
+          "name": "from",
+          "value": "2025-08-01",
+          "disabled": false
+        },
+        {
+          "name": "to",
+          "value": "2026-07-31",
+          "disabled": false
         }
       ],
-      "parameters": [],
       "metaSortKey": 2300,
       "settingStoreCookies": true,
-      "settingSendCookies": true,
-      "body": {
-        "mimeType": "application/json",
-        "text": "{\n  \"id\": \"1\",\n  \"from\": \"2025-08-01T00:00:00Z\",\n  \"to\": \"2026-07-31T23:59:59Z\"\n}"
-      }
+      "settingSendCookies": true
     },
     {
       "_id": "req_not_create",

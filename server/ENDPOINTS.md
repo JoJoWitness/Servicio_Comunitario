@@ -75,12 +75,42 @@ de baja, `404`.
 | GET    | `/notas`                 | `controllers.GetAllNotas` (secretaria/admin) |
 | GET    | `/notas/medics`          | `controllers.GetNotasFromMedic`              |
 | GET    | `/notas/medics/dates`    | `controllers.GetNotasFromMedicDates`         |
+| GET    | `/notas/medics/export`   | `controllers.ExportNotasMedico` (`.xlsx`)    |
 | GET    | `/notas/pacientes/{id}`  | `controllers.GetNotasFromPaciente`           |
 | GET    | `/notas/pacientes/dates` | `controllers.GetNotasFromPacienteDates`      |
 | POST   | `/notas`                 | `controllers.CreateNota`                     |
 | GET    | `/notas/{id}`            | `controllers.GetNota`                        |
 | PUT    | `/notas/{id}`            | `controllers.UpdateNota`                     |
 | DELETE | `/notas/{id}`            | `controllers.DeleteNota`                     |
+
+### `GET /notas/medics/export` — record quirúrgico en Excel
+
+Descarga un `.xlsx` con las notas del **médico de la sesión**: las que encabezó y aquellas en
+las que figura dentro del equipo quirúrgico. No devuelve JSON.
+
+| Parámetro | Obligatorio | Formato                  | Notas                                              |
+|-----------|-------------|--------------------------|----------------------------------------------------|
+| `from`    | no          | `YYYY-MM-DD` o RFC3339   | Sin él, no hay límite inferior                      |
+| `to`      | no          | `YYYY-MM-DD` o RFC3339   | Día incluido completo; sin él, no hay límite superior |
+| `medico`  | no          | UUID                     | **Solo admin.** Otro rol que lo mande recibe `403`  |
+
+Sin `from` ni `to` baja el historial completo. `to` anterior a `from`: `400`.
+
+Respuesta: `200` con
+`Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y
+`Content-Disposition: attachment; filename="record-quirurgico-<medico>-<from>_<to>.xlsx"`
+(el header va expuesto por CORS). Un médico sin notas en el rango recibe la planilla vacía,
+no un error.
+
+El libro trae dos hojas: **Record Quirurgico** (una fila por nota: fecha, horas, paciente,
+edad al momento de la cirugía, cédula, DX pre y post, intervención, cirujano, ayudantes,
+anestesia, pabellón, electiva/emergencia, biopsia y resumen) y **Resumen** (conteo por
+procedimiento, desglose de electivas/emergencias/biopsias y operaciones por mes, con dos
+gráficas: barras horizontales de procedimientos y columnas de actividad mensual).
+
+```
+GET /notas/medics/export?from=2026-01-01&to=2026-06-30
+```
 
 ## Diagnósticos (`/diagnosticos`) — lectura autenticada, escritura solo admin
 
