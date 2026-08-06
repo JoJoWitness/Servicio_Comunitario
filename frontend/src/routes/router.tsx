@@ -51,16 +51,8 @@ const MisNotasPage      = lazy(() => import("../features/notas/MisNotasPage"));
 const TodasNotasPage    = lazy(() => import("../features/notas/TodasNotasPage"));
 const DetalleNotaPage   = lazy(() => import("../features/notas/DetalleNotaPage"));
 const FormNotaPage      = lazy(() => import("../features/notas/FormNotaPage"));
-
-// Páginas pendientes — tareas 17 (placeholders temporales)
-const Placeholder = ({ nombre }: { nombre: string }) => (
-  <div style={{ padding: "2rem" }}>
-    <h1>{nombre}</h1>
-    <p>Página en construcción</p>
-  </div>
-);
-const CatalogosPage   = () => <Placeholder nombre="Catálogos" />;
-const UsuariosPage    = () => <Placeholder nombre="Usuarios" />;
+const CatalogosPage     = lazy(() => import("../features/catalogos/CatalogosPage"));
+const UsuariosPage      = lazy(() => import("../features/usuarios/UsuariosPage"));
 
 // Fallback de suspense
 const PageLoader = () => (

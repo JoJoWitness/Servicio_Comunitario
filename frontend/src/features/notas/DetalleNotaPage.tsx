@@ -33,6 +33,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clasificar403Nota, isApiError } from "@/api/errors";
 import { formatFechaUI } from "@/lib/datetime";
+import { BotonPDF } from "@/features/pdf/BotonPDF";
 
 // ---------------------------------------------------------------------------
 // Helpers de display
@@ -157,6 +158,7 @@ export default function DetalleNotaPage() {
           </Button>
           {puedeEditar && (
             <div className="flex gap-2">
+              <BotonPDF notaId={notaId} pacienteId={nota.idPaciente} />
               <Button
                 size="sm"
                 variant="outline"
