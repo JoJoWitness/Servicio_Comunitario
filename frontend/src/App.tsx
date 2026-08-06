@@ -1,51 +1,27 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+/**
+ * Componente raíz de la aplicación.
+ *
+ * Responsabilidades:
+ * 1. Rehidratación de sesión al iniciar — llama a GET /auth/validateUser
+ *    y actualiza el Store_Sesion (Requisito 4.1–4.4).
+ * 2. Renderiza el router principal con todas las rutas y guardias.
+ *
+ * El estado "cargando" inicial del Store_Sesion hace que RequireAuth
+ * muestre un spinner hasta que la validación termine (Requisito 4.4).
+ */
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+import { useValidateUser } from "./hooks/useAuth";
+import { AppRouter } from "./routes/router";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+function AppInner() {
+  // Dispara GET /auth/validateUser una sola vez al montar.
+  // El hook actualiza el Store_Sesion con el perfil o lo limpia ante 401.
+  // Requisitos 4.1, 4.2, 4.3
+  useValidateUser();
 
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+  return <AppRouter />;
 }
 
-export default App;
+export default function App() {
+  return <AppInner />;
+}

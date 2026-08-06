@@ -25,7 +25,7 @@
  * hasta que estén implementadas.
  */
 
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
   Navigate,
   Route,
@@ -38,27 +38,40 @@ import { RequireAuth, RequireRole } from "./guards";
 import { rutaInicialPorRol } from "./roleRoutes";
 
 // ---------------------------------------------------------------------------
-// Placeholders — se reemplazarán por las páginas reales en tareas 12–17
+// Páginas reales — lazy para code-splitting
 // ---------------------------------------------------------------------------
 
+const LoginPage         = lazy(() => import("../features/auth/LoginPage"));
+const SignupPage        = lazy(() => import("../features/auth/SignupPage"));
+const PerfilPage        = lazy(() => import("../features/auth/PerfilPage"));
+const PacientesPage     = lazy(() => import("../features/pacientes/PacientesPage"));
+const NuevoPacientePage = lazy(() => import("../features/pacientes/NuevoPacientePage"));
+const FichaPacientePage = lazy(() => import("../features/pacientes/FichaPacientePage"));
+
+// Páginas pendientes — tareas 14–17 (placeholders temporales)
 const Placeholder = ({ nombre }: { nombre: string }) => (
   <div style={{ padding: "2rem" }}>
     <h1>{nombre}</h1>
     <p>Página en construcción</p>
   </div>
 );
+const MisNotasPage    = () => <Placeholder nombre="Mis Notas" />;
+const TodasNotasPage  = () => <Placeholder nombre="Todas las Notas" />;
+const DetalleNotaPage = () => <Placeholder nombre="Detalle de Nota" />;
+const FormNotaPage    = () => <Placeholder nombre="Formulario de Nota" />;
+const CatalogosPage   = () => <Placeholder nombre="Catálogos" />;
+const UsuariosPage    = () => <Placeholder nombre="Usuarios" />;
 
-const LoginPage        = () => <Placeholder nombre="Login" />;
-const SignupPage       = () => <Placeholder nombre="Registro por invitación" />;
-const MisNotasPage     = () => <Placeholder nombre="Mis Notas" />;
-const TodasNotasPage   = () => <Placeholder nombre="Todas las Notas" />;
-const DetalleNotaPage  = () => <Placeholder nombre="Detalle de Nota" />;
-const FormNotaPage     = () => <Placeholder nombre="Formulario de Nota" />;
-const PacientesPage    = () => <Placeholder nombre="Pacientes" />;
-const FichaPacientePage = () => <Placeholder nombre="Ficha de Paciente" />;
-const CatalogosPage    = () => <Placeholder nombre="Catálogos" />;
-const UsuariosPage     = () => <Placeholder nombre="Usuarios" />;
-const PerfilPage       = () => <Placeholder nombre="Perfil" />;
+// Fallback de suspense
+const PageLoader = () => (
+  <div
+    role="status"
+    aria-label="Cargando página"
+    style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}
+  >
+    <span>Cargando…</span>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Componente interno que registra el interceptor 401
@@ -110,6 +123,7 @@ export function AppRouter() {
   return (
     <>
       <Interceptor401Registrar />
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* Rutas públicas */}
         <Route path="/login" element={<LoginPage />} />
@@ -194,6 +208,16 @@ export function AppRouter() {
           }
         />
 
+        {/* Nuevo paciente */}
+        <Route
+          path="/pacientes/nuevo"
+          element={
+            <RequireAuth>
+              <NuevoPacientePage />
+            </RequireAuth>
+          }
+        />
+
         {/* Ficha de paciente — todos los roles */}
         <Route
           path="/pacientes/:id"
@@ -248,6 +272,7 @@ export function AppRouter() {
           }
         />
       </Routes>
+      </Suspense>
     </>
   );
 }
