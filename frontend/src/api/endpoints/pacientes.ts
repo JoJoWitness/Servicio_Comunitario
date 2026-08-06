@@ -18,8 +18,8 @@ import {
   pacienteToWriteDto,
 } from "../dto/paciente.dto";
 import { request } from "../httpClient";
-import type { PaginatedResponse, PaginationParams } from "../types";
-import { buildPaginationQuery } from "./queryUtils";
+import type { FiltrosPacientesParams, PaginatedResponse, PaginationParams } from "../types";
+import { buildFilterQuery } from "./queryUtils";
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -27,12 +27,15 @@ import { buildPaginationQuery } from "./queryUtils";
 
 /**
  * Obtiene todos los pacientes del sistema (paginado server-side).
- * GET /pacientes
+ * GET /pacientes[?nombre=&documento=&historia_medica=&genero=&page=&size=&sortBy=&order=]
  *
  * Requisito 10.1
  */
-export async function listarPacientes(params?: PaginationParams): Promise<PaginatedResponse<Paciente>> {
-  const qs = buildPaginationQuery(params);
+export async function listarPacientes(
+  filtros?: FiltrosPacientesParams,
+  params?: PaginationParams
+): Promise<PaginatedResponse<Paciente>> {
+  const qs = buildFilterQuery(filtros as Record<string, string | undefined>, params);
   const raw = await request<PaginatedResponse<PacienteDTO>>(`/pacientes${qs}`);
   return {
     data: raw.data.map(pacienteToDomain),

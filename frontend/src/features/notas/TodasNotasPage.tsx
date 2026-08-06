@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FilePlus } from "lucide-react";
+import { FilePlus, FilterX } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,9 @@ export default function TodasNotasPage() {
   // Requisito 19.1: GET /notas — con paginación server-side
   const paginacion = useServerPaginacion("fecha_comienzo", "DESC", 10);
 
+  // Al cambiar cualquier filtro, volver a página 1
+  useEffect(() => { paginacion.resetear(); }, [medicoFiltro, pacienteFiltro, from, to]);
+
   const { data: notasResp, isLoading, isError } = useTodasLasNotas(filtros, {
     page: paginacion.pagina,
     size: paginacion.size,
@@ -62,11 +65,10 @@ export default function TodasNotasPage() {
   }, [notasResp?.meta]);
 
   // Pedir lista completa de usuarios y pacientes para los selectores de filtro
-  const { data: usuariosResp } = useListarUsuarios({ size: 100 });
-  const { data: pacientesResp } = useListarPacientes({ size: 200 });
+  const { data: usuariosResp } = useListarUsuarios(undefined, { size: 100 });
+  const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
 
   const notas = notasResp?.data ? ordenarNotasDesc(notasResp.data) : [];
-  // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
   const medicos = usuariosResp?.data ?? [];
   const pacientesLista = pacientesResp?.data ?? [];
 
@@ -112,7 +114,8 @@ export default function TodasNotasPage() {
                   <SelectItem key={m.id} value={m.id}>
                     {m.nombres} {m.apellidos}
                   </SelectItem>
-                ))}              </SelectContent>
+                ))}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
@@ -155,6 +158,7 @@ export default function TodasNotasPage() {
 
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
+            <FilterX className="mr-2 h-4 w-4" />
             Limpiar filtros
           </Button>
         )}
@@ -200,3 +204,4 @@ export default function TodasNotasPage() {
     </AppLayout>
   );
 }
+

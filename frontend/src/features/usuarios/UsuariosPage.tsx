@@ -1,14 +1,14 @@
 /**
  * Administración de usuarios — solo admin.
  *
- * Listado de todos los usuarios con su rol, creación, edición de rol
- * y baja lógica.
+ * Listado de todos los usuarios con filtros estructurados server-side,
+ * paginación, creación, edición de rol y baja lógica.
  *
  * Requisitos: 28.1–28.6
  */
 
-import { useState } from "react";
-import { Pencil, Plus, UserX } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Pencil, Plus, UserX, FilterX } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -39,12 +39,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import {
   useListarUsuarios,
   useCrearUsuario,
   useEditarUsuario,
   useDesactivarUsuario,
 } from "@/hooks/useUsuarios";
+import { useServerPaginacion } from "@/hooks/usePaginacion";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSessionStore } from "@/stores/sessionStore";
 import { isApiError } from "@/api/errors";
 import type { Rol, Usuario } from "@/domain/models";
@@ -210,9 +213,49 @@ export default function UsuariosPage() {
   const [bajaId, setBajaId] = useState<string | null>(null);
   const [errorBaja, setErrorBaja] = useState<string | null>(null);
 
-  const { data: respuesta, isLoading } = useListarUsuarios({ size: 100 });
+  // --- Estado de filtros ---
+  const [nombre, setNombre] = useState("");
+  const [correo, setCorreo] = useState("");
+  const [rol, setRol] = useState("");
+
+  // Debounce 500ms para texto libre
+  const nombreDebounced = useDebounce(nombre, 500);
+  const correoDebounced = useDebounce(correo, 500);
+
+  // Paginación server-side
+  const paginacion = useServerPaginacion("apellidos", "ASC", 20);
+
+  // Al cambiar cualquier filtro, volver a página 1
+  useEffect(() => { paginacion.resetear(); }, [nombreDebounced, correoDebounced, rol]);
+
+  const filtros = {
+    nombre: nombreDebounced || undefined,
+    correo: correoDebounced || undefined,
+    rol: rol || undefined,
+  };
+
+  const { data: respuesta, isLoading } = useListarUsuarios(filtros, {
+    page: paginacion.pagina,
+    size: paginacion.size,
+    sortBy: paginacion.sortBy,
+    order: paginacion.order,
+  });
+
+  useEffect(() => {
+    if (respuesta?.meta) paginacion.setMeta(respuesta.meta);
+  }, [respuesta?.meta]);
+
   const usuarios = respuesta?.data ?? [];
+
   const { mutateAsync: desactivar, isPending: dando } = useDesactivarUsuario();
+
+  const hayFiltros = nombre || correo || rol;
+
+  const limpiarFiltros = () => {
+    setNombre("");
+    setCorreo("");
+    setRol("");
+  };
 
   const handleBaja = async () => {
     if (!bajaId) return;
@@ -238,6 +281,51 @@ export default function UsuariosPage() {
           </Button>
         </div>
 
+        {/* Panel de filtros estructurados */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="space-y-1">
+            <Label htmlFor="uf-nombre">Nombre</Label>
+            <Input
+              id="uf-nombre"
+              placeholder="Buscar por nombre o apellido…"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              aria-label="Filtrar por nombre"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="uf-correo">Correo</Label>
+            <Input
+              id="uf-correo"
+              placeholder="Buscar por correo…"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+              aria-label="Filtrar por correo"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Rol</Label>
+            <Select value={rol} onValueChange={setRol}>
+              <SelectTrigger aria-label="Filtrar por rol">
+                <SelectValue placeholder="Todos los roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="medico">Médico</SelectItem>
+                <SelectItem value="secretaria">Secretaria</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {hayFiltros && (
+          <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
+            <FilterX className="mr-2 h-4 w-4" />
+            Limpiar filtros
+          </Button>
+        )}
+
         {errorBaja && (
           <Alert variant="destructive" role="alert">
             <AlertDescription>{errorBaja}</AlertDescription>
@@ -252,7 +340,7 @@ export default function UsuariosPage() {
 
         {!isLoading && usuarios.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8">
-            No hay usuarios registrados.
+            {hayFiltros ? "No hay usuarios con esos filtros." : "No hay usuarios registrados."}
           </p>
         )}
 
@@ -315,6 +403,9 @@ export default function UsuariosPage() {
                 ))}
               </TableBody>
             </Table>
+            <div className="px-4 pb-3">
+              <ControlsPaginacion {...paginacion} />
+            </div>
           </div>
         )}
       </div>

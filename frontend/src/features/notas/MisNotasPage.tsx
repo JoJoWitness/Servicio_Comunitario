@@ -33,7 +33,7 @@ export default function MisNotasPage() {
 
   // Requisito 18.1: GET /notas/medics — Req 18.4: con rango GET /notas/medics/dates
   const { data: notasRaw, isLoading, isError } = useMisNotas(rango);
-  const { data: pacientesResp } = useListarPacientes({ size: 200 });
+  const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
 
   // Requisito 18.2: ordenar de más reciente a más antigua
   const notas = notasRaw ? ordenarNotasDesc(notasRaw) : [];

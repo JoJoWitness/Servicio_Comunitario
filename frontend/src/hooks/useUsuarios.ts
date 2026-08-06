@@ -13,16 +13,20 @@ import {
   type CrearUsuarioInput,
   type EditarUsuarioInput,
 } from "../api/endpoints/usuarios";
-import type { PaginationParams } from "../api/types";
+import type { FiltrosUsuariosParams, PaginationParams } from "../api/types";
 
 export const usuarioKeys = {
-  all: (params?: PaginationParams) => ["usuarios", params ?? {}] as const,
+  all: (filtros?: FiltrosUsuariosParams, params?: PaginationParams) =>
+    ["usuarios", filtros ?? {}, params ?? {}] as const,
 };
 
-export function useListarUsuarios(params?: PaginationParams) {
+export function useListarUsuarios(
+  filtros?: FiltrosUsuariosParams,
+  params?: PaginationParams
+) {
   return useQuery({
-    queryKey: usuarioKeys.all(params),
-    queryFn: () => listarUsuarios(params),
+    queryKey: usuarioKeys.all(filtros, params),
+    queryFn: () => listarUsuarios(filtros, params),
     staleTime: 2 * 60 * 1000,
     placeholderData: (prev) => prev,
   });

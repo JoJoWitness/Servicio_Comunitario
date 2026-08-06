@@ -68,8 +68,8 @@ export default function FormNotaPage() {
   const { data: procedimientosData } = useProcedimientos();
   const { data: tecnicasData } = useTecnicas();
   // size:100 garantiza que todos los médicos aparezcan en el selector (Req 16.1)
-  const { data: usuariosResp, isSuccess: medicosListados } = useListarUsuarios({ size: 100 });
-  const { data: pacientesResp } = useListarPacientes({ size: 200 });
+  const { data: usuariosResp, isSuccess: medicosListados } = useListarUsuarios(undefined, { size: 100 });
+  const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
 
   const opcionesDx = (diagnosticosData ?? []).map((d) => d.diagnostico);
   const opcionesProc = (procedimientosData ?? []).map((p) => p.intervencion);

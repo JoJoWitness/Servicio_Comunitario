@@ -12,25 +12,29 @@ import {
   listarPacientes,
   obtenerPaciente,
 } from "../api/endpoints/pacientes";
-import type { PaginationParams } from "../api/types";
+import type { FiltrosPacientesParams, PaginationParams } from "../api/types";
 import type { Paciente } from "../domain/models";
 
 export const pacienteKeys = {
-  all: (params?: PaginationParams) => ["pacientes", params ?? {}] as const,
+  all: (filtros?: FiltrosPacientesParams, params?: PaginationParams) =>
+    ["pacientes", filtros ?? {}, params ?? {}] as const,
   detail: (id: string) => ["pacientes", id] as const,
 };
 
 /**
- * Obtiene los pacientes paginados desde el servidor.
- * Requisito 10.1 — GET /pacientes?page=&size=&sortBy=&order=
+ * Obtiene los pacientes paginados desde el servidor con filtros opcionales.
+ * Requisito 10.1 — GET /pacientes?nombre=&documento=&historia_medica=&genero=&page=&size=&sortBy=&order=
  *
- * La queryKey incluye los params para que TanStack Query haga refetch
- * automático al cambiar de página o criterio de ordenamiento.
+ * La queryKey incluye filtros y params para que TanStack Query haga refetch
+ * automático al cambiar cualquiera de ellos.
  */
-export function useListarPacientes(params?: PaginationParams) {
+export function useListarPacientes(
+  filtros?: FiltrosPacientesParams,
+  params?: PaginationParams
+) {
   return useQuery({
-    queryKey: pacienteKeys.all(params),
-    queryFn: () => listarPacientes(params),
+    queryKey: pacienteKeys.all(filtros, params),
+    queryFn: () => listarPacientes(filtros, params),
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev, // evita parpadeo al cambiar página
   });

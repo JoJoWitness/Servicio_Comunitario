@@ -1,16 +1,24 @@
 /**
- * Listado de pacientes con búsqueda local en tiempo real.
+ * Listado de pacientes con filtros estructurados server-side.
  * Requisitos: 10.1, 10.2, 10.3, 10.4, 10.5
  */
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, UserPlus } from "lucide-react";
+import { UserPlus, FilterX } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -23,40 +31,62 @@ import { Badge } from "@/components/ui/badge";
 import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { useListarPacientes } from "@/hooks/usePacientes";
 import { useServerPaginacion } from "@/hooks/usePaginacion";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSessionStore } from "@/stores/sessionStore";
-import { filtrarPacientes } from "@/lib/search";
 import { formatFechaUI } from "@/lib/datetime";
 
 export default function PacientesPage() {
   const navigate = useNavigate();
-  const [termino, setTermino] = useState("");
   const perfil = useSessionStore((s) => s.perfil);
   const puedeCrear = perfil?.rol !== "secretaria";
+
+  // --- Estado de filtros (inputs inmediatos) ---
+  const [nombre, setNombre] = useState("");
+  const [documento, setDocumento] = useState("");
+  const [historiaMedica, setHistoriaMedica] = useState("");
+  const [genero, setGenero] = useState("");
+
+  // Debounce de 500ms para inputs de texto libre
+  const nombreDebounced = useDebounce(nombre, 500);
+  const documentoDebounced = useDebounce(documento, 500);
+  const historiaMedicaDebounced = useDebounce(historiaMedica, 500);
 
   // Paginación server-side
   const paginacion = useServerPaginacion("nombre", "ASC", 10);
 
-  const { data: respuesta, isLoading, isError } = useListarPacientes({
+  // Al cambiar cualquier filtro debounced o genero, volver a página 1
+  useEffect(() => { paginacion.resetear(); }, [nombreDebounced, documentoDebounced, historiaMedicaDebounced, genero]);
+
+  const filtros = {
+    nombre: nombreDebounced || undefined,
+    documento: documentoDebounced || undefined,
+    historia_medica: historiaMedicaDebounced || undefined,
+    genero: genero || undefined,
+  };
+
+  const { data: respuesta, isLoading, isError } = useListarPacientes(filtros, {
     page: paginacion.pagina,
     size: paginacion.size,
     sortBy: paginacion.sortBy,
     order: paginacion.order,
   });
 
-  // Actualizar metadata cuando llega la respuesta
   useEffect(() => {
     if (respuesta?.meta) paginacion.setMeta(respuesta.meta);
   }, [respuesta?.meta]);
 
-  // Filtro local sobre la página actual (la búsqueda full-text queda pendiente de backend)
-  const todos = respuesta?.data ?? [];
-  const resultado = filtrarPacientes(todos, termino);
-  const sinResultados = termino.trim() !== "" && resultado.length === 0 && todos.length > 0;
+  const pacientes = respuesta?.data ?? [];
 
-  const handleTermino = (v: string) => {
-    setTermino(v);
-    paginacion.resetear();
+  const hayFiltros = nombre || documento || historiaMedica || genero;
+
+  const limpiarFiltros = () => {
+    setNombre("");
+    setDocumento("");
+    setHistoriaMedica("");
+    setGenero("");
   };
+
+  const sinResultados = !isLoading && !isError && pacientes.length === 0;
 
   return (
     <AppLayout>
@@ -71,17 +101,59 @@ export default function PacientesPage() {
           )}
         </div>
 
-        {/* Buscador */}
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre, cédula o historia médica…"
-            className="pl-9"
-            value={termino}
-            onChange={(e) => handleTermino(e.target.value)}
-            aria-label="Buscar paciente"
-          />
+        {/* Panel de filtros estructurados */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="f-nombre">Nombre</Label>
+            <Input
+              id="f-nombre"
+              placeholder="Buscar por nombre…"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              aria-label="Filtrar por nombre"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="f-documento">Documento</Label>
+            <Input
+              id="f-documento"
+              placeholder="Cédula o pasaporte…"
+              value={documento}
+              onChange={(e) => setDocumento(e.target.value)}
+              aria-label="Filtrar por documento"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="f-historia">Historia médica</Label>
+            <Input
+              id="f-historia"
+              placeholder="Nro. de historia…"
+              value={historiaMedica}
+              onChange={(e) => setHistoriaMedica(e.target.value)}
+              aria-label="Filtrar por historia médica"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Género</Label>
+            <Select value={genero} onValueChange={setGenero}>
+              <SelectTrigger aria-label="Filtrar por género">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="M">Masculino</SelectItem>
+                <SelectItem value="F">Femenino</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {hayFiltros && (
+          <Button variant="ghost" size="sm" onClick={limpiarFiltros}>
+            <FilterX className="mr-2 h-4 w-4" />
+            Limpiar filtros
+          </Button>
+        )}
 
         {/* Estado de carga */}
         {isLoading && (
@@ -99,17 +171,16 @@ export default function PacientesPage() {
           </Alert>
         )}
 
-        {/* Sin coincidencias — ofrecer registrar nuevo — Requisito 10.4 */}
-        {sinResultados && (
+        {/* Sin resultados con filtros activos — ofrecer registrar nuevo — Requisito 10.4 */}
+        {sinResultados && hayFiltros && (
           <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-6">
             <p className="text-sm text-muted-foreground">
-              No se encontró ningún paciente que coincida con{" "}
-              <span className="font-medium">"{termino}"</span>.
+              No se encontró ningún paciente con esos filtros.
             </p>
             {puedeCrear && (
               <Button
                 size="sm"
-                onClick={() => navigate("/pacientes/nuevo", { state: { terminoBusqueda: termino } })}
+                onClick={() => navigate("/pacientes/nuevo")}
               >
                 <UserPlus className="mr-2 h-4 w-4" />
                 Registrar paciente nuevo
@@ -119,7 +190,7 @@ export default function PacientesPage() {
         )}
 
         {/* Tabla de resultados */}
-        {!isLoading && !isError && !sinResultados && resultado.length > 0 && (
+        {!isLoading && !isError && pacientes.length > 0 && (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -132,7 +203,7 @@ export default function PacientesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {resultado.map((p) => (
+                {pacientes.map((p) => (
                   <TableRow
                     key={p.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -163,8 +234,8 @@ export default function PacientesPage() {
           </div>
         )}
 
-        {/* Estado vacío sin búsqueda */}
-        {!isLoading && !isError && resultado.length === 0 && termino.trim() === "" && (
+        {/* Estado vacío sin filtros */}
+        {sinResultados && !hayFiltros && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center">
             <p className="text-sm text-muted-foreground">No hay pacientes registrados aún.</p>
             {puedeCrear && (

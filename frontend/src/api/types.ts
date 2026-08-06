@@ -28,3 +28,22 @@ export interface PaginationParams {
   sortBy?: string;
   order?: "ASC" | "DESC";
 }
+
+// ---------------------------------------------------------------------------
+// Filtros de búsqueda server-side por entidad
+// ---------------------------------------------------------------------------
+
+/** Filtros para GET /pacientes */
+export interface FiltrosPacientesParams {
+  nombre?: string;
+  documento?: string;
+  historia_medica?: string;
+  genero?: string;
+}
+
+/** Filtros para GET /usuarios */
+export interface FiltrosUsuariosParams {
+  nombre?: string;
+  correo?: string;
+  rol?: string;
+}
