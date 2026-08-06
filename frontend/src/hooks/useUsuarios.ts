@@ -13,67 +13,41 @@ import {
   type CrearUsuarioInput,
   type EditarUsuarioInput,
 } from "../api/endpoints/usuarios";
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
+import type { PaginationParams } from "../api/types";
 
 export const usuarioKeys = {
-  all: ["usuarios"] as const,
+  all: (params?: PaginationParams) => ["usuarios", params ?? {}] as const,
 };
 
-// ---------------------------------------------------------------------------
-// Hooks
-// ---------------------------------------------------------------------------
-
-/**
- * Lista todos los usuarios.
- * Usado por el módulo de administración (Req 28.1) y el selector de equipo
- * quirúrgico (Req 16.1).
- */
-export function useListarUsuarios() {
+export function useListarUsuarios(params?: PaginationParams) {
   return useQuery({
-    queryKey: usuarioKeys.all,
-    queryFn: listarUsuarios,
-    staleTime: 2 * 60 * 1000, // 2 min
+    queryKey: usuarioKeys.all(params),
+    queryFn: () => listarUsuarios(params),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 }
 
-/**
- * Crea un usuario nuevo (admin).
- * Requisito 28.2 — POST /usuarios
- */
 export function useCrearUsuario() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CrearUsuarioInput) => crearUsuario(input),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: usuarioKeys.all }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
   });
 }
 
-/**
- * Edita los datos o el rol de un usuario.
- * Requisitos 28.3, 28.5 — PUT /usuarios/{id}
- */
 export function useEditarUsuario(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (datos: EditarUsuarioInput) => editarUsuario(id, datos),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: usuarioKeys.all }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
   });
 }
 
-/**
- * Desactiva (baja lógica) un usuario.
- * Requisito 28.4 — DELETE /usuarios/{id}
- */
 export function useDesactivarUsuario() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => desactivarUsuario(id),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: usuarioKeys.all }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["usuarios"] }),
   });
 }

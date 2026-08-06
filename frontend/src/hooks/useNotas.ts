@@ -18,15 +18,13 @@ import {
   obtenerNota,
   todasLasNotas,
 } from "../api/endpoints/notas";
+import type { PaginationParams } from "../api/types";
 import type { FiltrosNota, Nota, RangoFechas } from "../domain/models";
-
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
 
 export const notaKeys = {
   misNotas: (rango?: RangoFechas) => ["misNotas", rango ?? null] as const,
-  todasNotas: (filtros?: FiltrosNota) => ["todasNotas", filtros ?? null] as const,
+  todasNotas: (filtros?: FiltrosNota, paginacion?: PaginationParams) =>
+    ["todasNotas", filtros ?? null, paginacion ?? {}] as const,
   detail: (id: number) => ["nota", id] as const,
   dePaciente: (pacienteId: string, rango?: RangoFechas) =>
     ["notasPaciente", pacienteId, rango ?? null] as const,
@@ -48,13 +46,17 @@ export function useMisNotas(rango?: RangoFechas) {
 }
 
 /**
- * Obtiene todas las notas del servicio con filtros opcionales.
- * Requisitos 19.1, 19.2 — GET /notas[?medico=&paciente=&from=&to=]
+ * Obtiene todas las notas del servicio con filtros opcionales y paginación.
+ * Requisitos 19.1, 19.2 — GET /notas[?medico=&paciente=&from=&to=&page=&size=]
+ *
+ * La queryKey incluye tanto los filtros como los params de paginación para
+ * que TanStack Query refetch automáticamente al cambiar cualquiera de ellos.
  */
-export function useTodasLasNotas(filtros?: FiltrosNota) {
+export function useTodasLasNotas(filtros?: FiltrosNota, paginacion?: PaginationParams) {
   return useQuery({
-    queryKey: notaKeys.todasNotas(filtros),
-    queryFn: () => todasLasNotas(filtros),
+    queryKey: notaKeys.todasNotas(filtros, paginacion),
+    queryFn: () => todasLasNotas(filtros, paginacion),
+    placeholderData: (prev) => prev,
   });
 }
 

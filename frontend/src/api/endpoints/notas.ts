@@ -19,6 +19,8 @@ import type { FiltrosNota, Nota, RangoFechas } from "../../domain/models";
 import type { NotaDTO } from "../dto/nota.dto";
 import { notaToDomain, notaToDto } from "../dto/nota.dto";
 import { request } from "../httpClient";
+import type { PaginatedResponse, PaginationParams } from "../types";
+import { buildPaginationQuery } from "./queryUtils";
 
 // ---------------------------------------------------------------------------
 // Helpers de construcción de query string
@@ -124,21 +126,33 @@ export async function misNotas(rango?: RangoFechas): Promise<Nota[]> {
 }
 
 /**
- * Obtiene todas las notas del servicio con filtros opcionales.
- * GET /notas[?medico=&paciente=&from=&to=]
+ * Obtiene todas las notas del servicio con filtros opcionales y paginación.
+ * GET /notas[?medico=&paciente=&from=&to=&page=&size=&sortBy=&order=]
  *
  * Solo incluye en la query los filtros que estén presentes — Requisito 19.2.
  * Requisito 19.1
  */
-export async function todasLasNotas(filtros?: FiltrosNota): Promise<Nota[]> {
-  const path = `/notas${buildQuery({
-    medico: filtros?.medico,
-    paciente: filtros?.paciente,
-    from: filtros?.from,
-    to: filtros?.to,
-  })}`;
-  const dtos = await request<NotaDTO[]>(path);
-  return dtos.map(notaToDomain);
+export async function todasLasNotas(
+  filtros?: FiltrosNota,
+  paginacion?: PaginationParams
+): Promise<PaginatedResponse<Nota>> {
+  const filterQs = new URLSearchParams();
+  if (filtros?.medico)   filterQs.set("medico",   filtros.medico);
+  if (filtros?.paciente) filterQs.set("paciente", filtros.paciente);
+  if (filtros?.from)     filterQs.set("from",     filtros.from);
+  if (filtros?.to)       filterQs.set("to",       filtros.to);
+  if (paginacion?.page)   filterQs.set("page",   String(paginacion.page));
+  if (paginacion?.size)   filterQs.set("size",   String(paginacion.size));
+  if (paginacion?.sortBy) filterQs.set("sortBy", paginacion.sortBy);
+  if (paginacion?.order)  filterQs.set("order",  paginacion.order);
+  const qs = filterQs.toString();
+  const path = `/notas${qs ? `?${qs}` : ""}`;
+
+  const raw = await request<PaginatedResponse<NotaDTO>>(path);
+  return {
+    data: raw.data.map(notaToDomain),
+    meta: raw.meta,
+  };
 }
 
 /**

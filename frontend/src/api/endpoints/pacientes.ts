@@ -18,21 +18,26 @@ import {
   pacienteToWriteDto,
 } from "../dto/paciente.dto";
 import { request } from "../httpClient";
+import type { PaginatedResponse, PaginationParams } from "../types";
+import { buildPaginationQuery } from "./queryUtils";
 
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
 
 /**
- * Obtiene todos los pacientes del sistema.
+ * Obtiene todos los pacientes del sistema (paginado server-side).
  * GET /pacientes
  *
- * El filtrado local (búsqueda por nombre/cédula/historia) se realiza en cliente
- * usando `lib/search.ts`. Requisito 10.1
+ * Requisito 10.1
  */
-export async function listarPacientes(): Promise<Paciente[]> {
-  const dtos = await request<PacienteDTO[]>("/pacientes");
-  return dtos.map(pacienteToDomain);
+export async function listarPacientes(params?: PaginationParams): Promise<PaginatedResponse<Paciente>> {
+  const qs = buildPaginationQuery(params);
+  const raw = await request<PaginatedResponse<PacienteDTO>>(`/pacientes${qs}`);
+  return {
+    data: raw.data.map(pacienteToDomain),
+    meta: raw.meta,
+  };
 }
 
 /**

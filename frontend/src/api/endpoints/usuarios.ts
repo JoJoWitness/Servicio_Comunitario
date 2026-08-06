@@ -16,6 +16,8 @@ import type { Rol, Usuario } from "../../domain/models";
 import type { UsuarioDTO } from "../dto/usuario.dto";
 import { usuarioToDomain } from "../dto/usuario.dto";
 import { request } from "../httpClient";
+import type { PaginatedResponse, PaginationParams } from "../types";
+import { buildPaginationQuery } from "./queryUtils";
 
 // ---------------------------------------------------------------------------
 // Tipos de entrada
@@ -41,15 +43,18 @@ export interface EditarUsuarioInput {
 // ---------------------------------------------------------------------------
 
 /**
- * Obtiene la lista completa de usuarios.
- * GET /usuarios — devuelve un array directo.
+ * Obtiene la lista paginada de usuarios.
+ * GET /usuarios[?page=&size=&sortBy=&order=]
  */
-export async function listarUsuarios(): Promise<Usuario[]> {
-  const raw = await request<UsuarioDTO[]>("/usuarios");
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((d) => d && typeof d === "object" && "id" in d)
-    .map(usuarioToDomain);
+export async function listarUsuarios(params?: PaginationParams): Promise<PaginatedResponse<Usuario>> {
+  const qs = buildPaginationQuery(params);
+  const raw = await request<PaginatedResponse<UsuarioDTO>>(`/usuarios${qs}`);
+  return {
+    data: raw.data
+      .filter((d) => d && typeof d === "object" && "id" in d)
+      .map(usuarioToDomain),
+    meta: raw.meta,
+  };
 }
 
 /**

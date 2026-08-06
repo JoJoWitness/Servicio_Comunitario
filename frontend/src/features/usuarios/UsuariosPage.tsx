@@ -210,7 +210,8 @@ export default function UsuariosPage() {
   const [bajaId, setBajaId] = useState<string | null>(null);
   const [errorBaja, setErrorBaja] = useState<string | null>(null);
 
-  const { data: usuarios = [], isLoading } = useListarUsuarios();
+  const { data: respuesta, isLoading } = useListarUsuarios({ size: 100 });
+  const usuarios = respuesta?.data ?? [];
   const { mutateAsync: desactivar, isPending: dando } = useDesactivarUsuario();
 
   const handleBaja = async () => {

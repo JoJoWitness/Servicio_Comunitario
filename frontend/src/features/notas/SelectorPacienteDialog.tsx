@@ -45,9 +45,10 @@ export function SelectorPacienteDialog({
 }: SelectorPacienteDialogProps) {
   const navigate = useNavigate();
   const [termino, setTermino] = useState("");
-  const { data: pacientes, isLoading, isError } = useListarPacientes();
+  // size:200 para que el selector muestre todos los pacientes sin paginar el modal
+  const { data: respuesta, isLoading, isError } = useListarPacientes({ size: 200 });
 
-  const resultado = filtrarPacientes(pacientes ?? [], termino);
+  const resultado = filtrarPacientes(respuesta?.data ?? [], termino);
   const sinResultados = termino.trim() !== "" && resultado.length === 0;
 
   const paginacion = usePaginacion(resultado, 10);

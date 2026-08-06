@@ -67,14 +67,16 @@ export default function FormNotaPage() {
   const { data: diagnosticosData } = useDiagnosticos();
   const { data: procedimientosData } = useProcedimientos();
   const { data: tecnicasData } = useTecnicas();
-  const { data: usuariosData, isSuccess: medicosListados } = useListarUsuarios();
-  const { data: pacientesData } = useListarPacientes();
+  // size:100 garantiza que todos los médicos aparezcan en el selector (Req 16.1)
+  const { data: usuariosResp, isSuccess: medicosListados } = useListarUsuarios({ size: 100 });
+  const { data: pacientesResp } = useListarPacientes({ size: 200 });
 
   const opcionesDx = (diagnosticosData ?? []).map((d) => d.diagnostico);
   const opcionesProc = (procedimientosData ?? []).map((p) => p.intervencion);
   const opcionesTecnica = (tecnicasData ?? []).map((t) => t.tecnica);
   // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
-  const medicos = usuariosData ?? [];
+  const medicos = usuariosResp?.data ?? [];
+  const pacientesData = pacientesResp?.data ?? [];
 
   const { data: notaExistente } = useObtenerNota(notaId ?? 0);
   const { mutate: crearNota, isPending: creando } = useCrearNota();

@@ -3,7 +3,7 @@
  * Requisitos: 10.1, 10.2, 10.3, 10.4, 10.5
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, UserPlus } from "lucide-react";
 
@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { useListarPacientes } from "@/hooks/usePacientes";
-import { usePaginacion } from "@/hooks/usePaginacion";
+import { useServerPaginacion } from "@/hooks/usePaginacion";
 import { useSessionStore } from "@/stores/sessionStore";
 import { filtrarPacientes } from "@/lib/search";
 import { formatFechaUI } from "@/lib/datetime";
@@ -30,18 +30,29 @@ import { formatFechaUI } from "@/lib/datetime";
 export default function PacientesPage() {
   const navigate = useNavigate();
   const [termino, setTermino] = useState("");
-  const { data: pacientes, isLoading, isError } = useListarPacientes();
   const perfil = useSessionStore((s) => s.perfil);
-
-  // La secretaria solo consulta — no puede registrar pacientes
   const puedeCrear = perfil?.rol !== "secretaria";
 
-  const resultado = filtrarPacientes(pacientes ?? [], termino);
-  const sinResultados = termino.trim() !== "" && resultado.length === 0;
+  // Paginación server-side
+  const paginacion = useServerPaginacion("nombre", "ASC", 10);
 
-  const paginacion = usePaginacion(resultado, 10);
+  const { data: respuesta, isLoading, isError } = useListarPacientes({
+    page: paginacion.pagina,
+    size: paginacion.size,
+    sortBy: paginacion.sortBy,
+    order: paginacion.order,
+  });
 
-  // Resetear paginación al cambiar el filtro
+  // Actualizar metadata cuando llega la respuesta
+  useEffect(() => {
+    if (respuesta?.meta) paginacion.setMeta(respuesta.meta);
+  }, [respuesta?.meta]);
+
+  // Filtro local sobre la página actual (la búsqueda full-text queda pendiente de backend)
+  const todos = respuesta?.data ?? [];
+  const resultado = filtrarPacientes(todos, termino);
+  const sinResultados = termino.trim() !== "" && resultado.length === 0 && todos.length > 0;
+
   const handleTermino = (v: string) => {
     setTermino(v);
     paginacion.resetear();
@@ -121,7 +132,7 @@ export default function PacientesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginacion.itemsPagina.map((p) => (
+                {resultado.map((p) => (
                   <TableRow
                     key={p.id}
                     className="cursor-pointer hover:bg-muted/50"

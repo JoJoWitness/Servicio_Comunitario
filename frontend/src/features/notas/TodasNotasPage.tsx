@@ -3,7 +3,7 @@
  * Requisitos: 19.1, 19.2, 19.3, 19.4
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FilePlus } from "lucide-react";
 
@@ -19,10 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { NotaCard } from "./NotaCard";
 import { useTodasLasNotas } from "@/hooks/useNotas";
 import { useListarUsuarios } from "@/hooks/useUsuarios";
 import { useListarPacientes } from "@/hooks/usePacientes";
+import { useServerPaginacion } from "@/hooks/usePaginacion";
 import { useSessionStore } from "@/stores/sessionStore";
 import { ordenarNotasDesc } from "@/lib/sort";
 import type { FiltrosNota } from "@/domain/models";
@@ -44,17 +46,32 @@ export default function TodasNotasPage() {
     to: to ? new Date(to).toISOString() : undefined,
   };
 
-  // Requisito 19.1: GET /notas
-  const { data: notasRaw, isLoading, isError } = useTodasLasNotas(filtros);
-  const { data: usuarios } = useListarUsuarios();
-  const { data: pacientes } = useListarPacientes();
+  // Requisito 19.1: GET /notas — con paginación server-side
+  const paginacion = useServerPaginacion("fecha_comienzo", "DESC", 10);
 
-  const notas = notasRaw ? ordenarNotasDesc(notasRaw) : [];
+  const { data: notasResp, isLoading, isError } = useTodasLasNotas(filtros, {
+    page: paginacion.pagina,
+    size: paginacion.size,
+    sortBy: paginacion.sortBy,
+    order: paginacion.order,
+  });
+
+  // Actualizar metadata cuando llega la respuesta
+  useEffect(() => {
+    if (notasResp?.meta) paginacion.setMeta(notasResp.meta);
+  }, [notasResp?.meta]);
+
+  // Pedir lista completa de usuarios y pacientes para los selectores de filtro
+  const { data: usuariosResp } = useListarUsuarios({ size: 100 });
+  const { data: pacientesResp } = useListarPacientes({ size: 200 });
+
+  const notas = notasResp?.data ? ordenarNotasDesc(notasResp.data) : [];
   // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
-  const medicos = (usuarios ?? []);
+  const medicos = usuariosResp?.data ?? [];
+  const pacientesLista = pacientesResp?.data ?? [];
 
   const getPaciente = (idPaciente: string) =>
-    (pacientes ?? []).find((p) => p.id === idPaciente);
+    pacientesLista.find((p) => p.id === idPaciente);
 
   // Requisito 19.3: secretaria → solo lectura (sin botón de crear)
   const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "medico";
@@ -95,8 +112,7 @@ export default function TodasNotasPage() {
                   <SelectItem key={m.id} value={m.id}>
                     {m.nombres} {m.apellidos}
                   </SelectItem>
-                ))}
-              </SelectContent>
+                ))}              </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
@@ -107,7 +123,7 @@ export default function TodasNotasPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todos</SelectItem>
-                {(pacientes ?? [])
+                {pacientesLista
                   .filter((p) => !p.eliminado)
                   .map((p) => (
                     <SelectItem key={p.id} value={p.id}>
@@ -179,6 +195,7 @@ export default function TodasNotasPage() {
             );
           })}
         </div>
+        <ControlsPaginacion {...paginacion} />
       </div>
     </AppLayout>
   );
