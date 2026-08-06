@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"server/config"
+	"server/models/pagination"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -186,6 +187,43 @@ func GetAllMedics() ([]Usuarios, error) {
 	}
 
 	return users, nil
+}
+
+// GetAllMedicsPaged devuelve una página de usuarios activos y el total de
+// registros para paginación server-side.
+func GetAllMedicsPaged(p pagination.Params) ([]Usuarios, int, error) {
+	var total int
+	if err := config.PsqlDB.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM "Usuarios" WHERE eliminado = FALSE`).Scan(&total); err != nil {
+		log.Printf("Error counting usuarios: %v", err)
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT u.id, u.nombres, u.apellidos, u.correo, u.rol
+		FROM "Usuarios" u
+		WHERE u.eliminado = FALSE
+		ORDER BY ` + p.SortBy + ` ` + p.Order + `
+		LIMIT @limit OFFSET @offset;`
+
+	rows, err := config.PsqlDB.Query(context.Background(), query,
+		pgx.NamedArgs{"limit": p.Size, "offset": p.Offset()})
+	if err != nil {
+		log.Printf("Error getting usuarios page: %v", err)
+		return nil, total, err
+	}
+	defer rows.Close()
+
+	users := []Usuarios{}
+	for rows.Next() {
+		var u Usuarios
+		if err := rows.Scan(&u.ID, &u.Nombres, &u.Apellidos, &u.Correo, &u.Rol); err != nil {
+			log.Printf("Error scanning usuario: %v", err)
+			return users, total, err
+		}
+		users = append(users, u)
+	}
+	return users, total, rows.Err()
 }
 
 func (u *UsuarioData) Get(db *pgxpool.Pool) error {

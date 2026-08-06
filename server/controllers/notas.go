@@ -9,6 +9,7 @@ import (
 	"server/config"
 	"server/controllers/auth"
 	notas2 "server/models/notas"
+	"server/models/pagination"
 	"strconv"
 	"time"
 
@@ -45,8 +46,8 @@ func GetNota(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(nota)
 }
 
-// GetAllNotas devuelve las notas de todo el servicio. Es la vista de la
-// secretaria (HU-16); admite ?medico=&paciente=&from=&to= para buscar (HU-17).
+// GetAllNotas devuelve las notas de todo el servicio paginadas. Es la vista de
+// la secretaria (HU-16); admite ?medico=&paciente=&from=&to=&page=&size=&sortBy=&order=
 func GetAllNotas(w http.ResponseWriter, r *http.Request) {
 	filtro, err := filtroDesdeQuery(r)
 	if err != nil {
@@ -55,7 +56,14 @@ func GetAllNotas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	notas, err := notas2.GetAllNotas(config.PsqlDB, filtro)
+	allowedSort := map[string]string{
+		"fecha_comienzo": "n.fecha_comienzo",
+		"pabellon":       "n.pabellon",
+		"id":             "n.id",
+	}
+	p := parsePaginationParams(r, allowedSort, "n.fecha_comienzo")
+
+	notas, total, err := notas2.GetAllNotasPaged(config.PsqlDB, filtro, p)
 	if err != nil {
 		log.Printf("Error getting notas: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -63,9 +71,15 @@ func GetAllNotas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	meta := pagination.NewMeta(total, p)
+	resp := struct {
+		Data []notas2.Notas `json:"data"`
+		Meta pagination.Meta `json:"meta"`
+	}{Data: notas, Meta: meta}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(notas)
+	json.NewEncoder(w).Encode(resp)
 }
 
 // filtroDesdeQuery arma el filtro a partir del query string. Las fechas se

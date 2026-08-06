@@ -7,6 +7,7 @@ import (
 
 	"server/config"
 	models "server/models/pacientes"
+	"server/models/pagination"
 
 	"github.com/gorilla/mux"
 )
@@ -111,15 +112,29 @@ func DeletePaciente(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllPacientes(w http.ResponseWriter, r *http.Request) {
-	pacientes, err := models.GetAllPacientes()
+	// Columnas permitidas para sortBy — evita inyección SQL
+	allowed := map[string]string{
+		"nombre":           "nombre",
+		"historia_medica":  "historia_medica",
+		"fecha_nacimiento": "fecha_nacimiento",
+		"tipo_documento":   "tipo_documento",
+		"genero":           "genero",
+	}
+	p := parsePaginationParams(r, allowed, "nombre")
 
+	pacientes, total, err := models.GetAllPacientesPaged(p)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get pacientes"))
 		return
 	}
 
+	meta := pagination.NewMeta(total, p)
+	resp := struct {
+		Data []models.Pacientes `json:"data"`
+		Meta pagination.Meta    `json:"meta"`
+	}{Data: pacientes, Meta: meta}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(pacientes)
+	json.NewEncoder(w).Encode(resp)
 }

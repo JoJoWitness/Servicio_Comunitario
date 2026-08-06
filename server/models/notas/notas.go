@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"server/config"
+	"server/models/pagination"
 	"server/models/usuarios"
 
 	"github.com/jackc/pgx/v5"
@@ -132,6 +133,86 @@ func GetAllNotas(db *pgxpool.Pool, f FiltroNotas) ([]Notas, error) {
 		}
 	}
 	return records, nil
+}
+
+// GetAllNotasPaged devuelve una página de notas vigentes y el total de registros
+// para paginación server-side. Respeta los mismos filtros que GetAllNotas.
+func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]Notas, int, error) {
+	// Construir la cláusula WHERE compartida por COUNT y SELECT.
+	where := `WHERE n.eliminado = FALSE`
+	args := pgx.NamedArgs{}
+
+	if f.MedicoID != "" {
+		where += `
+			AND (
+				n.id_medico_encargado::text = @medico
+				OR EXISTS (SELECT 1 FROM "Equipo_Quirurgico" eq WHERE eq.id_nota_operatoria = n.id AND eq.id_medico::text = @medico)
+			)`
+		args["medico"] = f.MedicoID
+	}
+	if f.PacienteID != "" {
+		where += " AND n.id_paciente::text = @paciente"
+		args["paciente"] = f.PacienteID
+	}
+	if !f.From.IsZero() {
+		where += " AND n.fecha_comienzo >= @from"
+		args["from"] = f.From
+	}
+	if !f.To.IsZero() {
+		where += " AND n.fecha_comienzo <= @to"
+		args["to"] = f.To
+	}
+
+	// 1. Total
+	var total int
+	if err := db.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM "Nota_Operatoria" n `+where, args).Scan(&total); err != nil {
+		log.Printf("Error counting notas: %v", err)
+		return nil, 0, err
+	}
+
+	// 2. Página
+	args["limit"] = p.Size
+	args["offset"] = p.Offset()
+	dataQuery := `
+		SELECT n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada,
+			n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion,
+			n.resumen_intevencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia,
+			n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
+		FROM "Nota_Operatoria" n ` + where + `
+		ORDER BY ` + p.SortBy + ` ` + p.Order + `
+		LIMIT @limit OFFSET @offset;`
+
+	rows, err := db.Query(context.Background(), dataQuery, args)
+	if err != nil {
+		log.Printf("Error getting notas page: %v", err)
+		return nil, total, err
+	}
+	defer rows.Close()
+
+	records := []Notas{}
+	for rows.Next() {
+		var r Notas
+		if err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado,
+			&r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion,
+			&r.Resumen_Intervencion, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia,
+			&r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado); err != nil {
+			log.Printf("Error fetching nota page: %v", err)
+			return records, total, err
+		}
+		records = append(records, r)
+	}
+	if err := rows.Err(); err != nil {
+		return records, total, err
+	}
+
+	for i := range records {
+		records[i].Medicos, err = getMedicos(db, records[i].ID)
+		if err != nil {
+			return records, total, err
+		}
+	}
+	return records, total, nil
 }
 
 // EsParticipante indica si el usuario es el médico encargado de la nota o parte

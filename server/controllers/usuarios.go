@@ -7,6 +7,7 @@ import (
 	"server/config"
 	"server/controllers/auth"
 	users2 "server/models/usuarios"
+	"server/models/pagination"
 	"server/utils"
 
 	"github.com/google/uuid"
@@ -194,16 +195,30 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllMedics(w http.ResponseWriter, r *http.Request) {
-	users, err := users2.GetAllMedics()
+	allowedSort := map[string]string{
+		"apellidos": "apellidos",
+		"nombres":   "nombres",
+		"correo":    "correo",
+		"rol":       "rol",
+	}
+	p := parsePaginationParams(r, allowedSort, "apellidos")
+
+	users, total, err := users2.GetAllMedicsPaged(p)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get medics"))
 		return
 	}
 
+	meta := pagination.NewMeta(total, p)
+	resp := struct {
+		Data []users2.Usuarios `json:"data"`
+		Meta pagination.Meta   `json:"meta"`
+	}{Data: users, Meta: meta}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func GetUserData(w http.ResponseWriter, r *http.Request) {

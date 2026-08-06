@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"server/config"
+	"server/models/pagination"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -181,4 +182,42 @@ func GetAllPacientes() ([]Pacientes, error) {
 	}
 
 	return pacientes, rows.Err()
+}
+
+// GetAllPacientesPaged devuelve una página de pacientes activos y el total de
+// registros para paginación server-side.
+func GetAllPacientesPaged(p pagination.Params) ([]Pacientes, int, error) {
+	var total int
+	if err := config.PsqlDB.QueryRow(context.Background(),
+		`SELECT COUNT(*) FROM "Paciente" WHERE eliminado = FALSE`).Scan(&total); err != nil {
+		log.Printf("Error counting pacientes: %v", err)
+		return nil, 0, err
+	}
+
+	query := `SELECT ` + columnas + `
+		FROM "Paciente"
+		WHERE eliminado = FALSE
+		ORDER BY ` + p.SortBy + ` ` + p.Order + `
+		LIMIT @limit OFFSET @offset;`
+
+	rows, err := config.PsqlDB.Query(context.Background(), query,
+		pgx.NamedArgs{"limit": p.Size, "offset": p.Offset()})
+	if err != nil {
+		log.Printf("Error getting pacientes page: %v", err)
+		return nil, total, err
+	}
+	defer rows.Close()
+
+	pacientes := []Pacientes{}
+	for rows.Next() {
+		var pac Pacientes
+		if err := rows.Scan(&pac.ID, &pac.Historia_Medica, &pac.Numero_Indentificacion,
+			&pac.Tipo_Documento, &pac.Nombre, &pac.Genero,
+			&pac.Fecha_Nacimiento, &pac.Telefono, &pac.Direccion, &pac.Eliminado); err != nil {
+			log.Printf("Error scanning paciente: %v", err)
+			return pacientes, total, err
+		}
+		pacientes = append(pacientes, pac)
+	}
+	return pacientes, total, rows.Err()
 }
