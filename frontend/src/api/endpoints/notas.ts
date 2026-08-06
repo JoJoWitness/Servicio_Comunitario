@@ -1,0 +1,167 @@
+/**
+ * Endpoints de Notas Operatorias.
+ *
+ * Rutas cubiertas:
+ * - POST   /notas                           → crearNota
+ * - PUT    /notas/{id}                      → editarNota
+ * - DELETE /notas/{id}                      → eliminarNota
+ * - GET    /notas/{id}                      → obtenerNota
+ * - GET    /notas/medics                    → misNotas (sin filtro)
+ * - GET    /notas/medics/dates?from=&to=    → misNotas (con rango)
+ * - GET    /notas[?medico=&paciente=&from=&to=] → todasLasNotas
+ * - GET    /notas/pacientes/{id}            → notasDePaciente (sin filtro)
+ * - GET    /notas/pacientes/dates?id=&from=&to= → notasDePaciente (con rango)
+ *
+ * Requisitos: 12.2, 12.5, 14.6, 18.1, 18.4, 19.1, 19.2, 20.1, 21.2, 23.2
+ */
+
+import type { FiltrosNota, Nota, RangoFechas } from "../../domain/models";
+import type { NotaDTO } from "../dto/nota.dto";
+import { notaToDomain, notaToDto } from "../dto/nota.dto";
+import { request } from "../httpClient";
+
+// ---------------------------------------------------------------------------
+// Helpers de construcción de query string
+// ---------------------------------------------------------------------------
+
+/**
+ * Construye un query string incluyendo SOLO los parámetros presentes (no nulos/vacíos).
+ * Requisito 19.2: la query incluye exactamente los filtros activos.
+ */
+function buildQuery(
+  params: Record<string, string | undefined>
+): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      qs.append(key, value);
+    }
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
+
+// ---------------------------------------------------------------------------
+// Endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * Crea una nota operatoria nueva.
+ * POST /notas
+ *
+ * Requisito 14.6
+ * Posibles errores: 400 → Requisito 14.8
+ */
+export async function crearNota(
+  nota: Nota,
+  medicoEncargadoId: string
+): Promise<Nota> {
+  const dto = await request<NotaDTO>("/notas", {
+    method: "POST",
+    body: notaToDto(nota, { medicoEncargadoId }),
+  });
+  return notaToDomain(dto);
+}
+
+/**
+ * Actualiza una nota existente.
+ * PUT /notas/{id}
+ *
+ * Requisito 21.2
+ * Posibles errores 403: clasificar con `clasificar403Nota` → Requisito 21.4
+ */
+export async function editarNota(
+  id: number,
+  nota: Nota,
+  medicoEncargadoId: string
+): Promise<Nota> {
+  const dto = await request<NotaDTO>(`/notas/${id}`, {
+    method: "PUT",
+    body: notaToDto(nota, { medicoEncargadoId }),
+  });
+  return notaToDomain(dto);
+}
+
+/**
+ * Elimina una nota.
+ * DELETE /notas/{id}
+ *
+ * Requisito 23.2
+ * Posibles errores 403: clasificar con `clasificar403Nota` → Requisito 23.4
+ */
+export async function eliminarNota(id: number): Promise<void> {
+  await request(`/notas/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Obtiene el detalle de una nota.
+ * GET /notas/{id}
+ *
+ * Requisito 20.1
+ * Posible error 404 → Requisito 20.4
+ */
+export async function obtenerNota(id: number): Promise<Nota> {
+  const dto = await request<NotaDTO>(`/notas/${id}`);
+  return notaToDomain(dto);
+}
+
+/**
+ * Obtiene las notas del médico de la sesión actual.
+ * - Sin rango: GET /notas/medics
+ * - Con rango: GET /notas/medics/dates?from=&to=
+ *
+ * Requisitos 18.1, 18.4
+ */
+export async function misNotas(rango?: RangoFechas): Promise<Nota[]> {
+  let path: string;
+  if (rango?.from || rango?.to) {
+    path = `/notas/medics/dates${buildQuery({ from: rango.from, to: rango.to })}`;
+  } else {
+    path = "/notas/medics";
+  }
+  const dtos = await request<NotaDTO[]>(path);
+  return dtos.map(notaToDomain);
+}
+
+/**
+ * Obtiene todas las notas del servicio con filtros opcionales.
+ * GET /notas[?medico=&paciente=&from=&to=]
+ *
+ * Solo incluye en la query los filtros que estén presentes — Requisito 19.2.
+ * Requisito 19.1
+ */
+export async function todasLasNotas(filtros?: FiltrosNota): Promise<Nota[]> {
+  const path = `/notas${buildQuery({
+    medico: filtros?.medico,
+    paciente: filtros?.paciente,
+    from: filtros?.from,
+    to: filtros?.to,
+  })}`;
+  const dtos = await request<NotaDTO[]>(path);
+  return dtos.map(notaToDomain);
+}
+
+/**
+ * Obtiene el historial de notas de un paciente.
+ * - Sin rango: GET /notas/pacientes/{id}
+ * - Con rango: GET /notas/pacientes/dates?id={id}&from=&to=
+ *
+ * Requisitos 12.2, 12.5
+ */
+export async function notasDePaciente(
+  pacienteId: string,
+  rango?: RangoFechas
+): Promise<Nota[]> {
+  let path: string;
+  if (rango?.from || rango?.to) {
+    path = `/notas/pacientes/dates${buildQuery({
+      id: pacienteId,
+      from: rango.from,
+      to: rango.to,
+    })}`;
+  } else {
+    path = `/notas/pacientes/${pacienteId}`;
+  }
+  const dtos = await request<NotaDTO[]>(path);
+  return dtos.map(notaToDomain);
+}
