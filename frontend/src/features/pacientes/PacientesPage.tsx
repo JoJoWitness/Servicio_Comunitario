@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { useListarPacientes } from "@/hooks/usePacientes";
 import { usePaginacion } from "@/hooks/usePaginacion";
+import { useSessionStore } from "@/stores/sessionStore";
 import { filtrarPacientes } from "@/lib/search";
 import { formatFechaUI } from "@/lib/datetime";
 
@@ -30,6 +31,10 @@ export default function PacientesPage() {
   const navigate = useNavigate();
   const [termino, setTermino] = useState("");
   const { data: pacientes, isLoading, isError } = useListarPacientes();
+  const perfil = useSessionStore((s) => s.perfil);
+
+  // La secretaria solo consulta — no puede registrar pacientes
+  const puedeCrear = perfil?.rol !== "secretaria";
 
   const resultado = filtrarPacientes(pacientes ?? [], termino);
   const sinResultados = termino.trim() !== "" && resultado.length === 0;
@@ -47,6 +52,12 @@ export default function PacientesPage() {
       <div className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Pacientes</h1>
+          {puedeCrear && (
+            <Button size="sm" onClick={() => navigate("/pacientes/nuevo")}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Nuevo paciente
+            </Button>
+          )}
         </div>
 
         {/* Buscador */}
@@ -84,13 +95,15 @@ export default function PacientesPage() {
               No se encontró ningún paciente que coincida con{" "}
               <span className="font-medium">"{termino}"</span>.
             </p>
-            <Button
-              size="sm"
-              onClick={() => navigate("/pacientes/nuevo", { state: { terminoBusqueda: termino } })}
-            >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Registrar paciente nuevo
-            </Button>
+            {puedeCrear && (
+              <Button
+                size="sm"
+                onClick={() => navigate("/pacientes/nuevo", { state: { terminoBusqueda: termino } })}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Registrar paciente nuevo
+              </Button>
+            )}
           </div>
         )}
 
@@ -143,10 +156,12 @@ export default function PacientesPage() {
         {!isLoading && !isError && resultado.length === 0 && termino.trim() === "" && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center">
             <p className="text-sm text-muted-foreground">No hay pacientes registrados aún.</p>
-            <Button size="sm" onClick={() => navigate("/pacientes/nuevo")}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Registrar primer paciente
-            </Button>
+            {puedeCrear && (
+              <Button size="sm" onClick={() => navigate("/pacientes/nuevo")}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Registrar primer paciente
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -114,10 +114,24 @@ export function AppLayout({ children }: AppLayoutProps) {
             to="/perfil"
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            <User className="h-4 w-4" />
-            <span className="truncate">
-              {perfil ? `${perfil.nombres} ${perfil.apellidos}` : "Perfil"}
-            </span>
+            <User className="h-4 w-4 shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="truncate leading-tight">
+                {perfil ? `${perfil.nombres} ${perfil.apellidos}` : "Perfil"}
+              </span>
+              {perfil && (
+                <span className={cn(
+                  "text-xs font-medium mt-0.5 w-fit rounded px-1.5 py-0.5 leading-none",
+                  perfil.rol === "admin"      && "bg-primary/10 text-primary",
+                  perfil.rol === "medico"     && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                  perfil.rol === "secretaria" && "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+                )}>
+                  {perfil.rol === "admin"      ? "Administrador"
+                  : perfil.rol === "medico"    ? "Médico"
+                  : "Secretaria"}
+                </span>
+              )}
+            </div>
           </Link>
 
           {/* Selector de tema en modo expandido (tres botones) */}

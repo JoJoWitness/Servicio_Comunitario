@@ -1,9 +1,9 @@
 /**
  * Formulario de creación y edición de notas operatorias.
- * Requisitos: 14.1–14.8, 15.1–15.4, 16.2–16.6, 17.1–17.4, 21.1–21.3, 21.5, 24.1–24.3
+ * Requisitos: 14.1–14.8, 16.2–16.6, 17.1–17.4, 21.1–21.3, 21.5, 24.1–24.3
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,7 +29,6 @@ import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
 import { NotaFormSchema } from "@/domain/validation/nota.validation";
 import { BACKEND_SUPPORTS_OJO_ESTADO } from "@/api/dto/nota.dto";
 import type { z } from "zod";
-// Usamos el tipo de _input_ del schema para evitar conflictos con los defaults de Zod
 type NotaFormValues = z.input<typeof NotaFormSchema>;
 import { useCrearNota, useEditarNota, useObtenerNota } from "@/hooks/useNotas";
 import { useDiagnosticos, useProcedimientos, useTecnicas } from "@/hooks/useCatalogos";
@@ -40,17 +39,10 @@ import { isApiError } from "@/api/errors";
 import { derivarEquipoDesdeMedicos } from "@/lib/equipo";
 import type { Paciente } from "@/domain/models";
 
-// Clave de borrador sin paciente (para notas nuevas antes de seleccionar paciente)
-function draftKey(userId: string) {
-  return `draft:nota:${userId}:__pending__`;
-}
-
 function toDateInputValue(d: Date | undefined): string {
   if (!d) return "";
   return d.toISOString().split("T")[0]!;
 }
-
-const DEBOUNCE_MS = 800;
 
 export default function FormNotaPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,9 +52,7 @@ export default function FormNotaPage() {
 
   const esEdicion = !!id;
   const notaId = id ? Number(id) : undefined;
-  const userId = perfil?.id ?? "";
 
-  // Paciente llegado desde NuevoPacientePage
   const pacienteDesdeState = (
     location.state as { pacienteSeleccionado?: Paciente } | null
   )?.pacienteSeleccionado;
@@ -72,15 +62,11 @@ export default function FormNotaPage() {
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(
     pacienteDesdeState ?? null
   );
-  const [mostrarBorradorBanner, setMostrarBorradorBanner] = useState(false);
-  // Bug 3 fix: dialog en lugar de navegación
   const [selectorOpen, setSelectorOpen] = useState(false);
 
-  // Queries auxiliares
   const { data: diagnosticosData } = useDiagnosticos();
   const { data: procedimientosData } = useProcedimientos();
   const { data: tecnicasData } = useTecnicas();
-  // Bug 1 fix: staleTime=0 para que cargue siempre al montar el formulario
   const { data: usuariosData, isSuccess: medicosListados } = useListarUsuarios();
   const { data: pacientesData } = useListarPacientes();
 
@@ -107,7 +93,6 @@ export default function FormNotaPage() {
   } = useForm<NotaFormValues>({
     resolver: zodResolver(NotaFormSchema),
     defaultValues: {
-      // Bug 1 fix: preseleccionar médico encargado con el id del perfil actual
       medicoEncargado: perfil?.id ?? "",
       equipo: [],
       esElectiva: false,
@@ -116,8 +101,7 @@ export default function FormNotaPage() {
     },
   });
 
-  // Bug 1 fix: cuando la lista de médicos carga y el campo aún está vacío,
-  // establecer el médico encargado con el perfil actual
+  // Preseleccionar médico encargado cuando la lista de médicos carga
   useEffect(() => {
     if (!medicosListados || esEdicion) return;
     const encargadoActual = getValues("medicoEncargado");
@@ -126,7 +110,7 @@ export default function FormNotaPage() {
     }
   }, [medicosListados, esEdicion, perfil?.id, getValues, setValue]);
 
-  // Precarga de nota existente (edición) — Req 16.5
+  // Precarga de nota existente (edición)
   useEffect(() => {
     if (esEdicion && notaExistente) {
       const equipoIds = derivarEquipoDesdeMedicos(notaExistente.medicos).filter(
@@ -156,79 +140,20 @@ export default function FormNotaPage() {
     }
   }, [esEdicion, notaExistente, reset, perfil?.id, pacientesData]);
 
-  // Bug 2 fix: sincronizar pacienteSeleccionado con el campo oculto del form
+  // Sincronizar pacienteSeleccionado con el campo idPaciente del form
   useEffect(() => {
     if (pacienteSeleccionado) {
       setValue("idPaciente", pacienteSeleccionado.id, { shouldValidate: true });
     }
   }, [pacienteSeleccionado, setValue]);
 
-  // Si hay idPaciente en el form pero sin objeto seleccionado (borrador recuperado
-  // antes de que la lista de pacientes cargara), restaurar cuando lleguen los datos
+  // Restaurar objeto paciente cuando la lista carga y ya hay un idPaciente en el form
   const watchedIdPaciente = watch("idPaciente");
   useEffect(() => {
     if (pacienteSeleccionado || !watchedIdPaciente || !pacientesData?.length) return;
     const pac = pacientesData.find((p) => p.id === watchedIdPaciente);
     if (pac) setPacienteSeleccionado(pac);
   }, [pacientesData, watchedIdPaciente, pacienteSeleccionado]);
-
-  // Bug 2 fix: borrador con clave independiente del paciente
-  // Al abrir en creación, verificar si hay borrador guardado
-  useEffect(() => {
-    if (esEdicion || !userId) return;
-    const key = draftKey(userId);
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) setMostrarBorradorBanner(true);
-    } catch { /* ignorar */ }
-  }, [esEdicion, userId]);
-
-  const recuperarBorrador = () => {
-    try {
-      const raw = localStorage.getItem(draftKey(userId));
-      if (!raw) return;
-      const borrador = JSON.parse(raw) as Partial<NotaFormValues>;
-
-      // Los campos de fecha/hora en el formulario son strings ("YYYY-MM-DD" y "HH:mm")
-      // — localStorage los guarda así y el form los espera así, sin conversión.
-      reset({ ...getValues(), ...borrador });
-
-      // Restaurar el paciente visual si el borrador tenía idPaciente
-      if (borrador.idPaciente) {
-        const pac = (pacientesData ?? []).find((p) => p.id === borrador.idPaciente);
-        if (pac) {
-          setPacienteSeleccionado(pac);
-        } else {
-          // Si los pacientes aún no cargaron, guardar el id para restaurar más tarde
-          setValue("idPaciente", borrador.idPaciente, { shouldValidate: false });
-        }
-      }
-    } catch { /* ignorar */ }
-    setMostrarBorradorBanner(false);
-  };
-
-  const descartarBorrador = () => {
-    try { localStorage.removeItem(draftKey(userId)); } catch { /* ignorar */ }
-    setMostrarBorradorBanner(false);
-  };
-
-  // Bug 2 fix: autoguardado — watch() escucha todos los cambios
-  const watchedValues = watch();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (esEdicion || !userId) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      try {
-        localStorage.setItem(draftKey(userId), JSON.stringify(watchedValues));
-      } catch { /* ignorar */ }
-    }, DEBOUNCE_MS);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(watchedValues), userId, esEdicion]);
 
   const onSubmit = useCallback(
     (data: NotaFormValues) => {
@@ -272,7 +197,6 @@ export default function FormNotaPage() {
       } else {
         crearNota({ nota, medicoEncargadoId }, {
           onSuccess: (notaCreada) => {
-            try { localStorage.removeItem(draftKey(userId)); } catch { /* ignorar */ }
             setExito(true);
             navigate(`/notas/${notaCreada.id}`);
           },
@@ -280,7 +204,7 @@ export default function FormNotaPage() {
         });
       }
     },
-    [esEdicion, notaId, perfil?.id, crearNota, editarNota, navigate, userId]
+    [esEdicion, notaId, perfil?.id, crearNota, editarNota, navigate]
   );
 
   return (
@@ -293,23 +217,6 @@ export default function FormNotaPage() {
         <h1 className="text-2xl font-semibold">
           {esEdicion ? "Editar nota operatoria" : "Nueva nota operatoria"}
         </h1>
-
-        {/* Bug 2 fix: banner de borrador */}
-        {mostrarBorradorBanner && (
-          <Alert role="status">
-            <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
-              <span>Hay un borrador sin guardar de una nota anterior.</span>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={recuperarBorrador}>
-                  Recuperar borrador
-                </Button>
-                <Button size="sm" variant="ghost" onClick={descartarBorrador}>
-                  Descartar
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {exito && (
           <Alert role="status">
@@ -347,7 +254,6 @@ export default function FormNotaPage() {
                     Busca un paciente o regístralo si no existe.
                   </p>
                   <div className="flex gap-2">
-                    {/* Bug 3 fix: abre dialog en lugar de navegar */}
                     <Button type="button" size="sm" variant="outline"
                       onClick={() => setSelectorOpen(true)}>
                       Buscar paciente
@@ -358,7 +264,6 @@ export default function FormNotaPage() {
                       Registrar nuevo
                     </Button>
                   </div>
-                  {/* idPaciente sincronizado vía useEffect + setValue */}
                   <input type="hidden" {...register("idPaciente")} />
                   {errors.idPaciente && (
                     <p className="text-sm text-destructive">{errors.idPaciente.message}</p>
@@ -464,7 +369,7 @@ export default function FormNotaPage() {
             </CardContent>
           </Card>
 
-    {/* ── Datos clínicos ── */}
+          {/* ── Datos clínicos ── */}
           <Card>
             <CardHeader><CardTitle className="text-base">Datos clínicos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -528,7 +433,6 @@ export default function FormNotaPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Médico encargado y equipo</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {/* Bug 1 fix: Bug 1 fix: valor controlado + preselección al cargar */}
               <div className="space-y-1">
                 <Label htmlFor="medicoEncargado">Médico encargado</Label>
                 <Controller name="medicoEncargado" control={control}
@@ -599,7 +503,6 @@ export default function FormNotaPage() {
         </form>
       </div>
 
-      {/* Bug 3 fix: dialog de selección de paciente */}
       <SelectorPacienteDialog
         open={selectorOpen}
         onClose={() => setSelectorOpen(false)}
