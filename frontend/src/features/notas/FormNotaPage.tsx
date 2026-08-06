@@ -1,6 +1,5 @@
 /**
  * Formulario de creación y edición de notas operatorias.
- *
  * Requisitos: 14.1–14.8, 15.1–15.4, 16.2–16.6, 17.1–17.4, 21.1–21.3, 21.5, 24.1–24.3
  */
 
@@ -18,7 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -27,22 +25,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AutocompleteInput } from "./AutocompleteInput";
-import { saveDraft, loadDraft, clearDraft } from "./draftApi";
-import { NotaFormSchema, type NotaFormInput } from "@/domain/validation/nota.validation";
+import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
+import { NotaFormSchema } from "@/domain/validation/nota.validation";
 import { BACKEND_SUPPORTS_OJO_ESTADO } from "@/api/dto/nota.dto";
+import type { z } from "zod";
+// Usamos el tipo de _input_ del schema para evitar conflictos con los defaults de Zod
+type NotaFormValues = z.input<typeof NotaFormSchema>;
 import { useCrearNota, useEditarNota, useObtenerNota } from "@/hooks/useNotas";
 import { useDiagnosticos, useProcedimientos, useTecnicas } from "@/hooks/useCatalogos";
 import { useListarUsuarios } from "@/hooks/useUsuarios";
 import { useListarPacientes } from "@/hooks/usePacientes";
 import { useSessionStore } from "@/stores/sessionStore";
 import { isApiError } from "@/api/errors";
-import { formatRFC3339, horaFromRFC3339 } from "@/lib/datetime";
 import { derivarEquipoDesdeMedicos } from "@/lib/equipo";
 import type { Paciente } from "@/domain/models";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Clave de borrador sin paciente (para notas nuevas antes de seleccionar paciente)
+function draftKey(userId: string) {
+  return `draft:nota:${userId}:__pending__`;
+}
 
 function toDateInputValue(d: Date | undefined): string {
   if (!d) return "";
@@ -50,10 +51,6 @@ function toDateInputValue(d: Date | undefined): string {
 }
 
 const DEBOUNCE_MS = 800;
-
-// ---------------------------------------------------------------------------
-// Componente
-// ---------------------------------------------------------------------------
 
 export default function FormNotaPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,8 +60,9 @@ export default function FormNotaPage() {
 
   const esEdicion = !!id;
   const notaId = id ? Number(id) : undefined;
+  const userId = perfil?.id ?? "";
 
-  // Paciente pre-seleccionado (desde NuevoPacientePage o búsqueda)
+  // Paciente llegado desde NuevoPacientePage
   const pacienteDesdeState = (
     location.state as { pacienteSeleccionado?: Paciente } | null
   )?.pacienteSeleccionado;
@@ -75,30 +73,27 @@ export default function FormNotaPage() {
     pacienteDesdeState ?? null
   );
   const [mostrarBorradorBanner, setMostrarBorradorBanner] = useState(false);
+  // Bug 3 fix: dialog en lugar de navegación
+  const [selectorOpen, setSelectorOpen] = useState(false);
 
-  // Queries de datos auxiliares — Req 17.1, 16.1
+  // Queries auxiliares
   const { data: diagnosticosData } = useDiagnosticos();
   const { data: procedimientosData } = useProcedimientos();
   const { data: tecnicasData } = useTecnicas();
-  const { data: usuariosData } = useListarUsuarios();
+  // Bug 1 fix: staleTime=0 para que cargue siempre al montar el formulario
+  const { data: usuariosData, isSuccess: medicosListados } = useListarUsuarios();
   const { data: pacientesData } = useListarPacientes();
 
   const opcionesDx = (diagnosticosData ?? []).map((d) => d.diagnostico);
   const opcionesProc = (procedimientosData ?? []).map((p) => p.intervencion);
   const opcionesTecnica = (tecnicasData ?? []).map((t) => t.tecnica);
-  const medicos = (usuariosData ?? []).filter((u) => u.rol === "medico" || u.rol === "admin");
+  // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
+  const medicos = usuariosData ?? [];
 
-  // Nota existente para edición
   const { data: notaExistente } = useObtenerNota(notaId ?? 0);
-
-  // Mutaciones
   const { mutate: crearNota, isPending: creando } = useCrearNota();
   const { mutate: editarNota, isPending: editando } = useEditarNota(notaId ?? 0);
   const isPending = creando || editando;
-
-  // ---------------------------------------------------------------------------
-  // Formulario react-hook-form
-  // ---------------------------------------------------------------------------
 
   const {
     register,
@@ -107,10 +102,12 @@ export default function FormNotaPage() {
     watch,
     reset,
     getValues,
+    setValue,
     formState: { errors },
-  } = useForm<NotaFormInput>({
+  } = useForm<NotaFormValues>({
     resolver: zodResolver(NotaFormSchema),
     defaultValues: {
+      // Bug 1 fix: preseleccionar médico encargado con el id del perfil actual
       medicoEncargado: perfil?.id ?? "",
       equipo: [],
       esElectiva: false,
@@ -119,10 +116,17 @@ export default function FormNotaPage() {
     },
   });
 
-  // ---------------------------------------------------------------------------
-  // Precarga de nota existente (edición) — Req 16.5
-  // ---------------------------------------------------------------------------
+  // Bug 1 fix: cuando la lista de médicos carga y el campo aún está vacío,
+  // establecer el médico encargado con el perfil actual
+  useEffect(() => {
+    if (!medicosListados || esEdicion) return;
+    const encargadoActual = getValues("medicoEncargado");
+    if (!encargadoActual && perfil?.id) {
+      setValue("medicoEncargado", perfil.id, { shouldValidate: false });
+    }
+  }, [medicosListados, esEdicion, perfil?.id, getValues, setValue]);
 
+  // Precarga de nota existente (edición) — Req 16.5
   useEffect(() => {
     if (esEdicion && notaExistente) {
       const equipoIds = derivarEquipoDesdeMedicos(notaExistente.medicos).filter(
@@ -131,9 +135,9 @@ export default function FormNotaPage() {
       reset({
         idPaciente: notaExistente.idPaciente,
         dxPreOperatorio: notaExistente.dxPreOperatorio,
-        dxPostOperatorio: notaExistente.dxPostOperatorio,
+        dxPostOperatorio: notaExistente.dxPostOperatorio ?? "",
         intervencionRealizada: notaExistente.intervencionRealizada,
-        resumenIntervencion: notaExistente.resumenIntervencion,
+        resumenIntervencion: notaExistente.resumenIntervencion ?? "",
         fechaComienzo: toDateInputValue(notaExistente.fechaComienzo),
         fechaCulminacion: toDateInputValue(notaExistente.fechaCulminacion),
         horaComienzo: notaExistente.horaComienzo,
@@ -147,64 +151,90 @@ export default function FormNotaPage() {
         equipo: equipoIds,
         tecnica: "",
       });
-      // Buscar el paciente en la lista para mostrarlo
-      const pac = (pacientesData ?? []).find(
-        (p) => p.id === notaExistente.idPaciente
-      );
+      const pac = (pacientesData ?? []).find((p) => p.id === notaExistente.idPaciente);
       if (pac) setPacienteSeleccionado(pac);
     }
   }, [esEdicion, notaExistente, reset, perfil?.id, pacientesData]);
 
-  // ---------------------------------------------------------------------------
-  // Borrador local — Req 15.1, 15.2
-  // ---------------------------------------------------------------------------
-
-  const userId = perfil?.id ?? "";
-  const watchedIdPaciente = watch("idPaciente") ?? "";
-
-  // Mostrar banner de borrador al abrir en modo creación
+  // Bug 2 fix: sincronizar pacienteSeleccionado con el campo oculto del form
   useEffect(() => {
-    if (!esEdicion && userId && watchedIdPaciente) {
-      const borrador = loadDraft(userId, watchedIdPaciente);
-      if (borrador) setMostrarBorradorBanner(true);
+    if (pacienteSeleccionado) {
+      setValue("idPaciente", pacienteSeleccionado.id, { shouldValidate: true });
     }
-  }, [esEdicion, userId, watchedIdPaciente]);
+  }, [pacienteSeleccionado, setValue]);
+
+  // Si hay idPaciente en el form pero sin objeto seleccionado (borrador recuperado
+  // antes de que la lista de pacientes cargara), restaurar cuando lleguen los datos
+  const watchedIdPaciente = watch("idPaciente");
+  useEffect(() => {
+    if (pacienteSeleccionado || !watchedIdPaciente || !pacientesData?.length) return;
+    const pac = pacientesData.find((p) => p.id === watchedIdPaciente);
+    if (pac) setPacienteSeleccionado(pac);
+  }, [pacientesData, watchedIdPaciente, pacienteSeleccionado]);
+
+  // Bug 2 fix: borrador con clave independiente del paciente
+  // Al abrir en creación, verificar si hay borrador guardado
+  useEffect(() => {
+    if (esEdicion || !userId) return;
+    const key = draftKey(userId);
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setMostrarBorradorBanner(true);
+    } catch { /* ignorar */ }
+  }, [esEdicion, userId]);
 
   const recuperarBorrador = () => {
-    const borrador = loadDraft(userId, watchedIdPaciente);
-    if (borrador) {
+    try {
+      const raw = localStorage.getItem(draftKey(userId));
+      if (!raw) return;
+      const borrador = JSON.parse(raw) as Partial<NotaFormValues>;
+
+      // Los campos de fecha/hora en el formulario son strings ("YYYY-MM-DD" y "HH:mm")
+      // — localStorage los guarda así y el form los espera así, sin conversión.
       reset({ ...getValues(), ...borrador });
-    }
+
+      // Restaurar el paciente visual si el borrador tenía idPaciente
+      if (borrador.idPaciente) {
+        const pac = (pacientesData ?? []).find((p) => p.id === borrador.idPaciente);
+        if (pac) {
+          setPacienteSeleccionado(pac);
+        } else {
+          // Si los pacientes aún no cargaron, guardar el id para restaurar más tarde
+          setValue("idPaciente", borrador.idPaciente, { shouldValidate: false });
+        }
+      }
+    } catch { /* ignorar */ }
     setMostrarBorradorBanner(false);
   };
 
-  // Autoguardado con debounce — Req 15.1
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const descartarBorrador = () => {
+    try { localStorage.removeItem(draftKey(userId)); } catch { /* ignorar */ }
+    setMostrarBorradorBanner(false);
+  };
+
+  // Bug 2 fix: autoguardado — watch() escucha todos los cambios
   const watchedValues = watch();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!userId || !watchedIdPaciente || esEdicion) return;
+    if (esEdicion || !userId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      saveDraft(userId, watchedIdPaciente, watchedValues);
+      try {
+        localStorage.setItem(draftKey(userId), JSON.stringify(watchedValues));
+      } catch { /* ignorar */ }
     }, DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(watchedValues), userId, watchedIdPaciente, esEdicion]);
-
-  // ---------------------------------------------------------------------------
-  // Submit
-  // ---------------------------------------------------------------------------
+  }, [JSON.stringify(watchedValues), userId, esEdicion]);
 
   const onSubmit = useCallback(
-    (data: NotaFormInput) => {
+    (data: NotaFormValues) => {
       setErrorMsg(null);
       setExito(false);
-
       const medicoEncargadoId = data.medicoEncargado ?? perfil?.id ?? "";
-
       const nota = {
         id: notaId,
         dxPreOperatorio: data.dxPreOperatorio,
@@ -227,51 +257,31 @@ export default function FormNotaPage() {
         equipo: data.equipo ?? [],
         medicos: [],
       };
-
       const onError = (err: unknown) => {
-        if (isApiError(err) && err.status === 400) {
-          // Req 14.8
-          setErrorMsg(err.body || "Error de validación.");
-        } else {
-          setErrorMsg("Error al guardar la nota. Intenta de nuevo.");
-        }
+        setErrorMsg(
+          isApiError(err) && err.status === 400
+            ? err.body || "Error de validación."
+            : "Error al guardar la nota. Intenta de nuevo."
+        );
       };
-
       if (esEdicion && notaId) {
-        editarNota(
-          { nota, medicoEncargadoId },
-          {
-            onSuccess: () => {
-              setExito(true);
-              navigate(`/notas/${notaId}`);
-            },
-            onError,
-          }
-        );
+        editarNota({ nota, medicoEncargadoId }, {
+          onSuccess: () => { setExito(true); navigate(`/notas/${notaId}`); },
+          onError,
+        });
       } else {
-        crearNota(
-          { nota, medicoEncargadoId },
-          {
-            onSuccess: (notaCreada) => {
-              // Req 15.3: limpiar borrador al guardar con éxito
-              clearDraft(userId, watchedIdPaciente);
-              setExito(true);
-              navigate(`/notas/${notaCreada.id}`);
-            },
-            onError,
-          }
-        );
+        crearNota({ nota, medicoEncargadoId }, {
+          onSuccess: (notaCreada) => {
+            try { localStorage.removeItem(draftKey(userId)); } catch { /* ignorar */ }
+            setExito(true);
+            navigate(`/notas/${notaCreada.id}`);
+          },
+          onError,
+        });
       }
     },
-    [
-      esEdicion, notaId, perfil?.id, crearNota, editarNota,
-      navigate, userId, watchedIdPaciente,
-    ]
+    [esEdicion, notaId, perfil?.id, crearNota, editarNota, navigate, userId]
   );
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <AppLayout>
@@ -280,28 +290,20 @@ export default function FormNotaPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver
         </Button>
-
         <h1 className="text-2xl font-semibold">
           {esEdicion ? "Editar nota operatoria" : "Nueva nota operatoria"}
         </h1>
 
-        {/* Banner de borrador — Req 15.2 */}
+        {/* Bug 2 fix: banner de borrador */}
         {mostrarBorradorBanner && (
           <Alert role="status">
-            <AlertDescription className="flex items-center justify-between">
-              <span>Hay un borrador guardado para este paciente.</span>
-              <div className="flex gap-2 ml-4">
+            <AlertDescription className="flex items-center justify-between flex-wrap gap-2">
+              <span>Hay un borrador sin guardar de una nota anterior.</span>
+              <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={recuperarBorrador}>
-                  Recuperar
+                  Recuperar borrador
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    clearDraft(userId, watchedIdPaciente);
-                    setMostrarBorradorBanner(false);
-                  }}
-                >
+                <Button size="sm" variant="ghost" onClick={descartarBorrador}>
                   Descartar
                 </Button>
               </div>
@@ -314,7 +316,6 @@ export default function FormNotaPage() {
             <AlertDescription>Nota guardada correctamente.</AlertDescription>
           </Alert>
         )}
-
         {errorMsg && (
           <Alert variant="destructive" role="alert">
             <AlertDescription>{errorMsg}</AlertDescription>
@@ -322,12 +323,9 @@ export default function FormNotaPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
-
           {/* ── Paciente ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Paciente *</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Paciente *</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {pacienteSeleccionado ? (
                 <div className="flex items-center justify-between rounded-md border p-3">
@@ -338,172 +336,105 @@ export default function FormNotaPage() {
                       {" · "}HM: {pacienteSeleccionado.historiaMedica}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPacienteSeleccionado(null)}
-                  >
+                  <Button type="button" size="sm" variant="outline"
+                    onClick={() => setPacienteSeleccionado(null)}>
                     Cambiar
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Busca un paciente en la lista o regístralo si no existe.
+                    Busca un paciente o regístralo si no existe.
                   </p>
                   <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        navigate("/pacientes", {
-                          state: { seleccionandoParaNota: true },
-                        })
-                      }
-                    >
+                    {/* Bug 3 fix: abre dialog en lugar de navegar */}
+                    <Button type="button" size="sm" variant="outline"
+                      onClick={() => setSelectorOpen(true)}>
                       Buscar paciente
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        navigate("/pacientes/nuevo", {
-                          state: { origenNota: true },
-                        })
-                      }
-                    >
+                    <Button type="button" size="sm" variant="outline"
+                      onClick={() => navigate("/pacientes/nuevo", { state: { origenNota: true } })}>
                       <UserPlus className="mr-2 h-4 w-4" />
                       Registrar nuevo
                     </Button>
                   </div>
-                  {/* Campo oculto para que react-hook-form valide el idPaciente */}
+                  {/* idPaciente sincronizado vía useEffect + setValue */}
                   <input type="hidden" {...register("idPaciente")} />
                   {errors.idPaciente && (
                     <p className="text-sm text-destructive">{errors.idPaciente.message}</p>
                   )}
                 </div>
               )}
-              {/* Sincronizar el id del paciente en el formulario */}
-              {pacienteSeleccionado && (
-                <input
-                  type="hidden"
-                  {...register("idPaciente")}
-                  value={pacienteSeleccionado.id}
-                />
-              )}
             </CardContent>
           </Card>
 
           {/* ── Diagnósticos ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Diagnósticos</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Diagnósticos</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="dxPreOperatorio">Dx. preoperatorio *</Label>
-                <Controller
-                  name="dxPreOperatorio"
-                  control={control}
+                <Controller name="dxPreOperatorio" control={control}
                   render={({ field }) => (
-                    <AutocompleteInput
-                      id="dxPreOperatorio"
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      opciones={opcionesDx}
+                    <AutocompleteInput id="dxPreOperatorio" value={field.value ?? ""}
+                      onChange={field.onChange} opciones={opcionesDx}
                       placeholder="Escribir o seleccionar…"
-                      aria-describedby={errors.dxPreOperatorio ? "dxPre-error" : undefined}
-                    />
-                  )}
-                />
+                      aria-describedby={errors.dxPreOperatorio ? "dxPre-error" : undefined} />
+                  )} />
                 {errors.dxPreOperatorio && (
                   <p id="dxPre-error" className="text-sm text-destructive">
-                    {errors.dxPreOperatorio.message}
-                  </p>
+                    {errors.dxPreOperatorio.message}</p>
                 )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="dxPostOperatorio">Dx. postoperatorio</Label>
-                <Controller
-                  name="dxPostOperatorio"
-                  control={control}
+                <Controller name="dxPostOperatorio" control={control}
                   render={({ field }) => (
-                    <AutocompleteInput
-                      id="dxPostOperatorio"
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      opciones={opcionesDx}
-                      placeholder="Escribir o seleccionar…"
-                    />
-                  )}
-                />
+                    <AutocompleteInput id="dxPostOperatorio" value={field.value ?? ""}
+                      onChange={field.onChange} opciones={opcionesDx}
+                      placeholder="Escribir o seleccionar…" />
+                  )} />
               </div>
             </CardContent>
           </Card>
 
           {/* ── Intervención ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Intervención</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Intervención</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
                 <Label htmlFor="intervencionRealizada">Intervención realizada *</Label>
-                <Controller
-                  name="intervencionRealizada"
-                  control={control}
+                <Controller name="intervencionRealizada" control={control}
                   render={({ field }) => (
-                    <AutocompleteInput
-                      id="intervencionRealizada"
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      opciones={opcionesProc}
+                    <AutocompleteInput id="intervencionRealizada" value={field.value ?? ""}
+                      onChange={field.onChange} opciones={opcionesProc}
                       placeholder="Escribir o seleccionar…"
-                      aria-describedby={errors.intervencionRealizada ? "iv-error" : undefined}
-                    />
-                  )}
-                />
+                      aria-describedby={errors.intervencionRealizada ? "iv-error" : undefined} />
+                  )} />
                 {errors.intervencionRealizada && (
                   <p id="iv-error" className="text-sm text-destructive">
-                    {errors.intervencionRealizada.message}
-                  </p>
+                    {errors.intervencionRealizada.message}</p>
                 )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="tecnica">Técnica</Label>
-                <Controller
-                  name="tecnica"
-                  control={control}
+                <Controller name="tecnica" control={control}
                   render={({ field }) => (
-                    <AutocompleteInput
-                      id="tecnica"
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      opciones={opcionesTecnica}
-                      placeholder="Escribir o seleccionar…"
-                    />
-                  )}
-                />
+                    <AutocompleteInput id="tecnica" value={field.value ?? ""}
+                      onChange={field.onChange} opciones={opcionesTecnica}
+                      placeholder="Escribir o seleccionar…" />
+                  )} />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="resumenIntervencion">Resumen de la intervención</Label>
-                <Textarea
-                  id="resumenIntervencion"
-                  rows={3}
-                  {...register("resumenIntervencion")}
-                />
+                <Textarea id="resumenIntervencion" rows={3} {...register("resumenIntervencion")} />
               </div>
             </CardContent>
           </Card>
 
           {/* ── Fechas y horas ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Fechas y horas</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Fechas y horas</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="fechaComienzo">Fecha de inicio *</Label>
@@ -533,11 +464,9 @@ export default function FormNotaPage() {
             </CardContent>
           </Card>
 
-          {/* ── Datos clínicos ── */}
+    {/* ── Datos clínicos ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Datos clínicos</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Datos clínicos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
                 <Label htmlFor="pabellon">Pabellón</Label>
@@ -561,71 +490,52 @@ export default function FormNotaPage() {
                   Biopsia
                 </label>
               </div>
-
-              {/* Campos oftalmológicos pendientes — Req 24.1, 24.2, 24.3 */}
               {BACKEND_SUPPORTS_OJO_ESTADO && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="ojo">Ojo</Label>
-                    <Controller
-                      name={"ojo" as keyof NotaFormInput}
-                      control={control}
+                    <Controller name={"ojo" as keyof NotaFormValues} control={control}
                       render={({ field }) => (
                         <Select value={field.value as string} onValueChange={field.onChange}>
-                          <SelectTrigger id="ojo">
-                            <SelectValue placeholder="Seleccionar" />
-                          </SelectTrigger>
+                          <SelectTrigger id="ojo"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="OD">OD</SelectItem>
                             <SelectItem value="OI">OI</SelectItem>
                             <SelectItem value="AO">AO</SelectItem>
                           </SelectContent>
                         </Select>
-                      )}
-                    />
+                      )} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="estado">Estado</Label>
-                    <Controller
-                      name={"estado" as keyof NotaFormInput}
-                      control={control}
+                    <Controller name={"estado" as keyof NotaFormValues} control={control}
                       render={({ field }) => (
-                        <Select
-                          value={(field.value as string) ?? "realizada"}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger id="estado">
-                            <SelectValue />
-                          </SelectTrigger>
+                        <Select value={(field.value as string) ?? "realizada"} onValueChange={field.onChange}>
+                          <SelectTrigger id="estado"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="realizada">Realizada</SelectItem>
                             <SelectItem value="diferida">Diferida</SelectItem>
                           </SelectContent>
                         </Select>
-                      )}
-                    />
+                      )} />
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* ── Equipo quirúrgico ── Req 16.2 */}
+          {/* ── Equipo quirúrgico ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Médico encargado y equipo</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Médico encargado y equipo</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {/* Médico encargado — preseleccionado con el usuario de sesión — Req 14.3 */}
+              {/* Bug 1 fix: Bug 1 fix: valor controlado + preselección al cargar */}
               <div className="space-y-1">
                 <Label htmlFor="medicoEncargado">Médico encargado</Label>
-                <Controller
-                  name="medicoEncargado"
-                  control={control}
+                <Controller name="medicoEncargado" control={control}
                   render={({ field }) => (
                     <Select value={field.value ?? ""} onValueChange={field.onChange}>
                       <SelectTrigger id="medicoEncargado">
-                        <SelectValue placeholder="Seleccionar médico…" />
+                        <SelectValue placeholder={medicos.length === 0 ? "Cargando médicos…" : "Seleccionar médico…"} />
                       </SelectTrigger>
                       <SelectContent>
                         {medicos.map((m) => (
@@ -635,19 +545,14 @@ export default function FormNotaPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                />
+                  )} />
               </div>
-
-              {/* Selector de equipo — múltiple — Req 16.2 */}
               <div className="space-y-2">
                 <Label>Equipo quirúrgico</Label>
                 <p className="text-xs text-muted-foreground">
-                  Selecciona los médicos participantes (el encargado se agrega automáticamente).
+                  El médico encargado se agrega automáticamente.
                 </p>
-                <Controller
-                  name="equipo"
-                  control={control}
+                <Controller name="equipo" control={control}
                   render={({ field }) => {
                     const encargadoId = watch("medicoEncargado") ?? "";
                     const participantes = medicos.filter((m) => m.id !== encargadoId);
@@ -656,24 +561,18 @@ export default function FormNotaPage() {
                         {participantes.map((m) => {
                           const seleccionado = (field.value ?? []).includes(m.id);
                           return (
-                            <button
-                              key={m.id}
-                              type="button"
+                            <button key={m.id} type="button" aria-pressed={seleccionado}
                               onClick={() => {
                                 const actual = field.value ?? [];
-                                field.onChange(
-                                  seleccionado
-                                    ? actual.filter((uid) => uid !== m.id)
-                                    : [...actual, m.id]
-                                );
+                                field.onChange(seleccionado
+                                  ? actual.filter((uid) => uid !== m.id)
+                                  : [...actual, m.id]);
                               }}
                               className={`rounded-full px-3 py-1 text-sm border transition-colors ${
                                 seleccionado
                                   ? "bg-primary text-primary-foreground border-primary"
                                   : "bg-background border-border hover:bg-muted"
-                              }`}
-                              aria-pressed={seleccionado}
-                            >
+                              }`}>
                               {m.nombres} {m.apellidos}
                             </button>
                           );
@@ -683,21 +582,15 @@ export default function FormNotaPage() {
                         )}
                       </div>
                     );
-                  }}
-                />
+                  }} />
               </div>
             </CardContent>
           </Card>
 
           <Separator />
-
           <div className="flex gap-3">
             <Button type="submit" disabled={isPending}>
-              {isPending
-                ? "Guardando…"
-                : esEdicion
-                ? "Guardar cambios"
-                : "Crear nota"}
+              {isPending ? "Guardando…" : esEdicion ? "Guardar cambios" : "Crear nota"}
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancelar
@@ -705,6 +598,16 @@ export default function FormNotaPage() {
           </div>
         </form>
       </div>
+
+      {/* Bug 3 fix: dialog de selección de paciente */}
+      <SelectorPacienteDialog
+        open={selectorOpen}
+        onClose={() => setSelectorOpen(false)}
+        onSelect={(pac) => {
+          setPacienteSeleccionado(pac);
+          setSelectorOpen(false);
+        }}
+      />
     </AppLayout>
   );
 }

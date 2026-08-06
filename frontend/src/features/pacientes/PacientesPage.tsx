@@ -20,7 +20,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { useListarPacientes } from "@/hooks/usePacientes";
+import { usePaginacion } from "@/hooks/usePaginacion";
 import { filtrarPacientes } from "@/lib/search";
 import { formatFechaUI } from "@/lib/datetime";
 
@@ -29,10 +31,16 @@ export default function PacientesPage() {
   const [termino, setTermino] = useState("");
   const { data: pacientes, isLoading, isError } = useListarPacientes();
 
-  // Filtro local — Requisitos 10.2, 10.5 (excluye eliminados dentro de filtrarPacientes)
   const resultado = filtrarPacientes(pacientes ?? [], termino);
-
   const sinResultados = termino.trim() !== "" && resultado.length === 0;
+
+  const paginacion = usePaginacion(resultado, 10);
+
+  // Resetear paginación al cambiar el filtro
+  const handleTermino = (v: string) => {
+    setTermino(v);
+    paginacion.resetear();
+  };
 
   return (
     <AppLayout>
@@ -48,7 +56,7 @@ export default function PacientesPage() {
             placeholder="Buscar por nombre, cédula o historia médica…"
             className="pl-9"
             value={termino}
-            onChange={(e) => setTermino(e.target.value)}
+            onChange={(e) => handleTermino(e.target.value)}
             aria-label="Buscar paciente"
           />
         </div>
@@ -100,7 +108,7 @@ export default function PacientesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {resultado.map((p) => (
+                {paginacion.itemsPagina.map((p) => (
                   <TableRow
                     key={p.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -112,11 +120,8 @@ export default function PacientesPage() {
                     }}
                     aria-label={`Ver ficha de ${p.nombre}`}
                   >
-                    {/* Requisito 10.3: nombre, doc, historia, nacimiento, género */}
                     <TableCell className="font-medium">{p.nombre}</TableCell>
-                    <TableCell>
-                      {p.tipoDocumento}-{p.numeroIdentificacion}
-                    </TableCell>
+                    <TableCell>{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
                     <TableCell>{p.historiaMedica}</TableCell>
                     <TableCell>{formatFechaUI(p.fechaNacimiento)}</TableCell>
                     <TableCell>
@@ -128,6 +133,9 @@ export default function PacientesPage() {
                 ))}
               </TableBody>
             </Table>
+            <div className="px-4 pb-3">
+              <ControlsPaginacion {...paginacion} />
+            </div>
           </div>
         )}
 

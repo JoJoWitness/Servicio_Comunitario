@@ -42,15 +42,14 @@ export interface EditarUsuarioInput {
 
 /**
  * Obtiene la lista completa de usuarios.
- * GET /usuarios
- *
- * Usado por:
- * - El módulo de administración de usuarios (Requisito 28.1)
- * - El selector de equipo quirúrgico (Requisito 16.1)
+ * GET /usuarios — devuelve un array directo.
  */
 export async function listarUsuarios(): Promise<Usuario[]> {
-  const dtos = await request<UsuarioDTO[]>("/usuarios");
-  return dtos.map(usuarioToDomain);
+  const raw = await request<UsuarioDTO[]>("/usuarios");
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((d) => d && typeof d === "object" && "id" in d)
+    .map(usuarioToDomain);
 }
 
 /**

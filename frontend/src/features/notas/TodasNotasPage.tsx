@@ -50,7 +50,8 @@ export default function TodasNotasPage() {
   const { data: pacientes } = useListarPacientes();
 
   const notas = notasRaw ? ordenarNotasDesc(notasRaw) : [];
-  const medicos = (usuarios ?? []).filter((u) => u.rol === "medico" || u.rol === "admin");
+  // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
+  const medicos = (usuarios ?? []);
 
   const getPaciente = (idPaciente: string) =>
     (pacientes ?? []).find((p) => p.id === idPaciente);
