@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useLogin } from "@/hooks/useAuth";
 import { isApiError } from "@/api/errors";
 import { rutaInicialPorRol } from "@/routes/roleRoutes";
@@ -28,6 +30,27 @@ const LoginSchema = z.object({
   contrasena: z.string().min(1, "La contraseña es obligatoria"),
 });
 type LoginFormValues = z.infer<typeof LoginSchema>;
+
+// ---------------------------------------------------------------------------
+// Cuentas de prueba (solo en desarrollo)
+// ---------------------------------------------------------------------------
+
+const CUENTAS_PRUEBA: {
+  correo: string;
+  contrasena: string;
+  rol: string;
+  label: string;
+}[] = [
+  { correo: "roma@test.com",   contrasena: "roma2026",   rol: "medico",     label: "Médico" },
+  { correo: "canela@test.com", contrasena: "canela2026", rol: "secretaria", label: "Secretaria" },
+  { correo: "ryuk@test.com",   contrasena: "ryuk2026",   rol: "admin",      label: "Admin" },
+];
+
+const ROL_BADGE: Record<string, "secondary" | "outline" | "default"> = {
+  medico:     "secondary",
+  secretaria: "outline",
+  admin:      "default",
+};
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -45,6 +68,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(LoginSchema),
@@ -56,11 +80,9 @@ export default function LoginPage() {
       { correo: data.correo, contrasena: data.contrasena },
       {
         onSuccess: (perfil) => {
-          // Redirigir a la ruta solicitada o a la pantalla inicial por rol
           navigate(from ?? rutaInicialPorRol(perfil.rol), { replace: true });
         },
         onError: (err) => {
-          // Requisito 3.5: 401 → mensaje de credenciales inválidas, permanecer en login
           if (isApiError(err) && err.status === 401) {
             setErrorMsg("Correo o contraseña incorrectos.");
           } else {
@@ -71,79 +93,118 @@ export default function LoginPage() {
     );
   };
 
+  const rellenarCuenta = (correo: string, contrasena: string) => {
+    setValue("correo", correo, { shouldValidate: true });
+    setValue("contrasena", contrasena, { shouldValidate: true });
+    setErrorMsg(null);
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
-          <CardDescription>
-            Sistema de Notas Operatorias — HCSC Oftalmología
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <div className="w-full max-w-sm space-y-3">
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
+            <CardDescription>
+              Sistema de Notas Operatorias — HCSC Oftalmología
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
             {/* Mensaje de error global */}
-            {errorMsg && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{errorMsg}</AlertDescription>
-              </Alert>
-            )}
+              {errorMsg && (
+                <Alert variant="destructive" role="alert">
+                  <AlertDescription>{errorMsg}</AlertDescription>
+                </Alert>
+              )}
 
             {/* Correo */}
-            <div className="space-y-1">
-              <Label htmlFor="correo">Correo electrónico</Label>
-              <Input
-                id="correo"
-                type="email"
-                autoComplete="email"
-                aria-describedby={errors.correo ? "correo-error" : undefined}
-                {...register("correo")}
-              />
-              {errors.correo && (
-                <p id="correo-error" className="text-sm text-destructive">
-                  {errors.correo.message}
-                </p>
-              )}
-            </div>
+              <div className="space-y-1">
+                <Label htmlFor="correo">Correo electrónico</Label>
+                <Input
+                  id="correo"
+                  type="email"
+                  autoComplete="email"
+                  aria-describedby={errors.correo ? "correo-error" : undefined}
+                  {...register("correo")}
+                />
+                {errors.correo && (
+                  <p id="correo-error" className="text-sm text-destructive">
+                    {errors.correo.message}
+                  </p>
+                )}
+              </div>
 
             {/* Contraseña */}
-            <div className="space-y-1">
-              <Label htmlFor="contrasena">Contraseña</Label>
-              <div className="relative">
-                <Input
-                  id="contrasena"
-                  type={mostrarPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  aria-describedby={errors.contrasena ? "contrasena-error" : undefined}
-                  className="pr-10"
-                  {...register("contrasena")}
-                />
-                <button
-                  type="button"
-                  aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground"
-                  onClick={() => setMostrarPassword((v) => !v)}
-                >
-                  {mostrarPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
+              <div className="space-y-1">
+                <Label htmlFor="contrasena">Contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="contrasena"
+                    type={mostrarPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    aria-describedby={errors.contrasena ? "contrasena-error" : undefined}
+                    className="pr-10"
+                    {...register("contrasena")}
+                  />
+                  <button
+                    type="button"
+                    aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground"
+                    onClick={() => setMostrarPassword((v) => !v)}
+                  >
+                    {mostrarPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                {errors.contrasena && (
+                  <p id="contrasena-error" className="text-sm text-destructive">
+                    {errors.contrasena.message}
+                  </p>
+                )}
               </div>
-              {errors.contrasena && (
-                <p id="contrasena-error" className="text-sm text-destructive">
-                  {errors.contrasena.message}
-                </p>
-              )}
-            </div>
 
-            <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button type="submit" className="w-full" disabled={isPending}>
+                {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Panel de cuentas de prueba — solo en desarrollo */}
+        {import.meta.env.DEV && (
+          <Card className="border-dashed border-amber-400/60 bg-amber-50/40 dark:bg-amber-950/20">
+            <CardContent className="pt-4 pb-3 space-y-2">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                Cuentas de prueba
+              </p>
+              <Separator className="opacity-40" />
+              <div className="space-y-1.5">
+                {CUENTAS_PRUEBA.map((cuenta) => (
+                  <button
+                    key={cuenta.correo}
+                    type="button"
+                    onClick={() => rellenarCuenta(cuenta.correo, cuenta.contrasena)}
+                    className="w-full flex items-center justify-between rounded-md px-3 py-2 text-sm text-left hover:bg-amber-100/70 dark:hover:bg-amber-900/30 transition-colors"
+                    aria-label={`Usar cuenta de ${cuenta.label}: ${cuenta.correo}`}
+                  >
+                    <span className="text-muted-foreground truncate">{cuenta.correo}</span>
+                    <Badge variant={ROL_BADGE[cuenta.rol]} className="ml-2 shrink-0 text-xs">
+                      {cuenta.label}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground/70 pt-1">
+                Solo visible en desarrollo. Click rellena el formulario.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
