@@ -1,0 +1,253 @@
+/**
+ * Definición del router principal.
+ *
+ * Estructura de rutas (Requisito 7, diseño de enrutamiento):
+ *
+ * /login                        → LoginPage              (pública)
+ * /signup/:token                → SignupPage             (pública — Req 9.5)
+ * /                             → RequireAuth
+ *   /mis-notas                  → MisNotasPage          (medico)
+ *   /notas                      → TodasNotasPage        (secretaria, admin)
+ *   /notas/:id                  → DetalleNotaPage       (todos los roles autenticados)
+ *   /notas/nuevo                → FormNotaPage          (medico, admin)
+ *   /notas/:id/editar           → FormNotaPage          (medico, admin)
+ *   /pacientes                  → PacientesPage         (todos)
+ *   /pacientes/:id              → FichaPacientePage     (todos)
+ *   /catalogos                  → CatalogosPage         (admin)
+ *   /usuarios                   → UsuariosPage          (admin)
+ *   /perfil                     → PerfilPage            (todos — cambio contraseña)
+ *   *                           → redirige a pantalla inicial por rol
+ *
+ * El interceptor 401 se registra aquí porque este componente tiene acceso
+ * a `useNavigate` y al Store_Sesion — Requisitos 5.1, 5.2.
+ *
+ * Las páginas aún no existen (se crean en tareas 12–17); se usan placeholders
+ * hasta que estén implementadas.
+ */
+
+import { useEffect } from "react";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
+import { registerUnauthorizedHandler } from "../api/interceptor";
+import { useSessionStore } from "../stores/sessionStore";
+import { RequireAuth, RequireRole } from "./guards";
+import { rutaInicialPorRol } from "./roleRoutes";
+
+// ---------------------------------------------------------------------------
+// Placeholders — se reemplazarán por las páginas reales en tareas 12–17
+// ---------------------------------------------------------------------------
+
+const Placeholder = ({ nombre }: { nombre: string }) => (
+  <div style={{ padding: "2rem" }}>
+    <h1>{nombre}</h1>
+    <p>Página en construcción</p>
+  </div>
+);
+
+const LoginPage        = () => <Placeholder nombre="Login" />;
+const SignupPage       = () => <Placeholder nombre="Registro por invitación" />;
+const MisNotasPage     = () => <Placeholder nombre="Mis Notas" />;
+const TodasNotasPage   = () => <Placeholder nombre="Todas las Notas" />;
+const DetalleNotaPage  = () => <Placeholder nombre="Detalle de Nota" />;
+const FormNotaPage     = () => <Placeholder nombre="Formulario de Nota" />;
+const PacientesPage    = () => <Placeholder nombre="Pacientes" />;
+const FichaPacientePage = () => <Placeholder nombre="Ficha de Paciente" />;
+const CatalogosPage    = () => <Placeholder nombre="Catálogos" />;
+const UsuariosPage     = () => <Placeholder nombre="Usuarios" />;
+const PerfilPage       = () => <Placeholder nombre="Perfil" />;
+
+// ---------------------------------------------------------------------------
+// Componente interno que registra el interceptor 401
+// ---------------------------------------------------------------------------
+
+/**
+ * Se monta una sola vez dentro del RouterProvider y registra el handler global
+ * de 401. Necesita `useNavigate` que solo está disponible dentro del árbol del
+ * router.
+ *
+ * Cuando el httpClient recibe un 401:
+ * 1. Limpia el Store_Sesion (Requisito 5.1)
+ * 2. Navega a /login con replace para no dejar historial (Requisito 5.2)
+ *
+ * Nota: si el usuario ya está en /login (401 de credenciales inválidas),
+ * la redirección es idempotente y no causa bucle.
+ */
+function Interceptor401Registrar() {
+  const navigate = useNavigate();
+  const limpiar = useSessionStore((s) => s.limpiar);
+
+  useEffect(() => {
+    registerUnauthorizedHandler(() => {
+      limpiar();
+      navigate("/login", { replace: true });
+    });
+    // Solo registrar una vez al montar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// RutaRaiz — redirige a la pantalla inicial según el rol actual
+// ---------------------------------------------------------------------------
+
+function RutaRaiz() {
+  const perfil = useSessionStore((s) => s.perfil);
+  if (!perfil) return <Navigate to="/login" replace />;
+  return <Navigate to={rutaInicialPorRol(perfil.rol)} replace />;
+}
+
+// ---------------------------------------------------------------------------
+// Router principal
+// ---------------------------------------------------------------------------
+
+export function AppRouter() {
+  return (
+    <>
+      <Interceptor401Registrar />
+      <Routes>
+        {/* Rutas públicas */}
+        <Route path="/login" element={<LoginPage />} />
+        {/* Ruta de confirmación de registro — Requisito 9.5, expuesta en puerto 4321 */}
+        <Route path="/signup/:token" element={<SignupPage />} />
+
+        {/* Rutas protegidas por autenticación */}
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <RutaRaiz />
+            </RequireAuth>
+          }
+        />
+
+        {/* Mis notas — solo médico */}
+        <Route
+          path="/mis-notas"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["medico"]}>
+                <MisNotasPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Todas las notas — secretaria y admin */}
+        <Route
+          path="/notas"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["secretaria", "admin"]}>
+                <TodasNotasPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Detalle de nota — todos los roles autenticados */}
+        <Route
+          path="/notas/:id"
+          element={
+            <RequireAuth>
+              <DetalleNotaPage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Formulario nueva nota — médico y admin */}
+        <Route
+          path="/notas/nuevo"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["medico", "admin"]}>
+                <FormNotaPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Formulario editar nota — médico y admin */}
+        <Route
+          path="/notas/:id/editar"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["medico", "admin"]}>
+                <FormNotaPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Pacientes — todos los roles */}
+        <Route
+          path="/pacientes"
+          element={
+            <RequireAuth>
+              <PacientesPage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Ficha de paciente — todos los roles */}
+        <Route
+          path="/pacientes/:id"
+          element={
+            <RequireAuth>
+              <FichaPacientePage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Catálogos — solo admin */}
+        <Route
+          path="/catalogos"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["admin"]}>
+                <CatalogosPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Usuarios — solo admin */}
+        <Route
+          path="/usuarios"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["admin"]}>
+                <UsuariosPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
+        {/* Perfil / cambio de contraseña — todos los roles */}
+        <Route
+          path="/perfil"
+          element={
+            <RequireAuth>
+              <PerfilPage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Catch-all: redirige a la pantalla inicial según rol */}
+        <Route
+          path="*"
+          element={
+            <RequireAuth>
+              <RutaRaiz />
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </>
+  );
+}
