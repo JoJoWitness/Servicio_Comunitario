@@ -189,25 +189,49 @@ func GetAllMedics() ([]Usuarios, error) {
 	return users, nil
 }
 
+// FiltrosUsuarios acota el listado paginado de usuarios. Los campos vacíos se ignoran.
+type FiltrosUsuarios struct {
+	Nombre string // ILIKE en nombres || apellidos
+	Correo string // ILIKE en correo
+	Rol    string // coincidencia exacta ("admin" | "medico" | "secretaria")
+}
+
 // GetAllMedicsPaged devuelve una página de usuarios activos y el total de
-// registros para paginación server-side.
-func GetAllMedicsPaged(p pagination.Params) ([]Usuarios, int, error) {
+// registros para paginación server-side. Aplica los filtros opcionales.
+func GetAllMedicsPaged(f FiltrosUsuarios, p pagination.Params) ([]Usuarios, int, error) {
+	where := `WHERE u.eliminado = FALSE`
+	args := pgx.NamedArgs{}
+
+	if f.Nombre != "" {
+		where += ` AND (LOWER(u.nombres) LIKE LOWER(@nombre) OR LOWER(u.apellidos) LIKE LOWER(@nombre))`
+		args["nombre"] = "%" + f.Nombre + "%"
+	}
+	if f.Correo != "" {
+		where += ` AND LOWER(u.correo) LIKE LOWER(@correo)`
+		args["correo"] = "%" + f.Correo + "%"
+	}
+	if f.Rol != "" {
+		where += ` AND u.rol = @rol`
+		args["rol"] = f.Rol
+	}
+
 	var total int
 	if err := config.PsqlDB.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM "Usuarios" WHERE eliminado = FALSE`).Scan(&total); err != nil {
+		`SELECT COUNT(*) FROM "Usuarios" u `+where, args).Scan(&total); err != nil {
 		log.Printf("Error counting usuarios: %v", err)
 		return nil, 0, err
 	}
 
+	args["limit"] = p.Size
+	args["offset"] = p.Offset()
 	query := `
 		SELECT u.id, u.nombres, u.apellidos, u.correo, u.rol
 		FROM "Usuarios" u
-		WHERE u.eliminado = FALSE
+		` + where + `
 		ORDER BY ` + p.SortBy + ` ` + p.Order + `
 		LIMIT @limit OFFSET @offset;`
 
-	rows, err := config.PsqlDB.Query(context.Background(), query,
-		pgx.NamedArgs{"limit": p.Size, "offset": p.Offset()})
+	rows, err := config.PsqlDB.Query(context.Background(), query, args)
 	if err != nil {
 		log.Printf("Error getting usuarios page: %v", err)
 		return nil, total, err

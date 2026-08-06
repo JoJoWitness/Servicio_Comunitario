@@ -122,7 +122,15 @@ func GetAllPacientes(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parsePaginationParams(r, allowed, "nombre")
 
-	pacientes, total, err := models.GetAllPacientesPaged(p)
+	q := r.URL.Query()
+	f := models.FiltrosPacientes{
+		Nombre:         q.Get("nombre"),
+		Documento:      q.Get("documento"),
+		HistoriaMedica: q.Get("historia_medica"),
+		Genero:         q.Get("genero"),
+	}
+
+	pacientes, total, err := models.GetAllPacientesPaged(f, p)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get pacientes"))

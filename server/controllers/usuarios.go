@@ -203,7 +203,14 @@ func GetAllMedics(w http.ResponseWriter, r *http.Request) {
 	}
 	p := parsePaginationParams(r, allowedSort, "apellidos")
 
-	users, total, err := users2.GetAllMedicsPaged(p)
+	q := r.URL.Query()
+	f := users2.FiltrosUsuarios{
+		Nombre: q.Get("nombre"),
+		Correo: q.Get("correo"),
+		Rol:    q.Get("rol"),
+	}
+
+	users, total, err := users2.GetAllMedicsPaged(f, p)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get medics"))

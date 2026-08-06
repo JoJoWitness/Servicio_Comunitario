@@ -184,24 +184,53 @@ func GetAllPacientes() ([]Pacientes, error) {
 	return pacientes, rows.Err()
 }
 
+// FiltrosPacientes acota el listado paginado. Los campos vacíos se ignoran.
+type FiltrosPacientes struct {
+	Nombre         string // ILIKE en nombre
+	Documento      string // ILIKE en numero_identifiacion
+	HistoriaMedica string // ILIKE en historia_medica
+	Genero         string // coincidencia exacta ("M" | "F")
+}
+
 // GetAllPacientesPaged devuelve una página de pacientes activos y el total de
-// registros para paginación server-side.
-func GetAllPacientesPaged(p pagination.Params) ([]Pacientes, int, error) {
+// registros para paginación server-side. Aplica los filtros opcionales.
+func GetAllPacientesPaged(f FiltrosPacientes, p pagination.Params) ([]Pacientes, int, error) {
+	where := `WHERE eliminado = FALSE`
+	args := pgx.NamedArgs{}
+
+	if f.Nombre != "" {
+		where += ` AND LOWER(nombre) LIKE LOWER(@nombre)`
+		args["nombre"] = "%" + f.Nombre + "%"
+	}
+	if f.Documento != "" {
+		where += ` AND LOWER(numero_identifiacion) LIKE LOWER(@documento)`
+		args["documento"] = "%" + f.Documento + "%"
+	}
+	if f.HistoriaMedica != "" {
+		where += ` AND LOWER(historia_medica) LIKE LOWER(@historia_medica)`
+		args["historia_medica"] = "%" + f.HistoriaMedica + "%"
+	}
+	if f.Genero != "" {
+		where += ` AND genero = @genero`
+		args["genero"] = f.Genero
+	}
+
 	var total int
 	if err := config.PsqlDB.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM "Paciente" WHERE eliminado = FALSE`).Scan(&total); err != nil {
+		`SELECT COUNT(*) FROM "Paciente" `+where, args).Scan(&total); err != nil {
 		log.Printf("Error counting pacientes: %v", err)
 		return nil, 0, err
 	}
 
+	args["limit"] = p.Size
+	args["offset"] = p.Offset()
 	query := `SELECT ` + columnas + `
 		FROM "Paciente"
-		WHERE eliminado = FALSE
+		` + where + `
 		ORDER BY ` + p.SortBy + ` ` + p.Order + `
 		LIMIT @limit OFFSET @offset;`
 
-	rows, err := config.PsqlDB.Query(context.Background(), query,
-		pgx.NamedArgs{"limit": p.Size, "offset": p.Offset()})
+	rows, err := config.PsqlDB.Query(context.Background(), query, args)
 	if err != nil {
 		log.Printf("Error getting pacientes page: %v", err)
 		return nil, total, err
