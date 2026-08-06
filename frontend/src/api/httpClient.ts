@@ -92,14 +92,20 @@ export async function request<T = void>(
     throw new ApiError(response.status, errorBody);
   }
 
-  // Respuestas sin cuerpo (204, DELETE exitoso, etc.)
+  // Respuestas sin cuerpo o con texto plano (204, DELETE, respuestas no-JSON)
   const contentType = response.headers.get("content-type") ?? "";
-  if (
-    response.status === 204 ||
-    !contentType.includes("application/json")
-  ) {
+  if (response.status === 204 || !contentType.includes("application/json")) {
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  // Parsear JSON con fallback a undefined si el backend envía texto plano
+  // con Content-Type: application/json (bug conocido en algunos endpoints Go)
+  const text = await response.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // El backend envió texto plano con cabecera JSON — tratar como éxito sin datos
+    return undefined as T;
+  }
 }
