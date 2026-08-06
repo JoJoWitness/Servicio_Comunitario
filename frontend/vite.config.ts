@@ -35,5 +35,17 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
+    // Proxy temporal para evitar errores CORS mientras el backend nos agrega
+    // a su lista blanca. Solo activo en desarrollo (el bloque `server` de Vite
+    // no se aplica en producción ni en el binario de Tauri).
+    // Las peticiones a /api/* se reescriben quitando el prefijo y se reenvían
+    // al backend real con changeOrigin:true para falsificar el header Host.
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_URL ?? "https://servicio-comunitario-7ye5.onrender.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
   },
 }));
