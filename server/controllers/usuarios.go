@@ -121,37 +121,57 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	var user users2.Usuarios
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	// Decodificar solo los campos que el admin puede cambiar.
+	// La contraseña se gestiona por separado en PUT /usuarios/me/password.
+	var payload struct {
+		Correo    string `json:"correo"`
+		Nombres   string `json:"nombres"`
+		Apellidos string `json:"apellidos"`
+		Rol       string `json:"rol"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.Printf("Error decoding Update User request body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Request body is not valid JSON"))
 		return
 	}
 
+	// Cargar el usuario existente para no pisar campos no enviados.
+	var user users2.Usuarios
 	user.ID = id
-
-	hashedPassword, err := utils.HashPassword(user.Contrasena)
-	if err != nil {
+	if err := user.Get(config.PsqlDB); err != nil {
+		log.Printf("Error fetching user before update: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Something went wrong"))
+		w.Write([]byte("Unable to find user"))
 		return
 	}
 
-	user.Contrasena = hashedPassword
-	err = user.Update(config.PsqlDB)
-	if err != nil {
+	// Aplicar solo los campos presentes en el payload.
+	if payload.Correo != "" {
+		user.Correo = payload.Correo
+	}
+	if payload.Nombres != "" {
+		user.Nombres = payload.Nombres
+	}
+	if payload.Apellidos != "" {
+		user.Apellidos = payload.Apellidos
+	}
+	if payload.Rol != "" {
+		user.Rol = payload.Rol
+	}
+	// user.Contrasena conserva el hash existente — no se toca aquí.
+
+	if err := user.Update(config.PsqlDB); err != nil {
 		log.Printf("Error updating user: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to update user"))
 		return
 	}
 
-	// El hash nunca sale en una respuesta.
 	user.Contrasena = ""
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Add("Status-Code", "201")
+	w.Header().Add("Status-Code", "200")
 	json.NewEncoder(w).Encode(user)
 }
 

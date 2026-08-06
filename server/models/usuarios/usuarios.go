@@ -150,17 +150,18 @@ func (u *Usuarios) Delete(db *pgxpool.Pool) error {
 }
 
 func GetAllMedics() ([]Usuarios, error) {
-	// El id es lo que se manda en `equipo` al crear una nota (HU-15), así que
-	// tiene que venir en la lista.
+	// Devuelve todos los usuarios activos con su rol para que el frontend
+	// pueda poblar el selector de equipo quirúrgico y el panel de administración.
 	query := `
 		SELECT
 			u.id,
 			u.nombres,
 			u.apellidos,
-			u.correo
+			u.correo,
+			u.rol
 		FROM "Usuarios" u
 		WHERE
-			u.eliminado = FALSE and u.rol = 'medico'
+			u.eliminado = FALSE
 		ORDER BY
 			u.apellidos, u.nombres;
 	`
@@ -175,7 +176,7 @@ func GetAllMedics() ([]Usuarios, error) {
 	for rows.Next() {
 		var user Usuarios
 
-		err := rows.Scan(&user.ID, &user.Nombres, &user.Apellidos, &user.Correo)
+		err := rows.Scan(&user.ID, &user.Nombres, &user.Apellidos, &user.Correo, &user.Rol)
 		if err != nil {
 			log.Printf("Error scanning user: %v", user)
 			log.Printf("Error fetching users: %v", err)
