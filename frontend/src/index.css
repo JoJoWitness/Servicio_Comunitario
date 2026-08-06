@@ -30,69 +30,79 @@
 }
 
 /* ── Light theme ─────────────────────────────────────────── */
+/*
+  Paleta claro: blancos y grises muy limpios con un acento slate azulado
+  suave, apropiado para una aplicación médica (no agresivo visualmente).
+*/
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 47.4% 11.2%;
+  --background: 0 0% 98%;           /* casi blanco, no puro */
+  --foreground: 220 20% 12%;        /* gris azulado oscuro */
 
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
+  --muted: 220 14% 94%;
+  --muted-foreground: 220 10% 46%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 47.4% 11.2%;
+  --popover-foreground: 220 20% 12%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222.2 47.4% 11.2%;
+  --card-foreground: 220 20% 12%;
 
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
+  --border: 220 13% 88%;
+  --input: 220 13% 88%;
 
-  --primary: 222.2 47.4% 11.2%;
-  --primary-foreground: 210 40% 98%;
+  --primary: 221 70% 36%;           /* azul slate médico */
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 220 14% 94%;
+  --secondary-foreground: 220 20% 20%;
 
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
+  --accent: 220 14% 90%;
+  --accent-foreground: 220 20% 12%;
 
-  --destructive: 0 100% 50%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
 
-  --ring: 215 20.2% 65.1%;
+  --ring: 221 70% 50%;
 
   --radius: 0.5rem;
 }
 
 /* ── Dark theme ──────────────────────────────────────────── */
+/*
+  Paleta oscura: grises neutros cálidos (no azules fríos) para reducir
+  la fatiga visual en turnos nocturnos. El card y el sidebar son
+  ligeramente más claros que el fondo para mantener jerarquía sin contraste
+  agresivo. El primario conserva el azul slate pero más luminoso.
+*/
 .dark {
-  --background: 224 71% 4%;
-  --foreground: 213 31% 91%;
+  --background: 220 12% 10%;        /* gris oscuro neutro */
+  --foreground: 220 10% 90%;        /* gris claro cálido */
 
-  --muted: 223 47% 11%;
-  --muted-foreground: 215.4 16.3% 56.9%;
+  --muted: 220 10% 16%;
+  --muted-foreground: 220 8% 56%;
 
-  --popover: 224 71% 4%;
-  --popover-foreground: 215 20.2% 65.1%;
+  --popover: 220 12% 13%;
+  --popover-foreground: 220 10% 88%;
 
-  --card: 224 71% 4%;
-  --card-foreground: 213 31% 91%;
+  --card: 220 12% 13%;              /* un poco más claro que el fondo */
+  --card-foreground: 220 10% 90%;
 
-  --border: 216 34% 17%;
-  --input: 216 34% 17%;
+  --border: 220 10% 22%;
+  --input: 220 10% 22%;
 
-  --primary: 210 40% 98%;
-  --primary-foreground: 222.2 47.4% 1.2%;
+  --primary: 217 72% 62%;           /* azul más luminoso en oscuro */
+  --primary-foreground: 220 12% 8%;
 
-  --secondary: 222.2 47.4% 11.2%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 220 10% 18%;
+  --secondary-foreground: 220 10% 88%;
 
-  --accent: 216 34% 17%;
-  --accent-foreground: 210 40% 98%;
+  --accent: 220 10% 20%;
+  --accent-foreground: 220 10% 90%;
 
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 60% 45%;
+  --destructive-foreground: 0 0% 96%;
 
-  --ring: 216 34% 17%;
+  --ring: 217 72% 55%;
 
   --radius: 0.5rem;
 }

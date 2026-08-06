@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useLogout } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -107,8 +108,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         <Separator />
 
-        {/* Perfil y logout */}
-        <div className="p-3 space-y-2">
+        {/* Perfil, tema y logout */}
+        <div className="p-3 space-y-1">
           <Link
             to="/perfil"
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -118,6 +119,13 @@ export function AppLayout({ children }: AppLayoutProps) {
               {perfil ? `${perfil.nombres} ${perfil.apellidos}` : "Perfil"}
             </span>
           </Link>
+
+          {/* Selector de tema en modo expandido (tres botones) */}
+          <div className="flex items-center justify-between px-3 py-1">
+            <span className="text-xs text-muted-foreground">Tema</span>
+            <ThemeToggle expanded />
+          </div>
+
           <Button
             variant="ghost"
             size="sm"
