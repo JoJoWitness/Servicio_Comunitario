@@ -8,12 +8,22 @@
  * 3. Renderiza el router principal con todas las rutas y guardias.
  */
 
+import { useEffect } from "react";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { useValidateUser } from "./hooks/useAuth";
+import { useSessionStore } from "./stores/sessionStore";
 import { AppRouter } from "./routes/router";
 
 function AppInner() {
-  useValidateUser();
+  const limpiar = useSessionStore((s) => s.limpiar);
+  const { isError, error, isPending } = useValidateUser();
+
+  useEffect(() => {
+    if (isPending) return;
+    if (!isError) return;
+    limpiar();
+  }, [isError, error, isPending, limpiar]);
+
   return <AppRouter />;
 }
 

@@ -44,6 +44,10 @@ export default defineConfig(async () => ({
       "/api": {
         target: process.env.VITE_API_URL ?? "https://servicio-comunitario-7ye5.onrender.com",
         changeOrigin: true,
+        // Reescribir las cookies para que el navegador las acepte desde localhost
+        cookieDomainRewrite: "localhost",
+        // Permitir cookies sobre conexión no-HTTPS en desarrollo
+        secure: false,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
