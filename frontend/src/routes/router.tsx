@@ -47,18 +47,18 @@ const PerfilPage        = lazy(() => import("../features/auth/PerfilPage"));
 const PacientesPage     = lazy(() => import("../features/pacientes/PacientesPage"));
 const NuevoPacientePage = lazy(() => import("../features/pacientes/NuevoPacientePage"));
 const FichaPacientePage = lazy(() => import("../features/pacientes/FichaPacientePage"));
+const MisNotasPage      = lazy(() => import("../features/notas/MisNotasPage"));
+const TodasNotasPage    = lazy(() => import("../features/notas/TodasNotasPage"));
+const DetalleNotaPage   = lazy(() => import("../features/notas/DetalleNotaPage"));
+const FormNotaPage      = lazy(() => import("../features/notas/FormNotaPage"));
 
-// Páginas pendientes — tareas 14–17 (placeholders temporales)
+// Páginas pendientes — tareas 17 (placeholders temporales)
 const Placeholder = ({ nombre }: { nombre: string }) => (
   <div style={{ padding: "2rem" }}>
     <h1>{nombre}</h1>
     <p>Página en construcción</p>
   </div>
 );
-const MisNotasPage    = () => <Placeholder nombre="Mis Notas" />;
-const TodasNotasPage  = () => <Placeholder nombre="Todas las Notas" />;
-const DetalleNotaPage = () => <Placeholder nombre="Detalle de Nota" />;
-const FormNotaPage    = () => <Placeholder nombre="Formulario de Nota" />;
 const CatalogosPage   = () => <Placeholder nombre="Catálogos" />;
 const UsuariosPage    = () => <Placeholder nombre="Usuarios" />;
 
