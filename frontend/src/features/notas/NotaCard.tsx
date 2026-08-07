@@ -15,10 +15,32 @@ interface NotaCardProps {
   mostrarPaciente?: boolean;
   /** Nombre del paciente (cuando mostrarPaciente=true) */
   nombrePaciente?: string;
+  /**
+   * Nombre del médico encargado. Si no se pasa, se resuelve desde el equipo
+   * quirúrgico que trae la propia nota.
+   */
+  nombreMedico?: string;
 }
 
-export function NotaCard({ nota, mostrarPaciente = true, nombrePaciente }: NotaCardProps) {
+export function NotaCard({
+  nota,
+  mostrarPaciente = true,
+  nombrePaciente,
+  nombreMedico,
+}: NotaCardProps) {
   const navigate = useNavigate();
+
+  // `medicoEncargado` es un UUID: sin resolverlo, el listado mostraba el
+  // identificador en crudo. El equipo quirúrgico de la nota trae los nombres,
+  // así que sirve de respaldo cuando la pantalla no los pasa.
+  const encargado = nota.medicos.find((m) => m.id === nota.medicoEncargado);
+  const medico =
+    nombreMedico ??
+    (encargado ? `${encargado.nombres} ${encargado.apellidos}`.trim() : "");
+
+  const ayudantes = nota.medicos
+    .filter((m) => m.id !== nota.medicoEncargado)
+    .map((m) => `${m.nombres} ${m.apellidos}`.trim());
 
   return (
     <div
@@ -50,13 +72,16 @@ export function NotaCard({ nota, mostrarPaciente = true, nombrePaciente }: NotaC
         )}
       </div>
 
-      <div className="ml-4 flex flex-col items-end gap-1 shrink-0">
-        {nota.pabellon && (
-          <span className="text-xs text-muted-foreground">Pab. {nota.pabellon}</span>
+      <div className="ml-4 flex flex-col items-end gap-1 shrink-0 text-right">
+        {medico && (
+          <span className="max-w-44 truncate text-xs">
+            <span className="text-muted-foreground">Cirujano: </span>
+            {medico}
+          </span>
         )}
-        {nota.medicoEncargado && (
-          <span className="text-xs text-muted-foreground truncate max-w-32">
-            {nota.medicoEncargado}
+        {ayudantes.length > 0 && (
+          <span className="max-w-44 truncate text-xs text-muted-foreground">
+            Ayudantes: {ayudantes.join(", ")}
           </span>
         )}
       </div>

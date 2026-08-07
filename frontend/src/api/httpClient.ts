@@ -109,3 +109,42 @@ export async function request<T = void>(
     return undefined as T;
   }
 }
+
+// ---------------------------------------------------------------------------
+// requestBlob — descargas de archivos
+// ---------------------------------------------------------------------------
+
+/**
+ * Igual que `request`, pero para respuestas binarias (el .xlsx del record
+ * quirúrgico). Devuelve el contenido y el nombre que propone el servidor en
+ * `Content-Disposition`.
+ *
+ * Los errores se leen como texto y se lanzan como `ApiError`, igual que en
+ * `request`: el backend responde el motivo en texto plano aunque la petición
+ * esperara un archivo.
+ *
+ * @throws {ApiError} ante cualquier respuesta con status >= 400
+ */
+export async function requestBlob(
+  path: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{ blob: Blob; contentDisposition: string | null }> {
+  const response = await fetch(buildUrl(path), {
+    method: "GET",
+    credentials: "include",
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    if (response.status === 401) {
+      notifyUnauthorized();
+    }
+    throw new ApiError(response.status, errorBody);
+  }
+
+  return {
+    blob: await response.blob(),
+    contentDisposition: response.headers.get("Content-Disposition"),
+  };
+}

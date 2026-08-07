@@ -34,6 +34,19 @@ type FilaExport struct {
 	TuvoBiopsia        bool
 	Cirujano           string
 	Ayudantes          string
+	// Familia clínica del diagnóstico ("Pterigión", "Catarata"…), tomada del
+	// catálogo. Es la que agrupa las filas del record, igual que en la planilla
+	// que lleva el servicio a mano. Vacía cuando el diagnóstico se escribió
+	// como texto libre y no coincide con ninguna entrada del catálogo.
+	Familia string
+}
+
+// FamiliaOSinClasificar evita dejar el grupo en blanco en la planilla.
+func (f FilaExport) FamiliaOSinClasificar() string {
+	if strings.TrimSpace(f.Familia) == "" {
+		return "SIN CLASIFICAR"
+	}
+	return strings.ToUpper(strings.TrimSpace(f.Familia))
 }
 
 // Edad es la que tenía el paciente el día de la operación, no la de hoy: el
@@ -114,7 +127,16 @@ func GetNotasExportMedico(db *pgxpool.Pool, medicoID string, from, to *time.Time
 				JOIN "Usuarios" u ON u.id = eq.id_medico
 				WHERE eq.id_nota_operatoria = n.id
 				AND eq.id_medico <> n.id_medico_encargado
-			), '') AS ayudantes
+			), '') AS ayudantes,
+			-- La familia clínica vive en "Diagnosticos".resumen. Se compara sin
+			-- mayúsculas ni espacios de más porque el diagnóstico de la nota es
+			-- texto libre y no siempre se copió literal del catálogo.
+			COALESCE((
+				SELECT d.resumen
+				FROM "Diagnosticos" d
+				WHERE upper(btrim(d.procedimientos)) = upper(btrim(n.dx_pre_operatorio))
+				LIMIT 1
+			), '') AS familia
 		FROM "Nota_Operatoria" n
 		JOIN "Paciente" p ON p.id = n.id_paciente
 		JOIN "Usuarios" enc ON enc.id = n.id_medico_encargado
@@ -145,7 +167,7 @@ func GetNotasExportMedico(db *pgxpool.Pool, medicoID string, from, to *time.Time
 			&f.PacienteNombre, &f.PacienteDocumento, &f.PacienteGenero, &f.PacienteNacimiento,
 			&f.DXPreOperatorio, &f.DXPostOperatorio, &f.Intervencion, &f.Resumen,
 			&f.Pabellon, &f.Anestesia, &f.EsElectiva, &f.EsEmergencia, &f.TuvoBiopsia,
-			&f.Cirujano, &f.Ayudantes,
+			&f.Cirujano, &f.Ayudantes, &f.Familia,
 		)
 		if err != nil {
 			log.Printf("Error fetching notas para exportar: %v", err)

@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -59,6 +60,7 @@ export function PacienteForm({
 
   const tipoDoc = watch("tipoDocumento");
   const genero = watch("genero");
+  const fechaNacimiento = watch("fechaNacimiento");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
@@ -140,7 +142,11 @@ export function PacienteForm({
       {/* Fecha de nacimiento */}
       <div className="space-y-1">
         <Label htmlFor="fechaNacimiento">Fecha de nacimiento *</Label>
-        <Input id="fechaNacimiento" type="date" {...register("fechaNacimiento")} />
+        <DateInput
+          id="fechaNacimiento"
+          value={fechaNacimiento ?? ""}
+          onChange={(iso) => setValue("fechaNacimiento", iso, { shouldValidate: true })}
+        />
         {errors.fechaNacimiento && (
           <p className="text-sm text-destructive">{errors.fechaNacimiento.message}</p>
         )}

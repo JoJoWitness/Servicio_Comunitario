@@ -18,35 +18,28 @@ const (
 	hojaRecord  = "Record Quirurgico"
 	hojaResumen = "Resumen"
 
-	// Fila donde arranca el encabezado de la tabla; arriba va la portada
-	// (título, médico, período).
-	filaEncabezado = 6
+	// Fila donde arranca el encabezado de la tabla. Encima van las cuatro
+	// líneas de portada de la planilla del servicio (título con el período,
+	// médico, cédula y total de casos).
+	filaEncabezado = 8
 )
 
-// columnas del record quirúrgico, en el orden en que las lleva el servicio en
-// su planilla: primero identifica al paciente, después el acto quirúrgico.
+// columnas del record quirúrgico, en el mismo orden y con los mismos rótulos
+// que la planilla que el servicio lleva a mano (`docs/RECOR MAYTHE.xlsx`).
 var columnas = []struct {
 	Titulo string
 	Ancho  float64
 }{
-	{"N°", 6},
+	{"CASO", 7},
 	{"FECHA", 12},
-	{"HORA INICIO", 12},
-	{"HORA FIN", 11},
-	{"PACIENTE", 28},
+	{"NOMBRE Y APELLIDO", 30},
 	{"EDAD", 7},
 	{"SEXO", 7},
-	{"CEDULA", 16},
-	{"DX PRE-OPERATORIO", 34},
-	{"DX POST-OPERATORIO", 34},
-	{"INTERVENCION REALIZADA", 38},
-	{"CIRUJANO", 24},
-	{"AYUDANTES", 26},
-	{"ANESTESIA", 16},
-	{"PABELLON", 12},
-	{"TIPO", 12},
-	{"BIOPSIA", 9},
-	{"RESUMEN DE LA INTERVENCION", 50},
+	{"CEDULA", 18},
+	{"DIAGNOSTICO", 40},
+	{"INTERVENCION", 44},
+	{"CIRUJANO", 26},
+	{"AYUDANTE", 28},
 }
 
 // Rango es el período exportado. Los extremos en nil significan "sin límite",
@@ -75,7 +68,7 @@ func fecha(t time.Time) string { return t.Format("02/01/2006") }
 // RecordQuirurgico arma el libro con dos hojas: el detalle de cada nota y un
 // resumen por procedimiento, que es lo que el médico entrega como constancia de
 // actividad. El llamador cierra el archivo.
-func RecordQuirurgico(medico string, rango Rango, filas []notas.FilaExport) (*excelize.File, error) {
+func RecordQuirurgico(medico, documento string, rango Rango, filas []notas.FilaExport) (*excelize.File, error) {
 	f := excelize.NewFile()
 
 	if err := f.SetSheetName(f.GetSheetName(0), hojaRecord); err != nil {
@@ -87,11 +80,11 @@ func RecordQuirurgico(medico string, rango Rango, filas []notas.FilaExport) (*ex
 		return nil, err
 	}
 
-	if err := escribirRecord(f, estilos, medico, rango, filas); err != nil {
+	if err := escribirRecord(f, estilos, medico, documento, rango, filas); err != nil {
 		return nil, err
 	}
 
-	if err := escribirResumen(f, estilos, medico, rango, filas); err != nil {
+	if err := escribirResumen(f, estilos, medico, documento, rango, filas); err != nil {
 		return nil, err
 	}
 
@@ -109,6 +102,7 @@ type estilos struct {
 	Centrado  int
 	Fecha     int
 	Total     int
+	Grupo     int
 }
 
 func nuevosEstilos(f *excelize.File) (estilos, error) {
@@ -174,14 +168,24 @@ func nuevosEstilos(f *excelize.File) (estilos, error) {
 		return e, err
 	}
 
+	// Renglón que abre cada familia clínica dentro del record.
+	if e.Grupo, err = f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Color: "1F4E79"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"DCE6F1"}},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+		Border:    borde,
+	}); err != nil {
+		return e, err
+	}
+
 	return e, nil
 }
 
 func strPtr(s string) *string { return &s }
 
 // escribirRecord vuelca el detalle: una fila por nota operatoria.
-func escribirRecord(f *excelize.File, e estilos, medico string, rango Rango, filas []notas.FilaExport) error {
-	if err := portada(f, e, hojaRecord, "RECORD QUIRURGICO", medico, rango, len(columnas)); err != nil {
+func escribirRecord(f *excelize.File, e estilos, medico, documento string, rango Rango, filas []notas.FilaExport) error {
+	if err := portada(f, e, hojaRecord, "RECORD QUIRURGICO", medico, documento, rango, len(filas), len(columnas)); err != nil {
 		return err
 	}
 
@@ -215,28 +219,39 @@ func escribirRecord(f *excelize.File, e estilos, medico string, rango Rango, fil
 		return err
 	}
 
-	for i, fila := range filas {
-		n := filaEncabezado + 1 + i
+	// El cuerpo va agrupado por familia clínica, con un renglón de título por
+	// grupo, y la numeración de casos corre de principio a fin sin reiniciarse:
+	// así es como está armada la planilla del servicio.
+	n := filaEncabezado
+	caso := 0
+	familiaActual := ""
+
+	for _, fila := range agruparPorFamilia(filas) {
+		if familia := fila.FamiliaOSinClasificar(); familia != familiaActual {
+			familiaActual = familia
+			n++
+			if err := f.SetCellValue(hojaRecord, fmt.Sprintf("A%d", n), familia); err != nil {
+				return err
+			}
+			if err := f.SetCellStyle(hojaRecord, fmt.Sprintf("A%d", n), ultimaCol+fmt.Sprint(n), e.Grupo); err != nil {
+				return err
+			}
+		}
+
+		caso++
+		n++
 
 		valores := []any{
-			i + 1,
+			caso,
 			fila.Fecha,
-			fila.HoraComienzo,
-			fila.HoraCulminacion,
 			fila.PacienteNombre,
 			fila.Edad(),
 			fila.PacienteGenero,
 			fila.PacienteDocumento,
 			fila.DXPreOperatorio,
-			fila.DXPostOperatorio,
 			fila.Intervencion,
 			fila.Cirujano,
 			fila.Ayudantes,
-			fila.Anestesia,
-			fila.Pabellon,
-			fila.Tipo(),
-			fila.Biopsia(),
-			fila.Resumen,
 		}
 
 		for c, v := range valores {
@@ -267,7 +282,7 @@ func escribirRecord(f *excelize.File, e estilos, medico string, rango Rango, fil
 	}
 
 	if len(filas) > 0 {
-		rangoTabla := fmt.Sprintf("A%d:%s%d", filaEncabezado, ultimaCol, filaEncabezado+len(filas))
+		rangoTabla := fmt.Sprintf("A%d:%s%d", filaEncabezado, ultimaCol, n)
 		if err := f.AutoFilter(hojaRecord, rangoTabla, nil); err != nil {
 			return err
 		}
@@ -276,12 +291,43 @@ func escribirRecord(f *excelize.File, e estilos, medico string, rango Rango, fil
 	return nil
 }
 
+// agruparPorFamilia deja juntas las notas de la misma familia clínica,
+// conservando el orden cronológico dentro de cada grupo. Los grupos salen por
+// orden de aparición y "SIN CLASIFICAR" al final, para que no encabece la
+// planilla cuando hay diagnósticos escritos a mano.
+func agruparPorFamilia(filas []notas.FilaExport) []notas.FilaExport {
+	orden := map[string]int{}
+	for _, fila := range filas {
+		familia := fila.FamiliaOSinClasificar()
+		if _, visto := orden[familia]; !visto {
+			orden[familia] = len(orden)
+		}
+	}
+
+	agrupadas := make([]notas.FilaExport, len(filas))
+	copy(agrupadas, filas)
+
+	peso := func(familia string) int {
+		if familia == "SIN CLASIFICAR" {
+			return len(orden) + 1
+		}
+		return orden[familia]
+	}
+
+	sort.SliceStable(agrupadas, func(i, j int) bool {
+		return peso(agrupadas[i].FamiliaOSinClasificar()) <
+			peso(agrupadas[j].FamiliaOSinClasificar())
+	})
+
+	return agrupadas
+}
+
 // estiloColumna centra las columnas cortas y deja el resto con ajuste de texto.
 func estiloColumna(e estilos, indice int) int {
 	switch indice {
 	case 1: // FECHA
 		return e.Fecha
-	case 0, 2, 3, 5, 6, 15, 16: // N°, horas, edad, sexo, tipo, biopsia
+	case 0, 3, 4: // CASO, EDAD, SEXO
 		return e.Centrado
 	default:
 		return e.Texto
@@ -290,12 +336,12 @@ func estiloColumna(e estilos, indice int) int {
 
 // escribirResumen cuenta las intervenciones del período, que es el dato que se
 // entrega en los reportes de actividad del servicio.
-func escribirResumen(f *excelize.File, e estilos, medico string, rango Rango, filas []notas.FilaExport) error {
+func escribirResumen(f *excelize.File, e estilos, medico, documento string, rango Rango, filas []notas.FilaExport) error {
 	if _, err := f.NewSheet(hojaResumen); err != nil {
 		return err
 	}
 
-	if err := portada(f, e, hojaResumen, "RESUMEN DE ACTIVIDAD", medico, rango, 2); err != nil {
+	if err := portada(f, e, hojaResumen, "RESUMEN DE ACTIVIDAD", medico, documento, rango, len(filas), 2); err != nil {
 		return err
 	}
 
@@ -328,10 +374,10 @@ func escribirResumen(f *excelize.File, e estilos, medico string, rango Rango, fi
 
 	var electivas, emergencias, biopsias int
 	for _, fila := range filas {
-		clave := strings.ToUpper(strings.Join(strings.Fields(fila.Intervencion), " "))
-		if clave == "" {
-			clave = "(SIN ESPECIFICAR)"
-		}
+		// Se cuenta por familia clínica (PTERIGIONES, CHALAZION…), que es la
+		// unidad en la que el servicio reporta su actividad, y la misma con la
+		// que se agrupa el record.
+		clave := fila.FamiliaOSinClasificar()
 
 		if c, ok := indice[clave]; ok {
 			c.Cantidad++
@@ -505,41 +551,40 @@ func graficasResumen(f *excelize.File, procDesde, procHasta, mesDesde, mesHasta 
 	// significa nada: una sola serie, un solo color.
 	variarColores := false
 
-	// Barras horizontales, no columnas: los nombres de los procedimientos son
-	// largos ("Escisión de pterigión + autoinjerto conjuntival") y en vertical
-	// salen girados o cortados.
-	altoProc := max(60+26*(procHasta-procDesde+1), 200)
+	// Columnas verticales, del alto y ancho del original, y colocadas a la
+	// derecha de la tabla en vez de debajo: es la disposición del record que
+	// lleva el servicio (`docs/RECOR MAYTHE.xlsx`, Hoja2). Las categorías son
+	// familias clínicas ("PTERIGIONES", "CHALAZION"), nombres cortos que en
+	// vertical se leen sin girar.
+	const anchoGrafica, altoGrafica = 480, 300
 
 	if procHasta >= procDesde {
-		if err := f.AddChart(hojaResumen, "D6", &excelize.Chart{
-			Type: excelize.Bar,
+		if err := f.AddChart(hojaResumen, "D8", &excelize.Chart{
+			Type: excelize.Col,
 			Series: []excelize.ChartSeries{{
 				Name:       fmt.Sprintf("'%s'!$B$%d", hojaResumen, filaEncabezado),
 				Categories: fmt.Sprintf("'%s'!$A$%d:$A$%d", hojaResumen, procDesde, procHasta),
 				Values:     fmt.Sprintf("'%s'!$B$%d:$B$%d", hojaResumen, procDesde, procHasta),
 				Fill:       excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{azulSerie}},
 			}},
-			Title:      excelize.ChartTitle{Paragraph: []excelize.RichTextRun{{Text: "Procedimientos del periodo"}}},
-			Dimension:  excelize.ChartDimension{Width: 560, Height: uint(altoProc)},
+			Title:      excelize.ChartTitle{Paragraph: []excelize.RichTextRun{{Text: "RECORD QUIRURGICO"}}},
+			Dimension:  excelize.ChartDimension{Width: anchoGrafica, Height: altoGrafica},
 			VaryColors: &variarColores,
 			// Una sola serie: la leyenda solo repetiría el título.
 			Legend: excelize.ChartLegend{Position: "none"},
-			// El número al final de cada barra ahorra tener que leer el eje.
-			PlotArea: excelize.ChartPlotArea{ShowVal: true},
-			// La barra más larga ya da la magnitud; la rejilla solo ensucia.
-			XAxis: excelize.ChartAxis{MajorGridLines: false},
-			// Excel dibuja las categorías de abajo hacia arriba: sin invertir,
-			// el procedimiento más frecuente queda al final.
-			YAxis: excelize.ChartAxis{ReverseOrder: true},
+			// El original no rotula las barras: la altura y la rejilla bastan,
+			// y la cifra exacta está en la tabla de al lado.
+			PlotArea: excelize.ChartPlotArea{ShowVal: false},
+			YAxis:    excelize.ChartAxis{MajorGridLines: true},
 		}); err != nil {
 			return err
 		}
 	}
 
 	if mesHasta >= mesDesde {
-		// Aquí sí columnas: el mes es una secuencia y se lee de izquierda a
-		// derecha, como el calendario.
-		ancla := 6 + altoProc/altoFila + 2
+		// La de meses no está en el original, pero se dibuja igual para que las
+		// dos se lean como del mismo documento.
+		ancla := 8 + altoGrafica/altoFila + 2
 		if err := f.AddChart(hojaResumen, fmt.Sprintf("D%d", ancla), &excelize.Chart{
 			Type: excelize.Col,
 			Series: []excelize.ChartSeries{{
@@ -548,12 +593,12 @@ func graficasResumen(f *excelize.File, procDesde, procHasta, mesDesde, mesHasta 
 				Values:     fmt.Sprintf("'%s'!$B$%d:$B$%d", hojaResumen, mesDesde, mesHasta),
 				Fill:       excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{azulSerie}},
 			}},
-			Title:      excelize.ChartTitle{Paragraph: []excelize.RichTextRun{{Text: "Operaciones por mes"}}},
-			Dimension:  excelize.ChartDimension{Width: 560, Height: 300},
+			Title:      excelize.ChartTitle{Paragraph: []excelize.RichTextRun{{Text: "OPERACIONES POR MES"}}},
+			Dimension:  excelize.ChartDimension{Width: anchoGrafica, Height: altoGrafica},
 			VaryColors: &variarColores,
 			Legend:     excelize.ChartLegend{Position: "none"},
-			PlotArea:   excelize.ChartPlotArea{ShowVal: true},
-			YAxis:      excelize.ChartAxis{MajorGridLines: false},
+			PlotArea:   excelize.ChartPlotArea{ShowVal: false},
+			YAxis:      excelize.ChartAxis{MajorGridLines: true},
 		}); err != nil {
 			return err
 		}
@@ -565,7 +610,17 @@ func graficasResumen(f *excelize.File, procDesde, procHasta, mesDesde, mesHasta 
 // portada escribe el bloque de identificación que va sobre la tabla: qué es el
 // documento, de qué médico y de qué período. Sin esto una planilla impresa no
 // se puede atribuir a nadie.
-func portada(f *excelize.File, e estilos, hoja, titulo, medico string, rango Rango, ancho int) error {
+// Fila donde arranca el bloque de portada. Deja libres las tres primeras, como
+// la planilla del servicio, que reserva ese hueco para el membrete.
+const primeraFilaPortada = 4
+
+func portada(
+	f *excelize.File,
+	e estilos,
+	hoja, titulo, medico, documento string,
+	rango Rango,
+	casos, ancho int,
+) error {
 	ultima, err := excelize.ColumnNumberToName(ancho)
 	if err != nil {
 		return err
@@ -575,26 +630,40 @@ func portada(f *excelize.File, e estilos, hoja, titulo, medico string, rango Ran
 		Valor  string
 		Estilo int
 	}{
-		{titulo, e.Titulo},
-		{"Medico: " + medico, e.Subtitulo},
-		{"Periodo: " + rango.Texto(), e.Subtitulo},
-		{"Generado: " + time.Now().Format("02/01/2006 15:04"), e.Subtitulo},
+		{titulo + " " + rango.Texto(), e.Titulo},
+		{"MEDICO: " + medico, e.Subtitulo},
 	}
 
+	// El sistema no guarda la cédula del médico, así que el renglón solo
+	// aparece cuando quien llama tiene el dato: mejor omitirlo que imprimir
+	// "CEDULA:" en blanco.
+	if strings.TrimSpace(documento) != "" {
+		lineas = append(lineas, struct {
+			Valor  string
+			Estilo int
+		}{"CEDULA: " + documento, e.Subtitulo})
+	}
+
+	lineas = append(lineas, struct {
+		Valor  string
+		Estilo int
+	}{fmt.Sprintf("CASOS: %d · Generado: %s", casos, time.Now().Format("02/01/2006 15:04")), e.Subtitulo})
+
 	for i, l := range lineas {
-		celda := fmt.Sprintf("A%d", i+1)
+		n := primeraFilaPortada + i
+		celda := fmt.Sprintf("A%d", n)
 		if err := f.SetCellValue(hoja, celda, l.Valor); err != nil {
 			return err
 		}
 		if err := f.SetCellStyle(hoja, celda, celda, l.Estilo); err != nil {
 			return err
 		}
-		if err := f.MergeCell(hoja, celda, fmt.Sprintf("%s%d", ultima, i+1)); err != nil {
+		if err := f.MergeCell(hoja, celda, fmt.Sprintf("%s%d", ultima, n)); err != nil {
 			return err
 		}
 	}
 
-	return f.SetRowHeight(hoja, 1, 22)
+	return f.SetRowHeight(hoja, primeraFilaPortada, 22)
 }
 
 // NombreArchivo arma el nombre con el que se descarga el reporte. Se mantiene

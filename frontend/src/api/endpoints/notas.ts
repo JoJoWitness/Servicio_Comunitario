@@ -11,6 +11,7 @@
  * - GET    /notas[?medico=&paciente=&from=&to=] → todasLasNotas
  * - GET    /notas/pacientes/{id}            → notasDePaciente (sin filtro)
  * - GET    /notas/pacientes/dates?id=&from=&to= → notasDePaciente (con rango)
+ * - GET    /notas/medics/export?from=&to=   → exportarRecordQuirurgico (.xlsx)
  *
  * Requisitos: 12.2, 12.5, 14.6, 18.1, 18.4, 19.1, 19.2, 20.1, 21.2, 23.2
  */
@@ -18,7 +19,8 @@
 import type { FiltrosNota, Nota, RangoFechas } from "../../domain/models";
 import type { NotaDTO } from "../dto/nota.dto";
 import { notaToDomain, notaToDto } from "../dto/nota.dto";
-import { request } from "../httpClient";
+import { request, requestBlob } from "../httpClient";
+import { parseFilename } from "../../lib/contentDisposition";
 import type { PaginatedResponse, PaginationParams } from "../types";
 import { buildPaginationQuery } from "./queryUtils";
 
@@ -178,4 +180,28 @@ export async function notasDePaciente(
   }
   const dtos = await request<NotaDTO[]>(path);
   return dtos.map(notaToDomain);
+}
+
+// ---------------------------------------------------------------------------
+// Exportación a Excel
+// ---------------------------------------------------------------------------
+
+/**
+ * Descarga el record quirúrgico del médico de la sesión en .xlsx.
+ * GET /notas/medics/export?from=&to=
+ *
+ * El rango es opcional en ambos extremos: sin parámetros baja el historial
+ * completo. El backend resuelve el nombre del archivo y lo manda en
+ * `Content-Disposition`.
+ */
+export async function exportarRecordQuirurgico(
+  rango?: RangoFechas
+): Promise<{ blob: Blob; nombreArchivo: string }> {
+  const path = `/notas/medics/export${buildQuery({
+    from: rango?.from,
+    to: rango?.to,
+  })}`;
+
+  const { blob, contentDisposition } = await requestBlob(path);
+  return { blob, nombreArchivo: parseFilename(contentDisposition) };
 }

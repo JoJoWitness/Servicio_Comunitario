@@ -112,12 +112,26 @@ export interface Procedimiento {
   resumen?: string;
 }
 
+/**
+ * Valor que cambia de una cirugía a otra dentro de la frase de una técnica
+ * (la hora del reloj, el número de puntos, el calibre). Se pide al médico y
+ * sustituye al marcador `{nombre}` de la frase.
+ */
+export interface Hueco {
+  nombre: string;
+  default: string;
+}
+
 export interface Tecnica {
   id: number;
   tecnica: string;
+  /**
+   * Lo que la técnica aporta al resumen. El nombre corto no sirve para
+   * redactar: "Apertura de puerto principal" es la etiqueta, mientras que
+   * "se abre puerto principal en H{hora}" es lo que se escribe en la nota.
+   */
   frase?: string;
-  /** Huecos dinámicos de la técnica (estructura abierta hasta definición del backend) */
-  huecos?: unknown[];
+  huecos?: Hueco[];
 }
 
 // ---------------------------------------------------------------------------

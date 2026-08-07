@@ -9,10 +9,11 @@ import { FilePlus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NotaCard } from "./NotaCard";
+import { ExportarRecord } from "./ExportarRecord";
 import { useMisNotas } from "@/hooks/useNotas";
 import { useListarPacientes } from "@/hooks/usePacientes";
 import { ordenarNotasDesc } from "@/lib/sort";
@@ -52,25 +53,25 @@ export default function MisNotasPage() {
           </Button>
         </div>
 
+        <ExportarRecord />
+
         {/* Filtro por rango de fechas — Req 18.4 */}
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-1">
             <Label htmlFor="from">Desde</Label>
-            <Input
+            <DateInput
               id="from"
-              type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={setFrom}
               className="w-44"
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="to">Hasta</Label>
-            <Input
+            <DateInput
               id="to"
-              type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={setTo}
               className="w-44"
             />
           </div>

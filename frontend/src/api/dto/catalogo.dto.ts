@@ -6,6 +6,7 @@
 
 import type {
   Diagnostico,
+  Hueco,
   Procedimiento,
   Tecnica,
 } from "../../domain/models";
@@ -61,8 +62,9 @@ export function procedimientoToDto(
 export interface TecnicaDTO {
   id: number;
   tecnica: string;
+  /** El backend normaliza NULL a "" y a [] respectivamente. */
   frase?: string;
-  huecos?: unknown[];
+  huecos?: Hueco[];
 }
 
 export function tecnicaToDomain(dto: TecnicaDTO): Tecnica {

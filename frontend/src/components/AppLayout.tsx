@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useLogout } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import logoServicio from "@/assets/logo-servicio.svg";
 
 interface NavItem {
   label: string;
@@ -75,9 +76,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <aside className="flex w-56 flex-col border-r border-border bg-card">
-        {/* Logo / nombre del sistema */}
-        <div className="flex h-14 items-center px-4 font-semibold text-sm">
-          HCSC — Oftalmología
+        {/*
+          Logo del servicio. Se invierte a blanco en oscuro porque su tinta
+          original es un azul casi negro que desaparecería sobre el fondo.
+        */}
+        <div className="flex h-28 items-center justify-center px-4">
+          <img
+            src={logoServicio}
+            alt="Servicio de Oftalmología — Hospital Central de San Cristóbal"
+            className="h-20 w-auto max-w-full dark:brightness-0 dark:invert"
+          />
         </div>
         <Separator />
 
@@ -153,8 +161,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
       </aside>
 
-      {/* Contenido principal */}
-      <main className="flex-1 overflow-y-auto">
+      {/*
+        Contenido principal.
+        `relative` es necesario: los elementos con `position: absolute` que
+        cuelgan del contenido (p. ej. el <select> oculto que Radix renderiza
+        junto a cada Select) buscan el ancestro posicionado más cercano. Sin
+        él escapan de este contenedor, se posicionan respecto al documento y
+        estiran el alto de la página dejando un espacio vacío bajo el layout.
+      */}
+      <main className="relative flex-1 overflow-y-auto">
         {children}
       </main>
     </div>

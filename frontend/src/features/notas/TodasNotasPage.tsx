@@ -9,7 +9,7 @@ import { FilePlus, FilterX } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -75,6 +75,15 @@ export default function TodasNotasPage() {
   const getPaciente = (idPaciente: string) =>
     pacientesLista.find((p) => p.id === idPaciente);
 
+  // La secretaria necesita saber quién operó cada caso, y la nota solo trae el
+  // UUID del encargado: se resuelve contra la lista de usuarios que ya se pide
+  // para el filtro, sin peticiones extra.
+  const getNombreMedico = (idMedico?: string) => {
+    if (!idMedico) return undefined;
+    const m = medicos.find((u) => u.id === idMedico);
+    return m ? `${m.nombres} ${m.apellidos}`.trim() : undefined;
+  };
+
   // Requisito 19.3: secretaria → solo lectura (sin botón de crear)
   const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "medico";
 
@@ -138,20 +147,18 @@ export default function TodasNotasPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="from-todas">Desde</Label>
-            <Input
+            <DateInput
               id="from-todas"
-              type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={setFrom}
             />
           </div>
           <div className="space-y-1">
             <Label htmlFor="to-todas">Hasta</Label>
-            <Input
+            <DateInput
               id="to-todas"
-              type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={setTo}
             />
           </div>
         </div>
@@ -195,6 +202,7 @@ export default function TodasNotasPage() {
                 nota={nota}
                 mostrarPaciente
                 nombrePaciente={paciente?.nombre}
+                nombreMedico={getNombreMedico(nota.medicoEncargado)}
               />
             );
           })}

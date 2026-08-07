@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,12 @@ interface AutocompleteInputProps {
   opciones: string[];
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Muestra el catálogo completo al enfocar el campo y añade un botón para
+   * desplegarlo, de modo que se pueda elegir sin saber de antemano qué hay.
+   * Sin esto la lista solo aparece cuando ya se escribió algo.
+   */
+  permitirExplorar?: boolean;
   "aria-describedby"?: string;
 }
 
@@ -26,12 +33,14 @@ export function AutocompleteInput({
   opciones,
   placeholder,
   disabled,
+  permitirExplorar = false,
   "aria-describedby": ariaDescribedBy,
 }: AutocompleteInputProps) {
   const [open, setOpen] = useState(false);
   const [destacado, setDestacado] = useState(-1);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const contenedorRef = useRef<HTMLDivElement>(null);
 
   const filtradas = opciones.filter((op) =>
     op.toLowerCase().includes(value.toLowerCase())
@@ -71,10 +80,8 @@ export function AutocompleteInput({
   useEffect(() => {
     const handle = (e: MouseEvent) => {
       if (
-        inputRef.current &&
-        !inputRef.current.contains(e.target as Node) &&
-        listRef.current &&
-        !listRef.current.contains(e.target as Node)
+        contenedorRef.current &&
+        !contenedorRef.current.contains(e.target as Node)
       ) {
         setOpen(false);
       }
@@ -84,23 +91,27 @@ export function AutocompleteInput({
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={contenedorRef}>
       <Input
         ref={inputRef}
         id={id}
         value={value}
+        className={cn(permitirExplorar && "pr-10")}
         onChange={(e) => {
           onChange(e.target.value);
-          setOpen(e.target.value.length > 0 && filtradas.length > 0);
+          setOpen(permitirExplorar || (e.target.value.length > 0 && filtradas.length > 0));
           setDestacado(-1);
         }}
         onFocus={() => {
-          if (value.length > 0 && filtradas.length > 0) setOpen(true);
+          if (permitirExplorar || (value.length > 0 && filtradas.length > 0)) {
+            setOpen(true);
+          }
         }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
+        role={permitirExplorar ? "combobox" : undefined}
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={open ? `${id}-listbox` : undefined}
@@ -109,6 +120,24 @@ export function AutocompleteInput({
         }
         aria-describedby={ariaDescribedBy}
       />
+      {permitirExplorar && (
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={disabled}
+          aria-label="Ver catálogo"
+          aria-expanded={open}
+          onClick={() => {
+            setOpen((o) => !o);
+            inputRef.current?.focus();
+          }}
+          className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-r-md text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform", open && "rotate-180")}
+          />
+        </button>
+      )}
       {open && filtradas.length > 0 && (
         <ul
           ref={listRef}

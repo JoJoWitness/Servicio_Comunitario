@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 /*
+  En Tailwind v4 la variante `dark:` sigue por defecto a `prefers-color-scheme`,
+  pero el tema de la app lo decide el ThemeProvider poniendo la clase `dark` en
+  <html>. Sin esta redefinición, un usuario con el sistema en oscuro y la app en
+  claro (o al revés) recibe los estilos `dark:` cruzados con la paleta contraria.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
   Define CSS custom properties (variables) for shadcn/ui theming.
   En Tailwind v4 se exponen como utilidades mediante @theme inline.
 */
@@ -35,6 +43,9 @@
   suave, apropiado para una aplicación médica (no agresivo visualmente).
 */
 :root {
+  /* Los controles nativos que quedan (hora, scrollbars) siguen el tema. */
+  color-scheme: light;
+
   --background: 0 0% 98%;           /* casi blanco, no puro */
   --foreground: 220 20% 12%;        /* gris azulado oscuro */
 
@@ -75,6 +86,8 @@
   agresivo. El primario conserva el azul slate pero más luminoso.
 */
 .dark {
+  color-scheme: dark;
+
   --background: 220 12% 10%;        /* gris oscuro neutro */
   --foreground: 220 10% 90%;        /* gris claro cálido */
 

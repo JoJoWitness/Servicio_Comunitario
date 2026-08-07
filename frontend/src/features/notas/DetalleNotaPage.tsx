@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import logoServicio from "@/assets/logo-servicio.svg";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -183,6 +184,19 @@ export default function DetalleNotaPage() {
           )}
         </div>
 
+        {/*
+          Cabecera con la identidad de la hoja impresa, para que la nota en
+          pantalla se reconozca como el mismo documento que se archiva en papel.
+        */}
+        <div className="flex flex-col items-center gap-3 border-b border-border pb-4">
+          <img
+            src={logoServicio}
+            alt="Servicio de Oftalmología — Hospital Central de San Cristóbal"
+            className="h-24 w-auto dark:brightness-0 dark:invert"
+          />
+          <h1 className="text-xl font-bold tracking-wide">NOTA OPERATORIA</h1>
+        </div>
+
         {/* Mensajes de estado */}
         {mensajePlazo && (
           <Alert role="alert">
@@ -232,7 +246,6 @@ export default function DetalleNotaPage() {
               />
               <Campo label="Hora inicio" valor={nota.horaComienzo} />
               <Campo label="Hora culminación" valor={nota.horaCulminacion} />
-              <Campo label="Pabellón" valor={nota.pabellon} />
               <Campo label="Anestesia" valor={nota.anestesia} />
 
               <div className="sm:col-span-2">

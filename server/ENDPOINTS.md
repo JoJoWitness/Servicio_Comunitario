@@ -421,18 +421,35 @@ El `id` va en el **URL** (el body ya no lo necesita).
 
 ## Técnicas
 
+Además del nombre, una técnica lleva lo que aporta al resumen de la nota:
+
+- `frase`: el texto que se inserta en el relato. El nombre corto no sirve para redactar —
+  «Apertura de puerto principal» es la etiqueta, `se abre puerto principal en H{hora}` es lo
+  que se escribe en la nota. Los marcadores van entre llaves.
+- `huecos`: los valores que cambian de una cirugía a otra, para que la pantalla los pida y
+  sustituya cada `{nombre}`. Columna `JSONB`; el servidor la normaliza a `[]` si es `NULL`.
+
+`GET /tecnicas` y `GET /tecnicas/{id}` devuelven ambos campos.
+
 ### `POST /tecnicas` — CreateTecnica
 ```json
 {
-  "tecnica": "Sutura continua"
+  "tecnica": "Lavado de superficie con iodopovidona al 2 %",
+  "frase": "se procede a realizar lavado ocular con iodopovidona al 2 %, posterior lavado con {volumen} cc de solución Ringer",
+  "huecos": [{ "nombre": "volumen", "default": "80" }]
 }
 ```
 
 ### `PUT /tecnicas/{id}` — UpdateTecnica
 El `id` va en el **URL** (el body ya no lo necesita).
+
+Omitir `huecos` **conserva** los que ya tenía la técnica; enviarlos los reemplaza. `frase`
+sí se sobrescribe con lo que llegue, incluida la cadena vacía.
 ```json
 {
-  "tecnica": "Sutura discontinua"
+  "tecnica": "Sutura discontinua",
+  "frase": "se realizan {puntos} puntos separados de nylon 10-0",
+  "huecos": [{ "nombre": "puntos", "default": "3" }]
 }
 ```
 

@@ -40,6 +40,7 @@ func filasTest() []notas.FilaExport {
 			TuvoBiopsia:        true,
 			Cirujano:           "Maythe Chacon",
 			Ayudantes:          "Nelson Rosales",
+			Familia:            "Pterigion",
 		},
 		{
 			ID:                 2,
@@ -58,6 +59,7 @@ func filasTest() []notas.FilaExport {
 			Anestesia:          "Local",
 			EsEmergencia:       true,
 			Cirujano:           "Maythe Chacon",
+			Familia:            "Chalazion",
 		},
 	}
 }
@@ -67,7 +69,7 @@ func TestRecordQuirurgico(t *testing.T) {
 	hasta := fechaTest("2026-12-31")
 	rango := Rango{From: &desde, To: &hasta}
 
-	f, err := RecordQuirurgico("Maythe Chacon", rango, filasTest())
+	f, err := RecordQuirurgico("Maythe Chacon", "V-25.023.116", rango, filasTest())
 	if err != nil {
 		t.Fatalf("RecordQuirurgico: %v", err)
 	}
@@ -78,41 +80,63 @@ func TestRecordQuirurgico(t *testing.T) {
 		t.Fatalf("hojas = %v", hojas)
 	}
 
-	// Encabezado en la fila esperada y primera nota justo debajo.
-	if v, _ := f.GetCellValue(hojaRecord, "A6"); v != "N°" {
-		t.Errorf("A6 = %q, se esperaba el encabezado", v)
+	// Portada de la planilla: título con el período, médico y cédula.
+	if v, _ := f.GetCellValue(hojaRecord, "A5"); v != "MEDICO: Maythe Chacon" {
+		t.Errorf("A5 = %q", v)
 	}
-	if v, _ := f.GetCellValue(hojaRecord, "E7"); v != "Emilse Pacheco" {
-		t.Errorf("E7 = %q", v)
+	if v, _ := f.GetCellValue(hojaRecord, "A6"); v != "CEDULA: V-25.023.116" {
+		t.Errorf("A6 = %q", v)
+	}
+
+	// Encabezado en la fila 8, con los rótulos de la planilla del servicio.
+	if v, _ := f.GetCellValue(hojaRecord, "A8"); v != "CASO" {
+		t.Errorf("A8 = %q, se esperaba el encabezado", v)
+	}
+	if v, _ := f.GetCellValue(hojaRecord, "C8"); v != "NOMBRE Y APELLIDO" {
+		t.Errorf("C8 = %q", v)
+	}
+
+	// Fila 9: título del primer grupo. Fila 10: su primer caso.
+	if v, _ := f.GetCellValue(hojaRecord, "A9"); v != "PTERIGION" {
+		t.Errorf("A9 = %q, se esperaba el grupo", v)
+	}
+	if v, _ := f.GetCellValue(hojaRecord, "A10"); v != "1" {
+		t.Errorf("caso = %q", v)
+	}
+	if v, _ := f.GetCellValue(hojaRecord, "C10"); v != "Emilse Pacheco" {
+		t.Errorf("C10 = %q", v)
 	}
 
 	// La edad es la del día de la cirugía (2026-03-04), no la de hoy.
-	if v, _ := f.GetCellValue(hojaRecord, "F7"); v != "50" {
+	if v, _ := f.GetCellValue(hojaRecord, "D10"); v != "50" {
 		t.Errorf("edad = %q, se esperaba 50", v)
 	}
 
-	if v, _ := f.GetCellValue(hojaRecord, "P7"); v != "Electiva" {
-		t.Errorf("tipo fila 1 = %q", v)
+	// Segundo grupo con su propio título y la numeración de casos corrida.
+	if v, _ := f.GetCellValue(hojaRecord, "A11"); v != "CHALAZION" {
+		t.Errorf("A11 = %q, se esperaba el segundo grupo", v)
 	}
-	if v, _ := f.GetCellValue(hojaRecord, "P8"); v != "Emergencia" {
-		t.Errorf("tipo fila 2 = %q", v)
+	if v, _ := f.GetCellValue(hojaRecord, "A12"); v != "2" {
+		t.Errorf("segundo caso = %q, la numeracion no debe reiniciarse", v)
 	}
 
-	// Las dos filas traen la misma intervención escrita distinto: el resumen
-	// las cuenta como un solo procedimiento.
-	if v, _ := f.GetCellValue(hojaResumen, "A7"); v != "EXERESIS DE PTERIGION TEMPORAL GII OD" {
+	// El resumen cuenta por familia clínica, igual que el record.
+	if v, _ := f.GetCellValue(hojaResumen, "A9"); v != "CHALAZION" {
 		t.Errorf("procedimiento = %q", v)
 	}
-	if v, _ := f.GetCellValue(hojaResumen, "B7"); v != "2" {
-		t.Errorf("cantidad = %q, se esperaba 2", v)
+	if v, _ := f.GetCellValue(hojaResumen, "B9"); v != "1" {
+		t.Errorf("cantidad = %q", v)
 	}
-	if v, _ := f.GetCellValue(hojaResumen, "B8"); v != "2" {
+	if v, _ := f.GetCellValue(hojaResumen, "A11"); v != "TOTAL" {
+		t.Errorf("A11 = %q, se esperaba TOTAL", v)
+	}
+	if v, _ := f.GetCellValue(hojaResumen, "B11"); v != "2" {
 		t.Errorf("total = %q, se esperaba 2", v)
 	}
 }
 
 func TestRecordQuirurgicoSinNotas(t *testing.T) {
-	f, err := RecordQuirurgico("Maythe Chacon", Rango{}, nil)
+	f, err := RecordQuirurgico("Maythe Chacon", "V-25.023.116", Rango{}, nil)
 	if err != nil {
 		t.Fatalf("RecordQuirurgico: %v", err)
 	}
@@ -126,8 +150,8 @@ func TestRecordQuirurgicoSinNotas(t *testing.T) {
 	if len(filas) != filaEncabezado {
 		t.Errorf("filas = %d, se esperaban %d (portada + encabezado)", len(filas), filaEncabezado)
 	}
-	if v, _ := f.GetCellValue(hojaRecord, "A3"); v != "Periodo: historial completo" {
-		t.Errorf("A3 = %q", v)
+	if v, _ := f.GetCellValue(hojaRecord, "A4"); v != "RECORD QUIRURGICO historial completo" {
+		t.Errorf("A4 = %q", v)
 	}
 }
 
@@ -153,7 +177,7 @@ func TestNombreArchivo(t *testing.T) {
 }
 
 func TestResumenLlevaGraficas(t *testing.T) {
-	f, err := RecordQuirurgico("Maythe Chacon", Rango{}, filasTest())
+	f, err := RecordQuirurgico("Maythe Chacon", "V-25.023.116", Rango{}, filasTest())
 	if err != nil {
 		t.Fatalf("RecordQuirurgico: %v", err)
 	}
@@ -209,7 +233,7 @@ func TestResumenLlevaGraficas(t *testing.T) {
 // El archivo generado tiene que abrirse como un .xlsx válido después de
 // escribirse: es lo único que garantiza que el médico pueda abrirlo en Excel.
 func TestArchivoSeAbre(t *testing.T) {
-	f, err := RecordQuirurgico("Maythe Chacon", Rango{}, filasTest())
+	f, err := RecordQuirurgico("Maythe Chacon", "V-25.023.116", Rango{}, filasTest())
 	if err != nil {
 		t.Fatalf("RecordQuirurgico: %v", err)
 	}
@@ -226,7 +250,7 @@ func TestArchivoSeAbre(t *testing.T) {
 	}
 	defer abierto.Close()
 
-	if v, _ := abierto.GetCellValue(hojaRecord, "A1"); v != "RECORD QUIRURGICO" {
-		t.Errorf("A1 = %q", v)
+	if v, _ := abierto.GetCellValue(hojaRecord, "A4"); v != "RECORD QUIRURGICO historial completo" {
+		t.Errorf("A4 = %q", v)
 	}
 }

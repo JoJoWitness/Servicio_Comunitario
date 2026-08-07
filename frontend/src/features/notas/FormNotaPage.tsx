@@ -3,15 +3,18 @@
  * Requisitos: 14.1–14.8, 16.2–16.6, 17.1–17.4, 21.1–21.3, 21.5, 24.1–24.3
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, UserPlus } from "lucide-react";
+import { ArrowLeft, Plus, RotateCcw, UserPlus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,8 +28,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AutocompleteInput } from "./AutocompleteInput";
+import { CampoDiagnostico } from "./CampoDiagnostico";
 import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
-import { NotaFormSchema } from "@/domain/validation/nota.validation";
+import {
+  NotaFormSchema,
+  normalizarAnestesia,
+} from "@/domain/validation/nota.validation";
 import { BACKEND_SUPPORTS_OJO_ESTADO } from "@/api/dto/nota.dto";
 import type { z } from "zod";
 type NotaFormValues = z.input<typeof NotaFormSchema>;
@@ -37,6 +44,7 @@ import { useListarPacientes } from "@/hooks/usePacientes";
 import { useSessionStore } from "@/stores/sessionStore";
 import { isApiError } from "@/api/errors";
 import { derivarEquipoDesdeMedicos } from "@/lib/equipo";
+import { aplicarHuecos, insertarFrase, valoresPorDefecto } from "@/lib/resumen";
 import type { Paciente } from "@/domain/models";
 
 function toDateInputValue(d: Date | undefined): string {
@@ -66,7 +74,7 @@ export default function FormNotaPage() {
 
   const { data: diagnosticosData } = useDiagnosticos();
   const { data: procedimientosData } = useProcedimientos();
-  const { data: tecnicasData } = useTecnicas();
+  const { data: tecnicasData, isError: errorTecnicas } = useTecnicas();
   // size:100 garantiza que todos los médicos aparezcan en el selector (Req 16.1)
   const { data: usuariosResp, isSuccess: medicosListados } = useListarUsuarios(undefined, { size: 100 });
   const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
@@ -128,11 +136,10 @@ export default function FormNotaPage() {
         fechaCulminacion: toDateInputValue(notaExistente.fechaCulminacion),
         horaComienzo: notaExistente.horaComienzo,
         horaCulminacion: notaExistente.horaCulminacion,
-        pabellon: notaExistente.pabellon,
         esElectiva: notaExistente.esElectiva,
         esEmergencia: notaExistente.esEmergencia,
         tuvoBiopsia: notaExistente.tuvoBiopsia,
-        anestesia: notaExistente.anestesia,
+        anestesia: normalizarAnestesia(notaExistente.anestesia),
         medicoEncargado: notaExistente.medicoEncargado ?? perfil?.id ?? "",
         equipo: equipoIds,
         tecnica: "",
@@ -141,6 +148,82 @@ export default function FormNotaPage() {
       if (pac) setPacienteSeleccionado(pac);
     }
   }, [esEdicion, notaExistente, reset, perfil?.id, pacientesData]);
+
+  // ── Composición del resumen (docs/catalogo-clinico.md §1.4) ──────────────
+  //
+  // El médico no redacta desde cero: elige el procedimiento, que trae su
+  // relato canónico, y le inserta las frases de las técnicas que usó.
+
+  const intervencionActual = watch("intervencionRealizada");
+  const tecnicaActual = watch("tecnica");
+
+  const procedimientoElegido = useMemo(
+    () =>
+      (procedimientosData ?? []).find(
+        (p) => p.intervencion === intervencionActual
+      ),
+    [procedimientosData, intervencionActual]
+  );
+
+  const tecnicaElegida = useMemo(
+    () => (tecnicasData ?? []).find((t) => t.tecnica === tecnicaActual),
+    [tecnicasData, tecnicaActual]
+  );
+
+  // Guarda el último relato precargado. Sirve para distinguir "el texto es el
+  // que puse yo automáticamente" de "el médico ya escribió aquí": en el
+  // segundo caso no se pisa nunca.
+  const relatoPrecargado = useRef<string | null>(null);
+
+  const cargarRelatoDelProcedimiento = useCallback(() => {
+    const relato = procedimientoElegido?.resumen?.trim();
+    if (!relato) return;
+    relatoPrecargado.current = relato;
+    setValue("resumenIntervencion", relato, { shouldDirty: true });
+  }, [procedimientoElegido, setValue]);
+
+  useEffect(() => {
+    const relato = procedimientoElegido?.resumen?.trim();
+    if (!relato) return;
+    const actual = (getValues("resumenIntervencion") ?? "").trim();
+    if (actual && actual !== relatoPrecargado.current) return;
+    relatoPrecargado.current = relato;
+    setValue("resumenIntervencion", relato, { shouldDirty: true });
+  }, [procedimientoElegido, getValues, setValue]);
+
+  // Valores de los huecos de la técnica seleccionada; arrancan en su default.
+  const [valoresHuecos, setValoresHuecos] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setValoresHuecos(valoresPorDefecto(tecnicaElegida?.huecos));
+  }, [tecnicaElegida]);
+
+  // Técnicas ya insertadas en el resumen, para que el médico no pierda la
+  // cuenta mientras encadena varias.
+  const [tecnicasAgregadas, setTecnicasAgregadas] = useState<string[]>([]);
+
+  const agregarFraseDeTecnica = useCallback(() => {
+    if (!tecnicaElegida?.frase) return;
+    const frase = aplicarHuecos(
+      tecnicaElegida.frase,
+      tecnicaElegida.huecos,
+      valoresHuecos
+    );
+    setValue(
+      "resumenIntervencion",
+      insertarFrase(getValues("resumenIntervencion") ?? "", frase),
+      { shouldDirty: true }
+    );
+    setTecnicasAgregadas((previas) =>
+      previas.includes(tecnicaElegida.tecnica)
+        ? previas
+        : [...previas, tecnicaElegida.tecnica]
+    );
+    // Se limpia el campo para poder elegir la siguiente técnica de inmediato.
+    setValue("tecnica", "");
+    // A partir de aquí el texto lleva mano del médico: cambiar de
+    // procedimiento ya no lo reemplaza en silencio.
+    relatoPrecargado.current = null;
+  }, [tecnicaElegida, valoresHuecos, getValues, setValue]);
 
   // Sincronizar pacienteSeleccionado con el campo idPaciente del form
   useEffect(() => {
@@ -174,7 +257,9 @@ export default function FormNotaPage() {
           : new Date(data.fechaComienzo),
         horaComienzo: data.horaComienzo || "00:00",
         horaCulminacion: data.horaCulminacion || "00:00",
-        pabellon: data.pabellon ?? "",
+        // El pabellón ya no se captura, pero se conserva el valor guardado
+        // para no borrarlo al editar una nota antigua.
+        pabellon: notaExistente?.pabellon ?? "",
         esElectiva: data.esElectiva ?? false,
         esEmergencia: data.esEmergencia ?? false,
         tuvoBiopsia: data.tuvoBiopsia ?? false,
@@ -206,7 +291,7 @@ export default function FormNotaPage() {
         });
       }
     },
-    [esEdicion, notaId, perfil?.id, crearNota, editarNota, navigate]
+    [esEdicion, notaId, perfil?.id, notaExistente?.pabellon, crearNota, editarNota, navigate]
   );
 
   return (
@@ -278,30 +363,37 @@ export default function FormNotaPage() {
           {/* ── Diagnósticos ── */}
           <Card>
             <CardHeader><CardTitle className="text-base">Diagnósticos</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="dxPreOperatorio">Dx. preoperatorio *</Label>
-                <Controller name="dxPreOperatorio" control={control}
-                  render={({ field }) => (
-                    <AutocompleteInput id="dxPreOperatorio" value={field.value ?? ""}
-                      onChange={field.onChange} opciones={opcionesDx}
-                      placeholder="Escribir o seleccionar…"
-                      aria-describedby={errors.dxPreOperatorio ? "dxPre-error" : undefined} />
-                  )} />
-                {errors.dxPreOperatorio && (
-                  <p id="dxPre-error" className="text-sm text-destructive">
-                    {errors.dxPreOperatorio.message}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="dxPostOperatorio">Dx. postoperatorio</Label>
-                <Controller name="dxPostOperatorio" control={control}
-                  render={({ field }) => (
-                    <AutocompleteInput id="dxPostOperatorio" value={field.value ?? ""}
-                      onChange={field.onChange} opciones={opcionesDx}
-                      placeholder="Escribir o seleccionar…" />
-                  )} />
-              </div>
+            {/*
+              Los dos diagnósticos van uno debajo del otro y a todo el ancho,
+              como en la hoja de papel, donde el preoperatorio es una lista
+              numerada de hallazgos y el postoperatorio el estado con el que
+              sale el paciente.
+            */}
+            <CardContent className="space-y-5">
+              <Controller name="dxPreOperatorio" control={control}
+                render={({ field }) => (
+                  <CampoDiagnostico
+                    id="dxPreOperatorio"
+                    label="DX. PREOPERATORIO *"
+                    opciones={opcionesDx}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errors.dxPreOperatorio?.message}
+                  />
+                )} />
+
+              <Controller name="dxPostOperatorio" control={control}
+                render={({ field }) => (
+                  <CampoDiagnostico
+                    id="dxPostOperatorio"
+                    label="DX. POSTOPERATORIO"
+                    opciones={opcionesDx}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                  />
+                )} />
             </CardContent>
           </Card>
 
@@ -325,16 +417,134 @@ export default function FormNotaPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="tecnica">Técnica</Label>
+                <p className="text-xs text-muted-foreground">
+                  Elige una del catálogo para añadir su paso al resumen. Puedes
+                  encadenar todas las que hagan falta.
+                </p>
                 <Controller name="tecnica" control={control}
                   render={({ field }) => (
                     <AutocompleteInput id="tecnica" value={field.value ?? ""}
                       onChange={field.onChange} opciones={opcionesTecnica}
-                      placeholder="Escribir o seleccionar…" />
+                      permitirExplorar
+                      placeholder="Elegir del catálogo o escribir para filtrar…" />
                   )} />
+
+                {/*
+                  Sin estos avisos, cualquier fallo del catálogo se manifiesta
+                  como "el botón de agregar no aparece", sin explicar por qué.
+                */}
+                {errorTecnicas && (
+                  <p className="text-xs text-destructive">
+                    No se pudo cargar el catálogo de técnicas.
+                  </p>
+                )}
+                {!errorTecnicas && opcionesTecnica.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    El catálogo de técnicas está vacío.
+                  </p>
+                )}
+                {tecnicaActual && !tecnicaElegida && opcionesTecnica.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    «{tecnicaActual}» no está en el catálogo: escribe el paso
+                    directamente en el resumen.
+                  </p>
+                )}
+                {tecnicaElegida && !tecnicaElegida.frase && (
+                  <p className="text-xs text-muted-foreground">
+                    Esta técnica todavía no tiene una frase configurada, así que
+                    no hay nada que añadir al resumen. Un admin puede definirla
+                    en Catálogos.
+                  </p>
+                )}
+
+                {tecnicasAgregadas.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-xs text-muted-foreground">
+                      Ya en el resumen:
+                    </span>
+                    {tecnicasAgregadas.map((nombre) => (
+                      <span
+                        key={nombre}
+                        className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary"
+                      >
+                        {nombre}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/*
+                  La técnica del catálogo aporta una frase al resumen; sus
+                  huecos son lo que cambia de una cirugía a otra.
+                */}
+                {tecnicaElegida?.frase && (
+                  <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/40 p-3">
+                    {(tecnicaElegida.huecos ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-3">
+                        {(tecnicaElegida.huecos ?? []).map((hueco) => (
+                          <div key={hueco.nombre} className="space-y-1">
+                            <Label
+                              htmlFor={`hueco-${hueco.nombre}`}
+                              className="text-xs capitalize text-muted-foreground"
+                            >
+                              {hueco.nombre}
+                            </Label>
+                            <Input
+                              id={`hueco-${hueco.nombre}`}
+                              className="h-8 w-24"
+                              value={valoresHuecos[hueco.nombre] ?? ""}
+                              onChange={(e) =>
+                                setValoresHuecos((v) => ({
+                                  ...v,
+                                  [hueco.nombre]: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      «
+                      {aplicarHuecos(
+                        tecnicaElegida.frase,
+                        tecnicaElegida.huecos,
+                        valoresHuecos
+                      )}
+                      »
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={agregarFraseDeTecnica}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Agregar al resumen
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className="space-y-1">
-                <Label htmlFor="resumenIntervencion">Resumen de la intervención</Label>
-                <Textarea id="resumenIntervencion" rows={3} {...register("resumenIntervencion")} />
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="resumenIntervencion">Resumen de la intervención</Label>
+                  {procedimientoElegido?.resumen && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={cargarRelatoDelProcedimiento}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Cargar relato del procedimiento
+                    </Button>
+                  )}
+                </div>
+                <Textarea id="resumenIntervencion" rows={8} {...register("resumenIntervencion")} />
+                <p className="text-xs text-muted-foreground">
+                  Se precarga con el relato del procedimiento elegido y es
+                  editable. Lo que escribas nunca se reemplaza solo.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -345,14 +555,35 @@ export default function FormNotaPage() {
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="fechaComienzo">Fecha de inicio *</Label>
-                <Input id="fechaComienzo" type="date" {...register("fechaComienzo")} />
+                <Controller name="fechaComienzo" control={control}
+                  render={({ field }) => (
+                    <DateInput
+                      id="fechaComienzo"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  )}
+                />
                 {errors.fechaComienzo && (
                   <p className="text-sm text-destructive">{errors.fechaComienzo.message}</p>
                 )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="fechaCulminacion">Fecha de culminación</Label>
-                <Input id="fechaCulminacion" type="date" {...register("fechaCulminacion")} />
+                <Controller name="fechaCulminacion" control={control}
+                  render={({ field }) => (
+                    <DateInput
+                      id="fechaCulminacion"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  )}
+                />
+                {errors.fechaCulminacion && (
+                  <p className="text-sm text-destructive">{errors.fechaCulminacion.message}</p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label htmlFor="horaComienzo">Hora de inicio</Label>
@@ -375,27 +606,60 @@ export default function FormNotaPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Datos clínicos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="pabellon">Pabellón</Label>
-                <Input id="pabellon" {...register("pabellon")} />
+              <div className="space-y-2">
+                <Label>Anestesia</Label>
+                <Controller name="anestesia" control={control}
+                  render={({ field }) => (
+                    <RadioGroup
+                      name="anestesia"
+                      aria-label="Tipo de anestesia"
+                      value={field.value ?? ""}
+                      onValueChange={field.onChange}
+                      className="grid grid-cols-2"
+                      options={[
+                        { value: "Local", label: "Local" },
+                        { value: "General", label: "General" },
+                      ]}
+                    />
+                  )}
+                />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="anestesia">Anestesia</Label>
-                <Input id="anestesia" {...register("anestesia")} />
+
+              {/*
+                Electiva y emergencia son excluyentes entre sí (el tipo de
+                intervención), aunque el backend las guarde como dos booleanos.
+              */}
+              <div className="space-y-2">
+                <Label>Tipo de intervención</Label>
+                <RadioGroup
+                  name="tipoIntervencion"
+                  aria-label="Tipo de intervención"
+                  value={
+                    watch("esElectiva") ? "electiva"
+                    : watch("esEmergencia") ? "emergencia"
+                    : ""
+                  }
+                  onValueChange={(v) => {
+                    setValue("esElectiva", v === "electiva", { shouldValidate: true });
+                    setValue("esEmergencia", v === "emergencia", { shouldValidate: true });
+                  }}
+                  className="grid grid-cols-2"
+                  options={[
+                    { value: "electiva", label: "Electiva" },
+                    { value: "emergencia", label: "Emergencia" },
+                  ]}
+                />
               </div>
-              <div className="flex flex-wrap gap-6">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" {...register("esElectiva")} className="h-4 w-4" />
-                  Electiva
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" {...register("esEmergencia")} className="h-4 w-4" />
-                  Emergencia
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" {...register("tuvoBiopsia")} className="h-4 w-4" />
-                  Biopsia
-                </label>
+
+              <div className="space-y-2">
+                <Label>Biopsia</Label>
+                {/* La rejilla lo deja del mismo ancho que una opción de arriba. */}
+                <div className="grid grid-cols-2 gap-2">
+                  <Checkbox
+                    label="Se tomó biopsia"
+                    {...register("tuvoBiopsia")}
+                  />
+                </div>
               </div>
               {BACKEND_SUPPORTS_OJO_ESTADO && (
                 <div className="grid grid-cols-2 gap-4">

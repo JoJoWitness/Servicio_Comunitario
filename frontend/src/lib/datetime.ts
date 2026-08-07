@@ -135,3 +135,101 @@ export function formatFechaUI(date: Date): string {
   const yyyy = date.getUTCFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
+
+// ---------------------------------------------------------------------------
+// Rangos relativos (accesos rápidos de exportación)
+// ---------------------------------------------------------------------------
+
+/** Formatea una fecha local como "yyyy-mm-dd", sin pasar por UTC. */
+export function aISOLocal(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * Rango que va de hace `meses` meses hasta hoy, ambos incluidos.
+ *
+ * Retroceder meses en JavaScript desborda cuando el día no existe en el mes
+ * destino: al 31 de marzo menos un mes le corresponde el 3 de marzo, no el 28
+ * de febrero. Aquí se corrige llevándolo al último día del mes anterior.
+ *
+ * @example
+ * rangoUltimosMeses(1) // desde el mismo día del mes pasado hasta hoy
+ */
+export function rangoUltimosMeses(
+  meses: number,
+  hoy: Date = new Date()
+): { from: string; to: string } {
+  const desde = new Date(hoy);
+  const dia = desde.getDate();
+  desde.setMonth(desde.getMonth() - meses);
+  if (desde.getDate() !== dia) desde.setDate(0);
+
+  return { from: aISOLocal(desde), to: aISOLocal(hoy) };
+}
+
+// ---------------------------------------------------------------------------
+// Fecha corta "dd/mm/aa" ↔ ISO "yyyy-mm-dd"  (entrada manual del usuario)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resuelve un año de dos dígitos a un año de cuatro dígitos.
+ *
+ * Se usa una ventana móvil: los años hasta 10 por encima del actual se
+ * interpretan como del siglo en curso, y el resto como del siglo anterior.
+ * En 2026 eso significa 00–36 → 2000–2036 y 37–99 → 1937–1999, lo que cubre
+ * tanto fechas de nacimiento antiguas como fechas de notas a futuro cercano.
+ */
+export function anioDesdeDosDigitos(yy: number): number {
+  const anioActual = new Date().getFullYear();
+  const siglo = Math.floor(anioActual / 100) * 100;
+  const limite = (anioActual % 100) + 10;
+  return yy <= limite ? siglo + yy : siglo - 100 + yy;
+}
+
+/**
+ * Convierte una fecha ISO "yyyy-mm-dd" al formato corto "dd/mm/aa".
+ * Devuelve cadena vacía si la entrada no es una fecha ISO completa.
+ *
+ * @example
+ * isoAFechaCorta("2026-07-20") // "20/07/26"
+ */
+export function isoAFechaCorta(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+  if (!m) return "";
+  const [, yyyy, mm, dd] = m;
+  return `${dd}/${mm}/${yyyy.slice(2)}`;
+}
+
+/**
+ * Convierte una fecha corta "dd/mm/aa" a ISO "yyyy-mm-dd".
+ * Devuelve `null` si el texto está incompleto o el día no existe en ese mes
+ * (p. ej. "31/02/26").
+ *
+ * @example
+ * fechaCortaAISO("20/07/26") // "2026-07-20"
+ * fechaCortaAISO("31/02/26") // null
+ */
+export function fechaCortaAISO(texto: string): string | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(texto.trim());
+  if (!m) return null;
+  const dd = Number(m[1]);
+  const mm = Number(m[2]);
+  const yyyy = anioDesdeDosDigitos(Number(m[3]));
+  if (mm < 1 || mm > 12 || dd < 1) return null;
+  // Día 0 del mes siguiente = último día del mes actual.
+  const diasDelMes = new Date(Date.UTC(yyyy, mm, 0)).getUTCDate();
+  if (dd > diasDelMes) return null;
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+/**
+ * Aplica la máscara "dd/mm/aa" sobre lo que el usuario va escribiendo:
+ * conserva solo dígitos (máx. 6) e inserta las barras automáticamente.
+ */
+export function aplicarMascaraFechaCorta(entrada: string): string {
+  const digitos = entrada.replace(/\D/g, "").slice(0, 6);
+  const partes = [digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4, 6)];
+  return partes.filter((p) => p.length > 0).join("/");
+}

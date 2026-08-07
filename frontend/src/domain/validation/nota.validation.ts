@@ -6,7 +6,10 @@
  * 2. El diagnóstico preoperatorio es obligatorio.
  * 3. La intervención realizada es obligatoria.
  * 4. La fecha de comienzo es obligatoria.
- * 5. La hora de culminación no puede ser anterior a la hora de comienzo.
+ * 5. La fecha de culminación no puede ser anterior a la de comienzo.
+ * 6. La hora de culminación no puede ser anterior a la de comienzo, pero solo
+ *    cuando la intervención empieza y termina el mismo día (una intervención
+ *    que cruza la medianoche es válida).
  *
  * Integración con shadcn/ui: se exporta el schema de Zod para usar con
  * `react-hook-form` + `@hookform/resolvers/zod` en el formulario de nota.
@@ -24,6 +27,22 @@ import { esCulminacionAnterior } from "../../lib/datetime";
  * Acepta 00:00–23:59.
  */
 const HORA_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Únicos tipos de anestesia que registra el servicio. */
+export const TIPOS_ANESTESIA = ["Local", "General"] as const;
+
+export type TipoAnestesia = (typeof TIPOS_ANESTESIA)[number];
+
+/**
+ * Normaliza el valor de anestesia que viene del backend: las notas antiguas
+ * pueden traer texto libre, que no corresponde a ninguna de las dos opciones.
+ * En ese caso se devuelve "" para que el médico vuelva a elegir.
+ */
+export function normalizarAnestesia(valor: string | undefined): "" | TipoAnestesia {
+  return TIPOS_ANESTESIA.includes(valor as TipoAnestesia)
+    ? (valor as TipoAnestesia)
+    : "";
+}
 
 export const NotaFormSchema = z
   .object({
@@ -65,21 +84,46 @@ export const NotaFormSchema = z
       .optional()
       .or(z.literal("")),
 
-    pabellon: z.string().optional().default(""),
-
     esElectiva: z.boolean().optional().default(false),
     esEmergencia: z.boolean().optional().default(false),
     tuvoBiopsia: z.boolean().optional().default(false),
 
-    anestesia: z.string().optional().default(""),
+    /** Solo dos valores posibles; "" cuando aún no se ha elegido. */
+    anestesia: z
+      .enum(["", ...TIPOS_ANESTESIA], {
+        errorMap: () => ({ message: "La anestesia debe ser Local o General" }),
+      })
+      .optional()
+      .default(""),
     medicoEncargado: z.string().optional(),
     equipo: z.array(z.string()).optional().default([]),
     tecnica: z.string().optional().default(""),
   })
   .refine(
     (data) => {
-      // Validar hora de culminación no anterior a la de comienzo,
-      // solo cuando ambas están presentes y tienen formato válido.
+      // La fecha de culminación no puede ser anterior a la de comienzo.
+      // Ambas son "yyyy-mm-dd", por lo que la comparación lexicográfica
+      // equivale a la cronológica.
+      if (data.fechaComienzo && data.fechaCulminacion) {
+        return data.fechaCulminacion >= data.fechaComienzo;
+      }
+      return true;
+    },
+    {
+      message:
+        "La fecha de culminación no puede ser anterior a la fecha de comienzo",
+      path: ["fechaCulminacion"],
+    }
+  )
+  .refine(
+    (data) => {
+      // Las horas solo se comparan cuando la intervención empieza y termina
+      // el mismo día: si cruza la medianoche (p. ej. 22:00 → 02:00) la hora
+      // de culminación es legítimamente "menor" que la de comienzo.
+      const mismoDia =
+        !data.fechaCulminacion || data.fechaCulminacion === data.fechaComienzo;
+      if (!mismoDia) return true;
+
       const inicio = data.horaComienzo;
       const fin = data.horaCulminacion;
       if (inicio && fin && HORA_REGEX.test(inicio) && HORA_REGEX.test(fin)) {
@@ -89,7 +133,7 @@ export const NotaFormSchema = z
     },
     {
       message:
-        "La hora de culminación no puede ser anterior a la hora de comienzo",
+        "La hora de culminación no puede ser anterior a la hora de comienzo el mismo día",
       path: ["horaCulminacion"],
     }
   );

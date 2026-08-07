@@ -250,7 +250,6 @@ export default function FichaPacientePage() {
                     <TableHead>Fecha</TableHead>
                     <TableHead>Intervención</TableHead>
                     <TableHead>Médico encargado</TableHead>
-                    <TableHead>Pabellón</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -273,7 +272,6 @@ export default function FichaPacientePage() {
                       <TableCell className="text-sm text-muted-foreground">
                         {nota.medicoEncargado ?? "—"}
                       </TableCell>
-                      <TableCell>{nota.pabellon || "—"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

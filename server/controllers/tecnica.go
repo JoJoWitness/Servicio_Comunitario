@@ -21,18 +21,18 @@ func GetTecnica(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var procedimiento models.Procedimientos
-	procedimiento.Id = id
-	err = procedimiento.Get(config.PsqlDB)
+	var tecnica models.Tecnica
+	tecnica.Id = id
+	err = tecnica.Get(config.PsqlDB)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Unable to get procedimiento"))
+		w.Write([]byte("Unable to get tecnica"))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(procedimiento)
+	json.NewEncoder(w).Encode(tecnica)
 }
 
 func CreateTecnica(w http.ResponseWriter, r *http.Request) {
@@ -83,11 +83,22 @@ func UpdateTecnica(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tecnica.Id = id
-	err = tecnica.Get(config.PsqlDB)
+
+	// La comprobación de existencia va sobre una copia: `Get` rellena el
+	// struct desde la base, y hacerlo sobre `tecnica` pisaría lo que trae la
+	// petición, dejando el UPDATE sin efecto.
+	existente := models.Tecnica{Id: id}
+	err = existente.Get(config.PsqlDB)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("tecnica does not exist"))
 		return
+	}
+
+	// El catálogo del admin edita el nombre y la frase, no los huecos. Si la
+	// petición no los trae, se conservan los que ya estaban en vez de vaciarlos.
+	if tecnica.Huecos == nil {
+		tecnica.Huecos = existente.Huecos
 	}
 
 	err = tecnica.Update(config.PsqlDB)

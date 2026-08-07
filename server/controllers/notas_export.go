@@ -67,7 +67,10 @@ func ExportNotasMedico(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	archivo, err := export.RecordQuirurgico(nombre, rango, filas)
+	// La cédula del médico no está en "Usuarios": la planilla del servicio la
+	// lleva escrita a mano, y el sistema nunca la pidió. Se manda vacía y la
+	// portada omite el renglón.
+	archivo, err := export.RecordQuirurgico(nombre, "", rango, filas)
 	if err != nil {
 		log.Printf("Error building xlsx: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
