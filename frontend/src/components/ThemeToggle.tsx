@@ -6,7 +6,6 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useThemeStore, resolveEffectiveMode, type ThemeMode } from "@/stores/themeStore";
-import { cn } from "@/lib/utils";
 
 const OPCIONES: { mode: ThemeMode; label: string; icon: React.ReactNode }[] = [
   { mode: "light",  label: "Claro",   icon: <Sun    className="h-4 w-4" /> },

@@ -15,14 +15,18 @@ type Notas struct {
 	Hora_Comienzo          time.Time `json:"hora_comienzo"`
 	Hora_Culminacion       time.Time `json:"hora_culminacion"`
 	Resumen_Intervencion   string    `json:"resumen_intervencion"`
-	Pabellon               string    `json:"pabellon"`
-	Es_Electiva            bool      `json:"es_electiva"`
-	Es_Emergencia          bool      `json:"es_emergencia"`
-	Tuvo_Biopsia           bool      `json:"tuvo_biopsia"`
-	Anestia                string    `json:"anestia"`
-	ID_Paciente            string    `json:"Id_paciente"`
-	Medico_Encargado       string    `json:"medico_encargado"`
-	Eliminado              bool      `json:"eliminado"`
+	// Comentarios es el texto libre que el médico agrega a la intervención. Se
+	// guarda en su propia columna, pero al leer la nota (pantalla, PDF,
+	// reporte) va concatenado al final del resumen, tras "Observaciones:".
+	Comentarios      string `json:"comentarios"`
+	Pabellon         string `json:"pabellon"`
+	Es_Electiva      bool   `json:"es_electiva"`
+	Es_Emergencia    bool   `json:"es_emergencia"`
+	Tuvo_Biopsia     bool   `json:"tuvo_biopsia"`
+	Anestia          string `json:"anestia"`
+	ID_Paciente      string `json:"Id_paciente"`
+	Medico_Encargado string `json:"medico_encargado"`
+	Eliminado        bool   `json:"eliminado"`
 	// Medicos es el equipo quirúrgico tal como se devuelve en los GET: datos
 	// completos de cada médico, traídos de equipo_quirurgico.
 	Medicos []usuarios.Usuarios `json:"medicos"`

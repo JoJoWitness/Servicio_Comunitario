@@ -8,10 +8,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -44,7 +45,7 @@ const CUENTAS_PRUEBA: {
   label: string;
 }[] = [
   { correo: "roma@test.com",   contrasena: "roma2026",   rol: "medico",     label: "Médico" },
-  { correo: "canela@test.com", contrasena: "canela2026", rol: "secretaria", label: "Secretaria" },
+  { correo: "canela@test.com", contrasena: "canela2026", rol: "secretaria", label: "Secretario" },
   { correo: "ryuk@test.com",   contrasena: "ryuk2026",   rol: "admin",      label: "Admin" },
 ];
 
@@ -66,7 +67,6 @@ export default function LoginPage() {
   const { mutate: login, isPending } = useLogin();
   const { mutateAsync: loginOffline, isPending: verificandoLocal } = useLoginOffline();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   const sinConexion = useConexionStore((s) => s.estado) === "sin-conexion";
   const correoGuardado = correoRecordado();
@@ -203,28 +203,12 @@ export default function LoginPage() {
             {/* Contraseña */}
               <div className="space-y-1">
                 <Label htmlFor="contrasena">Contraseña</Label>
-                <div className="relative">
-                  <Input
-                    id="contrasena"
-                    type={mostrarPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    aria-describedby={errors.contrasena ? "contrasena-error" : undefined}
-                    className="pr-10"
-                    {...register("contrasena")}
-                  />
-                  <button
-                    type="button"
-                    aria-label={mostrarPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground"
-                    onClick={() => setMostrarPassword((v) => !v)}
-                  >
-                    {mostrarPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+                <PasswordInput
+                  id="contrasena"
+                  autoComplete="current-password"
+                  aria-describedby={errors.contrasena ? "contrasena-error" : undefined}
+                  {...register("contrasena")}
+                />
                 {errors.contrasena && (
                   <p id="contrasena-error" className="text-sm text-destructive">
                     {errors.contrasena.message}

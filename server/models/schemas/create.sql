@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS "Nota_Operatoria" (
 	"hora_comienzo" TIME NOT NULL,
 	"hora_culminacion" TIME NOT NULL,
 	"resumen_intevencion" TEXT NOT NULL,
+	-- Comentarios libres del médico sobre la intervención. Se guardan aparte
+	-- del relato para poder corregirlos sin tocarlo, pero se leen como parte
+	-- de él: al mostrarlo o exportarlo van al final, tras "Observaciones:".
+	"comentarios" TEXT NOT NULL DEFAULT '',
 	"pabellon" VARCHAR(255) NOT NULL,
 	"es_electiva" BOOLEAN NOT NULL,
 	"es_emergencia" BOOLEAN NOT NULL,
@@ -172,6 +176,35 @@ ON UPDATE NO ACTION ON DELETE CASCADE;
 -- Trabajo sin conexión: llave de idempotencia de la nota (ver el comentario
 -- en la definición de la tabla).
 ALTER TABLE "Nota_Operatoria" ADD COLUMN IF NOT EXISTS "client_uuid" UUID;
+
+-- Comentarios del médico sobre la intervención (ver el comentario en la
+-- definición de la tabla). Las notas ya registradas quedan con la cadena
+-- vacía: no tenían dónde escribirlos.
+ALTER TABLE "Nota_Operatoria"
+	ADD COLUMN IF NOT EXISTS "comentarios" TEXT NOT NULL DEFAULT '';
+
+-- El correo identifica al usuario al entrar, así que no puede repetirse: con
+-- dos filas iguales, la sesión depende de cuál devuelva Postgres primero y la
+-- contraseña buena se compara contra el hash de la otra cuenta.
+--
+-- La tabla original no lo exigía, de modo que puede haber duplicados ya
+-- guardados. En ese caso el índice no se puede crear, y tumbar el arranque del
+-- servidor por eso sería peor que el problema: se avisa en el log y se sigue.
+-- Para verlos:
+--   SELECT lower(btrim(correo)), count(*) FROM "Usuarios"
+--   GROUP BY 1 HAVING count(*) > 1;
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1 FROM "Usuarios" GROUP BY lower(btrim(correo)) HAVING count(*) > 1
+	) THEN
+		RAISE WARNING 'Hay correos repetidos en "Usuarios": no se creó el índice único. Depúralos y vuelve a arrancar.';
+	ELSE
+		CREATE UNIQUE INDEX IF NOT EXISTS "Usuarios_correo_key"
+			ON "Usuarios" (lower(btrim(correo)));
+	END IF;
+END
+$$;
 
 DO $$
 BEGIN

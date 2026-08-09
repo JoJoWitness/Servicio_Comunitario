@@ -63,6 +63,9 @@ export const NotaFormSchema = z
 
     resumenIntervencion: z.string().optional().default(""),
 
+    /** Comentarios del médico; se leen al final del resumen (Observaciones:) */
+    comentarios: z.string().optional().default(""),
+
     /** ISO date string o Date serializable; se valida que esté presente */
     fechaComienzo: z
       .string({ required_error: "La fecha de comienzo es obligatoria" })
@@ -95,7 +98,14 @@ export const NotaFormSchema = z
       })
       .optional()
       .default(""),
-    medicoEncargado: z.string().optional(),
+    /**
+     * Obligatorio y siempre un médico: el administrador registra notas pero no
+     * puede figurar en ellas, así que cuando es él quien escribe no hay a quién
+     * asignar por defecto y tiene que elegirlo.
+     */
+    medicoEncargado: z
+      .string({ required_error: "Debes seleccionar el médico encargado" })
+      .min(1, "Debes seleccionar el médico encargado"),
     equipo: z.array(z.string()).optional().default([]),
     tecnica: z.string().optional().default(""),
   })

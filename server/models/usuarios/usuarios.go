@@ -35,7 +35,10 @@ func (u *Usuarios) Get(db *pgxpool.Pool) error {
 		query += " AND id = @id"
 		args["id"] = u.ID
 	} else if u.Correo != "" {
-		query += " AND correo = @correo"
+		// Sin distinguir mayúsculas ni espacios de sobra: el correo se teclea a
+		// mano en el login, y el teclado del teléfono lo capitaliza solo. Quien
+		// se registró como "Juan@x.com" tiene que poder entrar como "juan@x.com".
+		query += " AND lower(btrim(correo)) = lower(btrim(@correo))"
 		args["correo"] = u.Correo
 	}
 

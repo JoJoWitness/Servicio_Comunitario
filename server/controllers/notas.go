@@ -185,8 +185,9 @@ func puedeModificar(w http.ResponseWriter, r *http.Request, notaID int) bool {
 	return true
 }
 
-// validarEquipo rechaza los UUID que no correspondan a un médico activo.
-// Escribe la respuesta de error cuando devuelve false.
+// validarEquipo rechaza los UUID que no correspondan a un médico activo. El
+// administrador no pasa este filtro: registra notas, pero no forma parte de
+// ellas. Escribe la respuesta de error cuando devuelve false.
 func validarEquipo(w http.ResponseWriter, equipo []string) bool {
 	invalidos, err := notas2.ValidarEquipo(config.PsqlDB, equipo)
 	if err != nil {
@@ -197,7 +198,7 @@ func validarEquipo(w http.ResponseWriter, equipo []string) bool {
 
 	if len(invalidos) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "equipo quirurgico invalido, no son medicos activos: %v", invalidos)
+		fmt.Fprintf(w, "equipo quirurgico invalido, solo un medico activo puede figurar en la nota (el administrador no): %v", invalidos)
 		return false
 	}
 
@@ -222,8 +223,14 @@ func CreateNota(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Por defecto el encargado es quien registra la nota; se manda explícito
-	// solo cuando operó otro médico.
+	// solo cuando operó otro médico. El admin es la excepción: puede registrar
+	// la nota, pero no aparecer en ella, así que tiene que decir quién operó.
 	if newnotas.Medico_Encargado == "" {
+		if session.Role == auth.RolAdmin {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("falta el medico encargado: el administrador no puede figurar en una nota operatoria"))
+			return
+		}
 		newnotas.Medico_Encargado = session.UserID
 	}
 

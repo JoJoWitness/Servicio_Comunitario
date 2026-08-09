@@ -71,7 +71,10 @@ export default function TodasNotasPage() {
   const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
 
   const notas = notasResp?.data ? ordenarNotasDesc(notasResp.data) : [];
-  const medicos = usuariosResp?.data ?? [];
+  // La lista completa sirve para resolver nombres; el filtro solo ofrece
+  // médicos, que son los únicos que pueden figurar en una nota.
+  const usuarios = usuariosResp?.data ?? [];
+  const medicos = usuarios.filter((u) => u.rol === "medico");
   const pacientesLista = pacientesResp?.data ?? [];
 
   const getPaciente = (idPaciente: string) =>
@@ -82,7 +85,7 @@ export default function TodasNotasPage() {
   // para el filtro, sin peticiones extra.
   const getNombreMedico = (idMedico?: string) => {
     if (!idMedico) return undefined;
-    const m = medicos.find((u) => u.id === idMedico);
+    const m = usuarios.find((u) => u.id === idMedico);
     return m ? `${m.nombres} ${m.apellidos}`.trim() : undefined;
   };
 
@@ -99,6 +102,19 @@ export default function TodasNotasPage() {
   };
 
   const hayFiltros = medicoFiltro || pacienteFiltro || from || to;
+
+  /*
+    Cuando lo único que se filtró es un médico, el vacío no es "no hay
+    resultados": es un dato sobre esa persona, y se dice con su nombre. Con más
+    filtros encima ya no se puede afirmar eso —podría tener notas fuera del
+    rango de fechas—, así que ahí se vuelve al mensaje genérico.
+  */
+  const soloFiltroMedico = medicoFiltro && !pacienteFiltro && !from && !to;
+  const mensajeSinNotas = soloFiltroMedico
+    ? `${getNombreMedico(medicoFiltro) ?? "Este médico"} no tiene notas registradas.`
+    : hayFiltros
+      ? "No hay notas con esos filtros."
+      : "No hay notas registradas.";
 
   return (
     <AppLayout>
@@ -191,7 +207,7 @@ export default function TodasNotasPage() {
         {!isLoading && !isError && notas.length === 0 && (
           <div className="rounded-lg border border-dashed p-10 text-center">
             <p className="text-sm text-muted-foreground">
-              {hayFiltros ? "No hay notas con esos filtros." : "No hay notas registradas."}
+              {mensajeSinNotas}
             </p>
           </div>
         )}

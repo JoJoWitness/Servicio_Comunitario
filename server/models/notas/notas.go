@@ -42,14 +42,14 @@ func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
 func (n *Notas) Get(db *pgxpool.Pool) error {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado, COALESCE(client_uuid::text, '')
+			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, COALESCE(comentarios, ''), pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado, COALESCE(client_uuid::text, '')
 		FROM "Nota_Operatoria"
 		WHERE id = @id
 		AND eliminado = FALSE;
 	`
 
 	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": n.ID})
-	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado, &n.ClientUUID)
+	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Comentarios, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado, &n.ClientUUID)
 	if err != nil {
 		log.Printf("\n\nError getting nota: %v", err)
 		return err
@@ -69,7 +69,7 @@ func (n *Notas) Get(db *pgxpool.Pool) error {
 func GetAllNotas(db *pgxpool.Pool, f FiltroNotas) ([]Notas, error) {
 	query := `
 		SELECT
-			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intevencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
+			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intevencion, COALESCE(n.comentarios, ''), n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
 		FROM "Nota_Operatoria" n
 		WHERE n.eliminado = FALSE
 	`
@@ -116,7 +116,7 @@ func GetAllNotas(db *pgxpool.Pool, f FiltroNotas) ([]Notas, error) {
 	records := []Notas{}
 	for rows.Next() {
 		var r Notas
-		err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado, &r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion, &r.Resumen_Intervencion, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia, &r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado)
+		err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado, &r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion, &r.Resumen_Intervencion, &r.Comentarios, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia, &r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado)
 		if err != nil {
 			log.Printf("Error fetching records: %v", err)
 			return records, err
@@ -178,7 +178,7 @@ func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]N
 	dataQuery := `
 		SELECT n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada,
 			n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion,
-			n.resumen_intevencion, n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia,
+			n.resumen_intevencion, COALESCE(n.comentarios, ''), n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia,
 			n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
 		FROM "Nota_Operatoria" n ` + where + `
 		ORDER BY ` + p.SortBy + ` ` + p.Order + `
@@ -196,7 +196,7 @@ func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]N
 		var r Notas
 		if err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado,
 			&r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion,
-			&r.Resumen_Intervencion, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia,
+			&r.Resumen_Intervencion, &r.Comentarios, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia,
 			&r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado); err != nil {
 			log.Printf("Error fetching nota page: %v", err)
 			return records, total, err
@@ -245,6 +245,12 @@ func EsParticipante(db *pgxpool.Pool, notaID int, userID string) (bool, error) {
 // ValidarEquipo comprueba que cada id del equipo corresponda a un médico activo.
 // Sin esto un UUID inválido revienta como error de llave foránea (500) en vez de
 // decirle al cliente qué mandó mal.
+//
+// El administrador queda fuera a propósito, aunque pueda registrar notas: no
+// opera, así que no puede figurar en ninguna, ni como encargado ni como parte
+// del equipo. Como el encargado se valida por aquí junto al resto del equipo,
+// esta es la única puerta por la que un admin podría colarse en la nota, y la
+// regla vale igual si se pone él mismo o si lo pone otro médico.
 func ValidarEquipo(db *pgxpool.Pool, ids []string) ([]string, error) {
 	// Los vacíos no son ids: sincronizarEquipo los descarta igual.
 	limpios := []string{}
@@ -264,7 +270,7 @@ func ValidarEquipo(db *pgxpool.Pool, ids []string) ([]string, error) {
 		SELECT u.id::text
 		FROM "Usuarios" u
 		WHERE u.id::text = ANY(@ids)
-		AND u.rol IN ('medico', 'admin')
+		AND u.rol = 'medico'
 		AND u.eliminado = FALSE;
 	`
 
@@ -367,9 +373,9 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 	// `eliminado` no se escribe: la baja es exclusiva de Delete.
 	query := `
 		INSERT INTO "Nota_Operatoria"
-			(dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, client_uuid)
+			(dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, comentarios, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, client_uuid)
 		VALUES
-			(@dx_pre_operatorio, @dx_post_operatorio, @intervencion_realizada, @fecha_comienzo, @fecha_culminacion, @hora_comienzo, @hora_culminacion, @resumen_intevencion, @pabellon, @es_electiva, @es_emergencia, @tuvo_biopsia, @anestesia, @id_paciente, @id_medico_encargado, @client_uuid)
+			(@dx_pre_operatorio, @dx_post_operatorio, @intervencion_realizada, @fecha_comienzo, @fecha_culminacion, @hora_comienzo, @hora_culminacion, @resumen_intevencion, @comentarios, @pabellon, @es_electiva, @es_emergencia, @tuvo_biopsia, @anestesia, @id_paciente, @id_medico_encargado, @client_uuid)
 		RETURNING id;
 	`
 
@@ -382,6 +388,7 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 		"hora_comienzo":          n.Hora_Comienzo,
 		"hora_culminacion":       n.Hora_Culminacion,
 		"resumen_intevencion":    n.Resumen_Intervencion,
+		"comentarios":            n.Comentarios,
 		"pabellon":               n.Pabellon,
 		"es_electiva":            n.Es_Electiva,
 		"es_emergencia":          n.Es_Emergencia,
@@ -440,6 +447,7 @@ func (n *Notas) Update(db *pgxpool.Pool) error {
 			hora_comienzo = @hora_comienzo,
 			hora_culminacion = @hora_culminacion,
 			resumen_intevencion = @resumen_intevencion,
+			comentarios = @comentarios,
 			pabellon = @pabellon,
 			es_electiva = @es_electiva,
 			es_emergencia = @es_emergencia,
@@ -461,6 +469,7 @@ func (n *Notas) Update(db *pgxpool.Pool) error {
 		"hora_comienzo":          n.Hora_Comienzo,
 		"hora_culminacion":       n.Hora_Culminacion,
 		"resumen_intevencion":    n.Resumen_Intervencion,
+		"comentarios":            n.Comentarios,
 		"pabellon":               n.Pabellon,
 		"es_electiva":            n.Es_Electiva,
 		"es_emergencia":          n.Es_Emergencia,

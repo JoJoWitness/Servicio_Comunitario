@@ -48,7 +48,12 @@ import { useTodosLosPacientes } from "@/hooks/usePacientes";
 import { useSessionStore } from "@/stores/sessionStore";
 import { isApiError } from "@/api/errors";
 import { derivarEquipoDesdeMedicos } from "@/lib/equipo";
-import { aplicarHuecos, insertarFrase, valoresPorDefecto } from "@/lib/resumen";
+import {
+  ENCABEZADO_OBSERVACIONES,
+  aplicarHuecos,
+  insertarFrase,
+  valoresPorDefecto,
+} from "@/lib/resumen";
 import type { Paciente } from "@/domain/models";
 
 function toDateInputValue(d: Date | undefined): string {
@@ -94,8 +99,23 @@ export default function FormNotaPage() {
   const opcionesDx = (diagnosticosData ?? []).map((d) => d.diagnostico);
   const opcionesProc = (procedimientosData ?? []).map((p) => p.intervencion);
   const opcionesTecnica = (tecnicasData ?? []).map((t) => t.tecnica);
-  // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
-  const medicos = usuarios ?? [];
+  /*
+    Solo médicos: el administrador registra notas del servicio pero no opera,
+    así que no puede figurar en ninguna —ni como encargado ni en el equipo—, ni
+    ponerse él ni ponerlo otro. Dejarlo fuera de esta lista es lo que impide
+    ambas cosas en la interfaz; el servidor lo rechaza igual (ValidarEquipo).
+  */
+  const medicos = useMemo(
+    () => (usuarios ?? []).filter((u) => u.rol === "medico"),
+    [usuarios]
+  );
+
+  /*
+    A quién se le asigna la nota si no se elige a nadie. El médico se la queda
+    (es el caso normal: opera y registra); para cualquier otro rol queda en
+    blanco, y el formulario no deja guardar hasta que se indique el médico.
+  */
+  const encargadoPorDefecto = perfil?.rol === "medico" ? perfil.id : "";
   const pacientesData = pacientes ?? [];
 
   const { data: notaExistente } = useObtenerNota(notaId ?? 0);
@@ -115,7 +135,7 @@ export default function FormNotaPage() {
   } = useForm<NotaFormValues>({
     resolver: zodResolver(NotaFormSchema),
     defaultValues: {
-      medicoEncargado: perfil?.id ?? "",
+      medicoEncargado: encargadoPorDefecto,
       equipo: [],
       esElectiva: false,
       esEmergencia: false,
@@ -127,10 +147,10 @@ export default function FormNotaPage() {
   useEffect(() => {
     if (!medicosListados || esEdicion) return;
     const encargadoActual = getValues("medicoEncargado");
-    if (!encargadoActual && perfil?.id) {
-      setValue("medicoEncargado", perfil.id, { shouldValidate: false });
+    if (!encargadoActual && encargadoPorDefecto) {
+      setValue("medicoEncargado", encargadoPorDefecto, { shouldValidate: false });
     }
-  }, [medicosListados, esEdicion, perfil?.id, getValues, setValue]);
+  }, [medicosListados, esEdicion, encargadoPorDefecto, getValues, setValue]);
 
   // Precarga de nota existente (edición)
   useEffect(() => {
@@ -144,6 +164,7 @@ export default function FormNotaPage() {
         dxPostOperatorio: notaExistente.dxPostOperatorio ?? "",
         intervencionRealizada: notaExistente.intervencionRealizada,
         resumenIntervencion: notaExistente.resumenIntervencion ?? "",
+        comentarios: notaExistente.comentarios ?? "",
         fechaComienzo: toDateInputValue(notaExistente.fechaComienzo),
         fechaCulminacion: toDateInputValue(notaExistente.fechaCulminacion),
         horaComienzo: notaExistente.horaComienzo,
@@ -152,14 +173,14 @@ export default function FormNotaPage() {
         esEmergencia: notaExistente.esEmergencia,
         tuvoBiopsia: notaExistente.tuvoBiopsia,
         anestesia: normalizarAnestesia(notaExistente.anestesia),
-        medicoEncargado: notaExistente.medicoEncargado ?? perfil?.id ?? "",
+        medicoEncargado: notaExistente.medicoEncargado ?? encargadoPorDefecto,
         equipo: equipoIds,
         tecnica: "",
       });
       const pac = (pacientesData ?? []).find((p) => p.id === notaExistente.idPaciente);
       if (pac) setPacienteSeleccionado(pac);
     }
-  }, [esEdicion, notaExistente, reset, perfil?.id, pacientesData]);
+  }, [esEdicion, notaExistente, reset, encargadoPorDefecto, pacientesData]);
 
   // Precarga de nota pendiente (corrección antes de subir). Los datos salen de
   // la cola local, no de la API: esta nota no existe en el servidor todavía.
@@ -172,6 +193,7 @@ export default function FormNotaPage() {
       dxPostOperatorio: nota.dxPostOperatorio ?? "",
       intervencionRealizada: nota.intervencionRealizada,
       resumenIntervencion: nota.resumenIntervencion ?? "",
+      comentarios: nota.comentarios ?? "",
       fechaComienzo: toDateInputValue(nota.fechaComienzo),
       fechaCulminacion: toDateInputValue(nota.fechaCulminacion),
       horaComienzo: nota.horaComienzo,
@@ -180,13 +202,29 @@ export default function FormNotaPage() {
       esEmergencia: nota.esEmergencia,
       tuvoBiopsia: nota.tuvoBiopsia,
       anestesia: normalizarAnestesia(nota.anestesia),
-      medicoEncargado: pendiente.medicoEncargadoId || perfil?.id || "",
+      medicoEncargado: pendiente.medicoEncargadoId || encargadoPorDefecto,
       equipo: nota.equipo ?? [],
       tecnica: "",
     });
     const pac = (pacientesData ?? []).find((p) => p.id === nota.idPaciente);
     if (pac) setPacienteSeleccionado(pac);
-  }, [esPendiente, pendiente, reset, perfil?.id, pacientesData]);
+  }, [esPendiente, pendiente, reset, encargadoPorDefecto, pacientesData]);
+
+  /*
+    El encargado que trae la nota puede no estar entre los elegibles: notas
+    viejas que quedaron a nombre de un administrador, o de un médico que ya no
+    está activo. Se limpia en cuanto se sabe —hace falta la lista cargada— para
+    que el selector no muestre un vacío engañoso mientras el formulario guarda
+    un id que el servidor va a rechazar. El admin puede corregir cualquier nota;
+    lo que no puede es quedarse en ella, así que aquí indica quién operó.
+  */
+  useEffect(() => {
+    if (!medicosListados) return;
+    const encargadoActual = getValues("medicoEncargado");
+    if (encargadoActual && !medicos.some((m) => m.id === encargadoActual)) {
+      setValue("medicoEncargado", "", { shouldValidate: false });
+    }
+  }, [medicosListados, medicos, notaExistente, pendiente, getValues, setValue]);
 
   // ── Composición del resumen (docs/catalogo-clinico.md §1.4) ──────────────
   //
@@ -283,13 +321,24 @@ export default function FormNotaPage() {
     (data: NotaFormValues) => {
       setErrorMsg(null);
       setExito(false);
-      const medicoEncargadoId = data.medicoEncargado ?? perfil?.id ?? "";
+      const medicoEncargadoId = data.medicoEncargado ?? encargadoPorDefecto;
+      /*
+        Una nota antigua puede traer en el equipo a alguien que hoy no puede
+        figurar en ella (un administrador, un médico dado de baja): al corregirla
+        se descarta aquí, porque el equipo se reemplaza entero en cada guardado y
+        reenviarlo tal cual moriría en el 400 del servidor. Solo se filtra con la
+        lista ya cargada; sin ella no hay con qué comparar.
+      */
+      const equipo = medicosListados
+        ? (data.equipo ?? []).filter((uid) => medicos.some((m) => m.id === uid))
+        : (data.equipo ?? []);
       const nota = {
         id: notaId,
         dxPreOperatorio: data.dxPreOperatorio,
         dxPostOperatorio: data.dxPostOperatorio ?? "",
         intervencionRealizada: data.intervencionRealizada,
         resumenIntervencion: data.resumenIntervencion ?? "",
+        comentarios: data.comentarios ?? "",
         fechaComienzo: new Date(data.fechaComienzo),
         fechaCulminacion: data.fechaCulminacion
           ? new Date(data.fechaCulminacion)
@@ -305,7 +354,7 @@ export default function FormNotaPage() {
         anestesia: data.anestesia ?? "",
         idPaciente: data.idPaciente,
         medicoEncargado: medicoEncargadoId,
-        equipo: data.equipo ?? [],
+        equipo,
         medicos: [],
       };
       const onError = (err: unknown) => {
@@ -347,7 +396,9 @@ export default function FormNotaPage() {
       esPendiente,
       clientUuid,
       notaId,
-      perfil?.id,
+      encargadoPorDefecto,
+      medicos,
+      medicosListados,
       notaExistente?.pabellon,
       crearNota,
       editarNota,
@@ -632,6 +683,20 @@ export default function FormNotaPage() {
                   editable. Lo que escribas nunca se reemplaza solo.
                 </p>
               </div>
+
+              {/*
+                Los comentarios se capturan aparte para poder corregirlos sin
+                tocar el relato, pero la nota se lee de corrido: al mostrarla o
+                exportarla van al final, tras "Observaciones:".
+              */}
+              <div className="space-y-1">
+                <Label htmlFor="comentarios">Comentarios</Label>
+                <Textarea id="comentarios" rows={3} {...register("comentarios")} />
+                <p className="text-xs text-muted-foreground">
+                  Se agregan al final del resumen encabezados por
+                  «{ENCABEZADO_OBSERVACIONES}».
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -786,7 +851,7 @@ export default function FormNotaPage() {
             <CardHeader><CardTitle className="text-base">Médico encargado y equipo</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
-                <Label htmlFor="medicoEncargado">Médico encargado</Label>
+                <Label htmlFor="medicoEncargado">Médico encargado *</Label>
                 <Controller name="medicoEncargado" control={control}
                   render={({ field }) => (
                     <Select value={field.value ?? ""} onValueChange={field.onChange}>
@@ -802,6 +867,19 @@ export default function FormNotaPage() {
                       </SelectContent>
                     </Select>
                   )} />
+                {errors.medicoEncargado && (
+                  <p className="text-sm text-destructive">{errors.medicoEncargado.message}</p>
+                )}
+                {/*
+                  El admin registra la nota, pero la cirugía es de un médico:
+                  aquí se dice de quién, porque él no puede quedar en ella.
+                */}
+                {perfil?.rol !== "medico" && (
+                  <p className="text-xs text-muted-foreground">
+                    Indica el médico que operó: quien registra la nota desde una
+                    cuenta de administrador no figura en ella.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Equipo quirúrgico</Label>

@@ -4,7 +4,6 @@
  * Estructura de rutas (Requisito 7, diseño de enrutamiento):
  *
  * /login                        → LoginPage              (pública)
- * /signup/:token                → SignupPage             (pública — Req 9.5)
  * /                             → RequireAuth
  *   /mis-notas                  → MisNotasPage          (medico)
  *   /notas                      → TodasNotasPage        (secretaria, admin)
@@ -42,7 +41,6 @@ import { rutaInicialPorRol } from "./roleRoutes";
 // ---------------------------------------------------------------------------
 
 const LoginPage         = lazy(() => import("../features/auth/LoginPage"));
-const SignupPage        = lazy(() => import("../features/auth/SignupPage"));
 const PerfilPage        = lazy(() => import("../features/auth/PerfilPage"));
 const PacientesPage     = lazy(() => import("../features/pacientes/PacientesPage"));
 const NuevoPacientePage = lazy(() => import("../features/pacientes/NuevoPacientePage"));
@@ -119,8 +117,6 @@ export function AppRouter() {
       <Routes>
         {/* Rutas públicas */}
         <Route path="/login" element={<LoginPage />} />
-        {/* Ruta de confirmación de registro — Requisito 9.5, expuesta en puerto 4321 */}
-        <Route path="/signup/:token" element={<SignupPage />} />
 
         {/* Rutas protegidas por autenticación */}
         <Route

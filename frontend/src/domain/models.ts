@@ -64,6 +64,14 @@ export interface Nota {
   /** Nombre de dominio corregido; el DTO lo llama `intervencion_realizado` */
   intervencionRealizada: string;
   resumenIntervencion: string;
+  /**
+   * Comentarios libres del médico sobre la intervención. Se guardan aparte del
+   * resumen, pero se leen como su cierre: al mostrar o exportar la nota van
+   * concatenados al final, encabezados por "Observaciones:".
+   *
+   * @see lib/resumen.ts — `resumenConObservaciones`
+   */
+  comentarios?: string;
   fechaComienzo: Date;
   fechaCulminacion: Date;
   /** Formato "HH:mm" — la parte de fecha se ignora en el backend */

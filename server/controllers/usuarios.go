@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"server/config"
 	"server/controllers/auth"
-	users2 "server/models/usuarios"
 	"server/models/pagination"
+	users2 "server/models/usuarios"
 	"server/utils"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -51,6 +52,16 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error decoding request body: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Request body is not valid JSON"))
+		return
+	}
+
+	// El correo es con lo que se entra. Dos cuentas con el mismo dejan el login
+	// a merced de cuál fila devuelva la base primero: la contraseña nueva se
+	// compara contra el hash de la vieja y no entra ninguna de las dos.
+	existente := users2.Usuarios{Correo: user.Correo}
+	if err := existente.Get(config.PsqlDB); err == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("ese correo ya esta registrado"))
 		return
 	}
 
@@ -149,6 +160,16 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Aplicar solo los campos presentes en el payload.
 	if payload.Correo != "" {
+		// Mismo motivo que en el alta: cambiarle el correo a uno que ya usa
+		// otra cuenta deja a las dos sin poder entrar.
+		if !strings.EqualFold(strings.TrimSpace(payload.Correo), strings.TrimSpace(user.Correo)) {
+			otro := users2.Usuarios{Correo: payload.Correo}
+			if err := otro.Get(config.PsqlDB); err == nil && otro.ID != user.ID {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("ese correo ya esta registrado"))
+				return
+			}
+		}
 		user.Correo = payload.Correo
 	}
 	if payload.Nombres != "" {

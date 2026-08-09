@@ -77,9 +77,14 @@ interface TabCatalogoProps {
   nombreEntidad: string;
   /** Etiqueta del campo nombre (varía por catálogo) */
   campoNombre: string;
-  onCrear: (nombre: string, resumen: string) => Promise<void>;
-  onEditar: (id: number, nombre: string, resumen: string) => Promise<void>;
-  onEliminar: (id: number) => Promise<void>;
+  /*
+    Devuelven `unknown` y no `void`: los `mutateAsync` de TanStack resuelven con
+    la entidad que respondió el servidor. Aquí no se usa —la tabla se refresca
+    invalidando la query—, pero el tipo tiene que admitirla.
+  */
+  onCrear: (nombre: string, resumen: string) => Promise<unknown>;
+  onEditar: (id: number, nombre: string, resumen: string) => Promise<unknown>;
+  onEliminar: (id: number) => Promise<unknown>;
 }
 
 function TabCatalogo({

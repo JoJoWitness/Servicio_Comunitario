@@ -13,6 +13,7 @@ import { Pencil, Plus, UserX, FilterX } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +60,7 @@ import type { Rol, Usuario } from "@/domain/models";
 const ROL_LABEL: Record<Rol, string> = {
   admin: "Administrador",
   medico: "Médico",
-  secretaria: "Secretaria",
+  secretaria: "Secretario",
 };
 
 const ROL_VARIANT: Record<Rol, "default" | "secondary" | "outline"> = {
@@ -169,19 +170,29 @@ function FormUsuario({ usuarioInicial, onClose }: FormUsuarioProps) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="medico">Médico</SelectItem>
-            <SelectItem value="secretaria">Secretaria</SelectItem>
-            <SelectItem value="admin">Administrador</SelectItem>
+            <SelectItem value="secretaria">Secretario</SelectItem>
+            {/*
+              Administrador no se ofrece: desde esta página no se crean cuentas
+              con mando sobre el resto, ni dando de alta ni cambiándole el rol a
+              alguien. Solo aparece cuando se está editando a un admin que ya lo
+              era, para que el selector muestre su rol de verdad y no un hueco.
+            */}
+            {usuarioInicial?.rol === "admin" && (
+              <SelectItem value="admin">Administrador</SelectItem>
+            )}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          El rol de administrador no se asigna desde aquí.
+        </p>
       </div>
 
       {/* Contraseña solo en creación */}
       {!esEdicion && (
         <div className="space-y-1">
           <Label htmlFor="u-contrasena">Contraseña * (mínimo 8 caracteres)</Label>
-          <Input
+          <PasswordInput
             id="u-contrasena"
-            type="password"
             value={contrasena}
             onChange={(e) => setContrasena(e.target.value)}
             autoComplete="new-password"
@@ -313,7 +324,7 @@ export default function UsuariosPage() {
                 <SelectItem value="">Todos</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
                 <SelectItem value="medico">Médico</SelectItem>
-                <SelectItem value="secretaria">Secretaria</SelectItem>
+                <SelectItem value="secretaria">Secretario</SelectItem>
               </SelectContent>
             </Select>
           </div>

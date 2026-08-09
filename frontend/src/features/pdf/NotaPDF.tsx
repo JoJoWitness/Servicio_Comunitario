@@ -24,6 +24,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Nota, Paciente } from "@/domain/models";
 import { formatFechaUI } from "@/lib/datetime";
+import { resumenConObservaciones } from "@/lib/resumen";
 
 /*
  * Los logos se incrustan como data URI (`?inline`) en vez de referenciarse por
@@ -470,7 +471,10 @@ function PaginaNota({ nota, paciente }: NotaDocumentProps) {
         <Text style={styles.tituloResumen}>
           RESUMEN DE LA INTERVENCIÓN REALIZADA
         </Text>
-        <Text style={styles.parrafoResumen}>{nota.resumenIntervencion}</Text>
+        {/* Los comentarios del médico cierran el relato, tras "Observaciones:". */}
+        <Text style={styles.parrafoResumen}>
+          {resumenConObservaciones(nota.resumenIntervencion, nota.comentarios)}
+        </Text>
 
         {/* ── Firmas ── */}
         <View style={styles.firmas} wrap={false}>

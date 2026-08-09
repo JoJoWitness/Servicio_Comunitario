@@ -100,7 +100,7 @@ func SyncPendientes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range lote.Notas {
-		resp.Notas = append(resp.Notas, subirNota(&lote.Notas[i], session.UserID))
+		resp.Notas = append(resp.Notas, subirNota(&lote.Notas[i], session.UserID, session.Role))
 	}
 
 	log.Printf("Sync de %s: %d pacientes, %d notas", session.UserID, len(resp.Pacientes), len(resp.Notas))
@@ -151,8 +151,10 @@ func subirPaciente(p *pacientes2.Pacientes) SyncResultado {
 	return res
 }
 
-// subirNota registra una nota redactada sin conexión.
-func subirNota(n *notas2.Notas, usuarioID string) SyncResultado {
+// subirNota registra una nota redactada sin conexión. `rol` es el de quien
+// sube el lote: el admin puede subir notas, pero no queda como encargado de
+// las que no traigan uno, porque no puede figurar en ninguna.
+func subirNota(n *notas2.Notas, usuarioID, rol string) SyncResultado {
 	res := SyncResultado{ClienteID: n.ClientUUID}
 
 	// Regla 3: sin client_uuid no hay forma de reconocer un reintento, y una
@@ -163,8 +165,13 @@ func subirNota(n *notas2.Notas, usuarioID string) SyncResultado {
 		return res
 	}
 
-	if n.Medico_Encargado == "" {
+	if n.Medico_Encargado == "" && rol != auth.RolAdmin {
 		n.Medico_Encargado = usuarioID
+	}
+	if n.Medico_Encargado == "" {
+		res.Estado = SyncError
+		res.Motivo = "la nota no indica médico encargado; el administrador no puede figurar en una nota operatoria"
+		return res
 	}
 
 	existente, err := notas2.BuscarPorClientUUID(config.PsqlDB, n.ClientUUID)
@@ -187,7 +194,7 @@ func subirNota(n *notas2.Notas, usuarioID string) SyncResultado {
 	}
 	if len(invalidos) > 0 {
 		res.Estado = SyncError
-		res.Motivo = fmt.Sprintf("equipo quirúrgico inválido, no son médicos activos: %v", invalidos)
+		res.Motivo = fmt.Sprintf("equipo quirúrgico inválido, solo un médico activo puede figurar en la nota (el administrador no): %v", invalidos)
 		return res
 	}
 

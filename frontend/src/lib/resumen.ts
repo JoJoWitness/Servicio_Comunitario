@@ -115,6 +115,34 @@ function capitalizar(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
+/** Encabezado con el que los comentarios entran al resumen. */
+export const ENCABEZADO_OBSERVACIONES = "Observaciones:";
+
+/**
+ * Resumen tal como se lee la nota: el relato y, al final, los comentarios del
+ * médico bajo "Observaciones:". Los dos se guardan en campos distintos para
+ * poder corregir uno sin tocar el otro, pero nunca se muestran por separado.
+ *
+ * Sin comentarios devuelve el resumen intacto, para no dejar un encabezado
+ * huérfano en las notas que no llevan ninguno.
+ *
+ * @example
+ * resumenConObservaciones("Acto culminado.", "sangrado mínimo")
+ * // "Acto culminado.\n\nObservaciones: sangrado mínimo"
+ */
+export function resumenConObservaciones(
+  resumen: string | undefined,
+  comentarios: string | undefined
+): string {
+  const relato = (resumen ?? "").trim();
+  const observaciones = (comentarios ?? "").trim();
+
+  if (!observaciones) return relato;
+  if (!relato) return `${ENCABEZADO_OBSERVACIONES} ${observaciones}`;
+
+  return `${relato}\n\n${ENCABEZADO_OBSERVACIONES} ${observaciones}`;
+}
+
 /**
  * Valores iniciales de los huecos de una técnica: cada uno arranca con su
  * `default`, que es lo que el servicio usa en la mayoría de las cirugías.

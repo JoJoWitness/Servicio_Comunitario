@@ -42,7 +42,6 @@ de baja, `404`.
 | Method | URL                    | Handler                | Notes                             |
 |--------|------------------------|------------------------|-----------------------------------|
 | ANY    | `/auth/login`          | `auth.Login`           | Login (setea cookie `session_id`) |
-| POST   | `/auth/signup/{token}` | `auth.SignUp`          | Sign up con token de invitación   |
 | ANY    | `/auth/validateUser`   | `auth.ValidateSession` | Valida la sesión actual           |
 | ANY    | `/auth/logout`         | `auth.Logout`          | Cierra sesión y limpia la cookie  |
 
@@ -290,9 +289,15 @@ GET /notas?medico=6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7&from=2025-08-01&to=2026-0
 existe o fue dada de baja, responde `404`.
 
 ### `POST /notas` — CreateNota
-`medico_encargado` es opcional: si no se manda, se usa el usuario de la sesión.
-`equipo` es la lista de UUID del equipo quirúrgico; el encargado se agrega solo, no hace
-falta repetirlo. Si algún UUID no corresponde a un médico activo, responde `400`.
+`medico_encargado` es opcional: si no se manda, se usa el usuario de la sesión, salvo que
+sea un administrador (ver abajo). `equipo` es la lista de UUID del equipo quirúrgico; el
+encargado se agrega solo, no hace falta repetirlo. Si algún UUID no corresponde a un
+médico activo, responde `400`.
+
+> **El administrador no puede figurar en una nota operatoria.** Puede registrarlas, pero
+> no aparecer en ellas ni como `medico_encargado` ni dentro de `equipo`, ni poniéndose él
+> ni poniéndolo otro médico: `ValidarEquipo` solo acepta usuarios con rol `medico`. Si un
+> admin crea una nota sin `medico_encargado`, responde `400` en vez de asignársela.
 ```json
 {
   "dx_pre_operatorio": "Apendicitis aguda",
@@ -303,6 +308,7 @@ falta repetirlo. Si algún UUID no corresponde a un médico activo, responde `40
   "hora_comienzo": "2026-07-20T08:00:00Z",
   "hora_culminacion": "2026-07-20T09:30:00Z",
   "resumen_intervencion": "Procedimiento sin complicaciones",
+  "comentarios": "Sangrado mínimo, paciente estable",
   "pabellon": "Quirófano 2",
   "es_electiva": false,
   "es_emergencia": true,
@@ -320,6 +326,8 @@ falta repetirlo. Si algún UUID no corresponde a un médico activo, responde `40
 > **lee** en los `GET`: los datos completos de cada médico, traídos de `"Equipo_Quirurgico"`.
 > La respuesta del `POST`/`PUT` ya trae `medicos` actualizado.
 > `eliminado` no se manda: la baja es exclusiva del `DELETE`.
+> `comentarios` es opcional y se guarda en su propia columna, pero se lee como parte del
+> relato: al mostrar o exportar la nota va al final del resumen, tras `Observaciones:`.
 
 ### `PUT /notas/{id}` — UpdateNota
 El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota dentro de los **7 días calendario** siguientes a su registro (columna `created_at`; ver `notas.PlazoEdicionDias`). Fuera de plazo: `403`.
@@ -333,6 +341,7 @@ El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una
   "hora_comienzo": "2026-07-20T08:00:00Z",
   "hora_culminacion": "2026-07-20T09:30:00Z",
   "resumen_intervencion": "Resumen actualizado",
+  "comentarios": "Sangrado mínimo, paciente estable",
   "pabellon": "Quirófano 2",
   "es_electiva": false,
   "es_emergencia": true,
@@ -350,6 +359,8 @@ El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una
 > **lee** en los `GET`: los datos completos de cada médico, traídos de `"Equipo_Quirurgico"`.
 > La respuesta del `POST`/`PUT` ya trae `medicos` actualizado.
 > `eliminado` no se manda: la baja es exclusiva del `DELETE`.
+> `comentarios` es opcional y se guarda en su propia columna, pero se lee como parte del
+> relato: al mostrar o exportar la nota va al final del resumen, tras `Observaciones:`.
 
 ### `DELETE /notas/{id}` — DeleteNota
 **Sin body.** El `id` va en el URL. Igual que el PUT, solo aplica dentro de los **7 días**
@@ -488,24 +499,10 @@ Request:
 > Los datos se recargan en cada arranque del servidor, así que las 30 notas quedan siempre
 > dentro del plazo de edición.
 
-### `POST /auth/signup/{token}` — SignUp
-El `{token}` es un **path param**. Tiene dos modos según su valor:
-
-- **Paso 1 — solicitar registro** → usa el token literal `confirmation` en la URL
-  (`/auth/signup/confirmation`). Manda el body con los datos del usuario; el server
-  guarda al usuario en caché y envía un correo de confirmación (Resend).
-  ```json
-  {
-    "correo": "nuevo@test.com",
-    "nombres": "Nuevo",
-    "apellidos": "Medico",
-    "rol": "medico",
-    "contrasena": "secreto123"
-  }
-  ```
-- **Paso 2 — confirmar** → el enlace del correo trae el token real
-  (`/auth/signup/<token_generado>`). En este modo **no se manda body**: el server
-  recupera al usuario de la caché con ese token, crea la cuenta y setea la sesión.
+> **No hay registro público.** El alta por invitación con confirmación por correo se
+> retiró junto con el envío de correos: las cuentas las crea el admin con
+> `POST /usuarios`, que exige sesión, indicando rol y contraseña inicial. Cada
+> usuario la cambia después desde `PUT /usuarios/me/password`.
 
 ### `GET/POST /auth/validateUser` — ValidateSession
 **Sin body.** Lee la cookie `session_id`. Responde `200` si la sesión es válida, `401` si no.

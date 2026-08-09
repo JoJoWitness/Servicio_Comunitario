@@ -23,7 +23,6 @@ import { request, requestBlob } from "../httpClient";
 import { parseFilename } from "../../lib/contentDisposition";
 import { conEspejo } from "@/offline/espejo";
 import type { PaginatedResponse, PaginationParams } from "../types";
-import { buildPaginationQuery } from "./queryUtils";
 
 // ---------------------------------------------------------------------------
 // Helpers de construcción de query string

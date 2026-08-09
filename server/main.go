@@ -16,7 +16,11 @@ import (
 )
 
 func main() {
-	if os.Getenv("ENVIRONMENT") != "PROD" {
+	// Sin ENVIRONMENT=PROD se asume desarrollo: las variables salen del .env y
+	// la base se reconstruye desde cero en cada arranque.
+	enProduccion := os.Getenv("ENVIRONMENT") == "PROD"
+
+	if !enProduccion {
 		err := godotenv.Load(".env")
 		if err != nil {
 			log.Fatal("Error loading .env file")
@@ -25,12 +29,28 @@ func main() {
 
 	config.InitDB()
 
-	models.DropDB(config.PsqlDB)
+	// Empezar de cero es una comodidad de desarrollo, no algo que se le pueda
+	// hacer a la base del servicio: ahí viven las cuentas y las notas
+	// operatorias, que son historia clínica. En producción no se borra nada.
+	if !enProduccion {
+		log.Println("Modo desarrollo: se reconstruye la base desde cero")
+		models.DropDB(config.PsqlDB)
+	}
+
+	// El esquema sí se aplica siempre: create.sql es idempotente (CREATE TABLE
+	// IF NOT EXISTS más las alteraciones repetibles), y es lo que lleva las
+	// columnas nuevas a una base ya desplegada.
 	models.InitDB(config.PsqlDB)
-	// El catálogo va antes que los datos de muestra: las notas de prueba usan
-	// sus diagnósticos y procedimientos.
+
+	// El catálogo clínico es contenido de producción y su script tampoco
+	// duplica ni pisa lo que el admin haya editado (HU-20).
 	models.LoadSeed(config.PsqlDB)
-	models.LoadSampleData(config.PsqlDB)
+
+	// Los datos de muestra son cuentas y pacientes inventados, con contraseñas
+	// conocidas: no tienen nada que hacer en el servidor real.
+	if !enProduccion {
+		models.LoadSampleData(config.PsqlDB)
+	}
 
 	router := mux.NewRouter()
 	routes.Init(router)

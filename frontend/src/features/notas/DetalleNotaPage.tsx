@@ -19,7 +19,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import logoServicio from "@/assets/logo-servicio.svg";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +33,7 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useUIStore } from "@/stores/uiStore";
 import { clasificar403Nota, isApiError } from "@/api/errors";
 import { formatFechaUI } from "@/lib/datetime";
+import { resumenConObservaciones } from "@/lib/resumen";
 import { BotonPDF } from "@/features/pdf/BotonPDF";
 
 // ---------------------------------------------------------------------------
@@ -114,6 +114,13 @@ export default function DetalleNotaPage() {
   }
 
   if (!nota) return null;
+
+  // El relato y los comentarios se guardan aparte, pero se leen como un solo
+  // texto: los comentarios cierran el resumen tras "Observaciones:".
+  const resumen = resumenConObservaciones(
+    nota.resumenIntervencion,
+    nota.comentarios
+  );
 
   // ── Eliminación con manejo de 403 — Req 23.2, 23.4
   const handleEliminar = () => {
@@ -262,10 +269,11 @@ export default function DetalleNotaPage() {
                 <dt className="text-xs text-muted-foreground">Intervención realizada</dt>
                 <dd className="text-sm">{nota.intervencionRealizada}</dd>
               </div>
-              {nota.resumenIntervencion && (
+              {/* Los comentarios cierran el relato, no van en un campo aparte. */}
+              {resumen && (
                 <div className="sm:col-span-2">
                   <dt className="text-xs text-muted-foreground">Resumen</dt>
-                  <dd className="text-sm whitespace-pre-wrap">{nota.resumenIntervencion}</dd>
+                  <dd className="text-sm whitespace-pre-wrap">{resumen}</dd>
                 </div>
               )}
 

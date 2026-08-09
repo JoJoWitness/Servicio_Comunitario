@@ -12,6 +12,7 @@
  * | idPaciente             | Id_paciente               | mayúscula inicial        |
  * | intervencionRealizada  | intervencion_realizado    | 'o' final en el DTO      |
  * | resumenIntervencion    | resumen_intervencion      |                          |
+ * | comentarios            | comentarios               | van al final del resumen |
  * | medicoEncargado        | medico_encargado          | UUID                     |
  * | equipo (escritura)     | equipo (string[])         | excluye al encargado     |
  * | medicos (lectura)      | medicos (objeto[])        | equipo real para render  |
@@ -54,6 +55,8 @@ export interface NotaDTO {
   /** Typo del backend: debería ser `intervencion_realizada` */
   intervencion_realizado: string;
   resumen_intervencion: string;
+  /** Comentarios del médico; se leen al final del resumen tras "Observaciones:" */
+  comentarios?: string;
   fecha_comienzo: string;    // RFC3339
   fecha_culminacion: string; // RFC3339
   hora_comienzo: string;     // RFC3339 con fecha fija ignorada
@@ -93,6 +96,8 @@ export function notaToDomain(dto: NotaDTO): Nota {
     dxPostOperatorio: dto.dx_post_operatorio,
     intervencionRealizada: dto.intervencion_realizado,  // corrige typo
     resumenIntervencion: dto.resumen_intervencion,
+    // Las notas registradas antes de que existiera la columna no lo traen.
+    comentarios: dto.comentarios ?? "",
     fechaComienzo: parseRFC3339(dto.fecha_comienzo),
     fechaCulminacion: parseRFC3339(dto.fecha_culminacion),
     horaComienzo: horaFromRFC3339(dto.hora_comienzo),
@@ -132,6 +137,7 @@ export function notaToDto(
     dx_post_operatorio: nota.dxPostOperatorio,
     intervencion_realizado: nota.intervencionRealizada, // reintroduce typo
     resumen_intervencion: nota.resumenIntervencion,
+    comentarios: nota.comentarios ?? "",
     fecha_comienzo: formatRFC3339(nota.fechaComienzo),
     fecha_culminacion: formatRFC3339(nota.fechaCulminacion),
     hora_comienzo: horaToRFC3339(nota.horaComienzo),

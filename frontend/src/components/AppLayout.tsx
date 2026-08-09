@@ -142,7 +142,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 )}>
                   {perfil.rol === "admin"      ? "Administrador"
                   : perfil.rol === "medico"    ? "Médico"
-                  : "Secretaria"}
+                  : "Secretario"}
                 </span>
               )}
             </div>

@@ -5,8 +5,6 @@
  * - POST /auth/login                    → login
  * - GET  /auth/validateUser             → validateUser
  * - POST /auth/logout                   → logout
- * - POST /auth/signup/confirmation      → confirmarInvitacion
- * - POST /auth/signup/{token}           → confirmarRegistro
  * - PUT  /usuarios/me/password          → cambiarPassword
  *
  * Requisitos: 3.2, 4.1, 6.1, 8.2, 9.1, 9.2
@@ -19,14 +17,6 @@ import { request } from "../httpClient";
 
 export interface LoginInput {
   correo: string;
-  contrasena: string;
-}
-
-export interface InvitacionInput {
-  correo: string;
-  nombres: string;
-  apellidos: string;
-  rol: string;
   contrasena: string;
 }
 
@@ -60,23 +50,6 @@ export async function validateUser(): Promise<void> {
  */
 export async function logout(): Promise<void> {
   await request("/auth/logout", { method: "POST" });
-}
-
-/**
- * Invita a un usuario nuevo (solo admin).
- * POST /auth/signup/confirmation — Requisito 9.1
- */
-export async function confirmarInvitacion(data: InvitacionInput): Promise<void> {
-  await request("/auth/signup/confirmation", { method: "POST", body: data });
-}
-
-/**
- * Completa el registro del usuario invitado usando el token del enlace de correo.
- * POST /auth/signup/{token} — Requisito 9.2
- */
-export async function confirmarRegistro(token: string): Promise<Usuario> {
-  const dto = await request<UsuarioDTO>(`/auth/signup/${token}`, { method: "POST" });
-  return usuarioToDomain(dto);
 }
 
 /**

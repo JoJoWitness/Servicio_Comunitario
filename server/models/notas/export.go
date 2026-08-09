@@ -114,7 +114,12 @@ func GetNotasExportMedico(db *pgxpool.Pool, medicoID string, from, to *time.Time
 			n.dx_pre_operatorio,
 			n.dx_post_operatorio,
 			n.intervencion_realizada,
-			n.resumen_intevencion,
+			-- Los comentarios del médico se leen como el cierre del relato, no
+			-- como un dato aparte: van pegados al final, tras "Observaciones:".
+			n.resumen_intevencion || CASE
+				WHEN COALESCE(btrim(n.comentarios), '') = '' THEN ''
+				ELSE E'\n\nObservaciones: ' || btrim(n.comentarios)
+			END,
 			n.pabellon,
 			n.anestesia,
 			n.es_electiva,
