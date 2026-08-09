@@ -178,6 +178,22 @@ export function AppRouter() {
           }
         />
 
+        {/*
+          Corregir una nota que sigue en la cola de este equipo. No lleva id
+          numérico porque todavía no existe en el servidor: se identifica por
+          el UUID que le puso el dispositivo.
+        */}
+        <Route
+          path="/notas/pendientes/:clientUuid"
+          element={
+            <RequireAuth>
+              <RequireRole roles={["medico", "admin"]}>
+                <FormNotaPage />
+              </RequireRole>
+            </RequireAuth>
+          }
+        />
+
         {/* Formulario editar nota — médico y admin */}
         <Route
           path="/notas/:id/editar"

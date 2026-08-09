@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Plus, RotateCcw, UserPlus } from "lucide-react";
+import { ArrowLeft, CloudOff, Plus, RotateCcw, UserPlus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,13 @@ import { BACKEND_SUPPORTS_OJO_ESTADO } from "@/api/dto/nota.dto";
 import type { z } from "zod";
 type NotaFormValues = z.input<typeof NotaFormSchema>;
 import { useCrearNota, useEditarNota, useObtenerNota } from "@/hooks/useNotas";
+import {
+  useGuardarNotaPendiente,
+  usePendienteNota,
+} from "@/offline/useSincronizacion";
 import { useDiagnosticos, useProcedimientos, useTecnicas } from "@/hooks/useCatalogos";
-import { useListarUsuarios } from "@/hooks/useUsuarios";
-import { useListarPacientes } from "@/hooks/usePacientes";
+import { useTodosLosUsuarios } from "@/hooks/useUsuarios";
+import { useTodosLosPacientes } from "@/hooks/usePacientes";
 import { useSessionStore } from "@/stores/sessionStore";
 import { isApiError } from "@/api/errors";
 import { derivarEquipoDesdeMedicos } from "@/lib/equipo";
@@ -53,13 +57,22 @@ function toDateInputValue(d: Date | undefined): string {
 }
 
 export default function FormNotaPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, clientUuid } = useParams<{ id: string; clientUuid: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const perfil = useSessionStore((s) => s.perfil);
 
+  // Tres modos, no dos: crear, editar una nota del servidor, y corregir una
+  // que todavía está en la cola de este equipo. La tercera no tiene id
+  // numérico —no existe fuera de aquí— y se guarda de vuelta en la cola, no
+  // contra la API.
+  const esPendiente = !!clientUuid;
   const esEdicion = !!id;
   const notaId = id ? Number(id) : undefined;
+
+  const { data: pendiente } = usePendienteNota(clientUuid);
+  const { mutateAsync: guardarPendiente, isPending: guardandoPendiente } =
+    useGuardarNotaPendiente();
 
   const pacienteDesdeState = (
     location.state as { pacienteSeleccionado?: Paciente } | null
@@ -75,21 +88,20 @@ export default function FormNotaPage() {
   const { data: diagnosticosData } = useDiagnosticos();
   const { data: procedimientosData } = useProcedimientos();
   const { data: tecnicasData, isError: errorTecnicas } = useTecnicas();
-  // size:100 garantiza que todos los médicos aparezcan en el selector (Req 16.1)
-  const { data: usuariosResp, isSuccess: medicosListados } = useListarUsuarios(undefined, { size: 100 });
-  const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
+  const { data: usuarios, isSuccess: medicosListados } = useTodosLosUsuarios();
+  const { data: pacientes } = useTodosLosPacientes();
 
   const opcionesDx = (diagnosticosData ?? []).map((d) => d.diagnostico);
   const opcionesProc = (procedimientosData ?? []).map((p) => p.intervencion);
   const opcionesTecnica = (tecnicasData ?? []).map((t) => t.tecnica);
   // Sin filtro de rol — el backend devuelve rol vacío ("") temporalmente
-  const medicos = usuariosResp?.data ?? [];
-  const pacientesData = pacientesResp?.data ?? [];
+  const medicos = usuarios ?? [];
+  const pacientesData = pacientes ?? [];
 
   const { data: notaExistente } = useObtenerNota(notaId ?? 0);
   const { mutate: crearNota, isPending: creando } = useCrearNota();
   const { mutate: editarNota, isPending: editando } = useEditarNota(notaId ?? 0);
-  const isPending = creando || editando;
+  const isPending = creando || editando || guardandoPendiente;
 
   const {
     register,
@@ -148,6 +160,33 @@ export default function FormNotaPage() {
       if (pac) setPacienteSeleccionado(pac);
     }
   }, [esEdicion, notaExistente, reset, perfil?.id, pacientesData]);
+
+  // Precarga de nota pendiente (corrección antes de subir). Los datos salen de
+  // la cola local, no de la API: esta nota no existe en el servidor todavía.
+  useEffect(() => {
+    if (!esPendiente || !pendiente) return;
+    const nota = pendiente.datos;
+    reset({
+      idPaciente: nota.idPaciente,
+      dxPreOperatorio: nota.dxPreOperatorio,
+      dxPostOperatorio: nota.dxPostOperatorio ?? "",
+      intervencionRealizada: nota.intervencionRealizada,
+      resumenIntervencion: nota.resumenIntervencion ?? "",
+      fechaComienzo: toDateInputValue(nota.fechaComienzo),
+      fechaCulminacion: toDateInputValue(nota.fechaCulminacion),
+      horaComienzo: nota.horaComienzo,
+      horaCulminacion: nota.horaCulminacion,
+      esElectiva: nota.esElectiva,
+      esEmergencia: nota.esEmergencia,
+      tuvoBiopsia: nota.tuvoBiopsia,
+      anestesia: normalizarAnestesia(nota.anestesia),
+      medicoEncargado: pendiente.medicoEncargadoId || perfil?.id || "",
+      equipo: nota.equipo ?? [],
+      tecnica: "",
+    });
+    const pac = (pacientesData ?? []).find((p) => p.id === nota.idPaciente);
+    if (pac) setPacienteSeleccionado(pac);
+  }, [esPendiente, pendiente, reset, perfil?.id, pacientesData]);
 
   // ── Composición del resumen (docs/catalogo-clinico.md §1.4) ──────────────
   //
@@ -276,22 +315,45 @@ export default function FormNotaPage() {
             : "Error al guardar la nota. Intenta de nuevo."
         );
       };
-      if (esEdicion && notaId) {
+      if (esPendiente && clientUuid) {
+        // Sigue en la cola: se corrige donde está y vuelve a quedar en espera.
+        guardarPendiente({ clientUuid, nota, medicoEncargadoId })
+          .then(() => { setExito(true); navigate("/mis-notas"); })
+          .catch(onError);
+      } else if (esEdicion && notaId) {
         editarNota({ nota, medicoEncargadoId }, {
           onSuccess: () => { setExito(true); navigate(`/notas/${notaId}`); },
           onError,
         });
       } else {
         crearNota({ nota, medicoEncargadoId }, {
-          onSuccess: (notaCreada) => {
+          onSuccess: (resultado) => {
             setExito(true);
-            navigate(`/notas/${notaCreada.id}`);
+            // Encolada: todavía no tiene ficha en el servidor a la que
+            // navegar. Se vuelve al listado, donde aparece marcada como
+            // pendiente, y se avisa de que está guardada aquí y no allá.
+            if (resultado.estado === "en-cola") {
+              navigate("/mis-notas", { state: { notaEncolada: true } });
+              return;
+            }
+            navigate(`/notas/${resultado.nota.id}`);
           },
           onError,
         });
       }
     },
-    [esEdicion, notaId, perfil?.id, notaExistente?.pabellon, crearNota, editarNota, navigate]
+    [
+      esEdicion,
+      esPendiente,
+      clientUuid,
+      notaId,
+      perfil?.id,
+      notaExistente?.pabellon,
+      crearNota,
+      editarNota,
+      guardarPendiente,
+      navigate,
+    ]
   );
 
   return (
@@ -302,8 +364,32 @@ export default function FormNotaPage() {
           Volver
         </Button>
         <h1 className="text-2xl font-semibold">
-          {esEdicion ? "Editar nota operatoria" : "Nueva nota operatoria"}
+          {esPendiente
+            ? "Corregir nota pendiente"
+            : esEdicion
+              ? "Editar nota operatoria"
+              : "Nueva nota operatoria"}
         </h1>
+
+        {/* En modo pendiente hay que dejar claro dónde está esta nota: no en el
+            servidor, sino en este equipo, y con qué queda al guardar. */}
+        {esPendiente && (
+          <Alert className="border-amber-500/50">
+            <CloudOff className="h-4 w-4" />
+            <AlertDescription>
+              Esta nota todavía no está en el servidor: existe solo en este
+              equipo.
+              {pendiente?.error && (
+                <>
+                  {" "}
+                  El último intento de subirla fue rechazado —{" "}
+                  <span className="font-medium">{pendiente.error}</span>
+                </>
+              )}{" "}
+              Al guardar, se vuelve a poner en cola para el próximo intento.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {exito && (
           <Alert role="status">
@@ -760,7 +846,13 @@ export default function FormNotaPage() {
           <Separator />
           <div className="flex gap-3">
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Guardando…" : esEdicion ? "Guardar cambios" : "Crear nota"}
+              {isPending
+                ? "Guardando…"
+                : esPendiente
+                  ? "Guardar y volver a encolar"
+                  : esEdicion
+                    ? "Guardar cambios"
+                    : "Crear nota"}
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancelar

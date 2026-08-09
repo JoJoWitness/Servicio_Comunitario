@@ -26,7 +26,9 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ControlsPaginacion } from "@/components/ControlsPaginacion";
-import { useListarPacientes } from "@/hooks/usePacientes";
+import { useTodosLosPacientes } from "@/hooks/usePacientes";
+import { usePendientes } from "@/offline/useSincronizacion";
+import type { PacientePendiente } from "@/offline/outbox";
 import { usePaginacion } from "@/hooks/usePaginacion";
 import { filtrarPacientes } from "@/lib/search";
 import { formatFechaUI } from "@/lib/datetime";
@@ -45,10 +47,27 @@ export function SelectorPacienteDialog({
 }: SelectorPacienteDialogProps) {
   const navigate = useNavigate();
   const [termino, setTermino] = useState("");
-  // size:200 para que el selector muestre todos los pacientes sin paginar el modal
-  const { data: respuesta, isLoading, isError } = useListarPacientes(undefined, { size: 200 });
+  const { data: pacientes, isLoading, isError } = useTodosLosPacientes();
+  const { data: pendientes = [] } = usePendientes();
 
-  const resultado = filtrarPacientes(respuesta?.data ?? [], termino);
+  // Los pacientes registrados sin conexión todavía no están en ninguna lista
+  // del servidor. Si no se sumaran aquí, el médico acabaría de darlos de alta y
+  // no los encontraría para asignarles su nota — que es justo lo que iba a
+  // hacer a continuación.
+  const pacientesLocales = pendientes
+    .filter((p): p is PacientePendiente => p.tipo === "paciente")
+    .map((p) => p.datos);
+
+  const yaEnServidor = new Set((pacientes ?? []).map((p) => p.id));
+  const idsPendientes = new Set(
+    pacientesLocales.filter((p) => !yaEnServidor.has(p.id)).map((p) => p.id)
+  );
+  const todos = [
+    ...pacientesLocales.filter((p) => !yaEnServidor.has(p.id)),
+    ...(pacientes ?? []),
+  ];
+
+  const resultado = filtrarPacientes(todos, termino);
   const sinResultados = termino.trim() !== "" && resultado.length === 0;
 
   const paginacion = usePaginacion(resultado, 10);
@@ -135,7 +154,19 @@ export function SelectorPacienteDialog({
                     }}
                     aria-label={`Seleccionar ${p.nombre}`}
                   >
-                    <TableCell className="font-medium">{p.nombre}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="inline-flex items-center gap-2">
+                        {p.nombre}
+                        {/* Distintivo para los que solo existen en este equipo:
+                            se pueden usar igual, pero conviene saber que el
+                            resto del servicio todavía no los ve. */}
+                        {idsPendientes.has(p.id) && (
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            Sin subir
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell>{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
                     <TableCell>{p.historiaMedica}</TableCell>
                     <TableCell>{formatFechaUI(p.fechaNacimiento)}</TableCell>

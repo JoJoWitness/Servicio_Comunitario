@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS "Nota_Operatoria" (
 		CHECK ("estado" IN ('realizada', 'diferida')),
     "tipo_lente" VARCHAR(255),
 	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	-- Identificador que genera el dispositivo antes de tener red. Es lo que
+	-- vuelve idempotente la subida: si el médico redactó la nota sin conexión y
+	-- la sincronización se reintenta (se cortó a mitad, tocó dos veces el
+	-- botón), el UNIQUE garantiza que la nota entre una sola vez. NULL para las
+	-- notas creadas estando en línea, que nunca pasaron por la cola local.
+	"client_uuid" UUID UNIQUE,
 	PRIMARY KEY("id")
 );
 
@@ -151,3 +157,29 @@ ON UPDATE NO ACTION ON DELETE CASCADE;
 ALTER TABLE "Procedimiento_Tecnica"
 ADD FOREIGN KEY("id_tecnica") REFERENCES "Intervencion"("id")
 ON UPDATE NO ACTION ON DELETE CASCADE;
+
+
+
+
+-- =====================================================================
+-- Alteraciones idempotentes
+--
+-- Los CREATE TABLE de arriba son IF NOT EXISTS: sobre una base que ya
+-- existe no agregan columnas nuevas. Lo que se añada al esquema después
+-- del primer despliegue va aquí, en forma repetible.
+-- =====================================================================
+
+-- Trabajo sin conexión: llave de idempotencia de la nota (ver el comentario
+-- en la definición de la tabla).
+ALTER TABLE "Nota_Operatoria" ADD COLUMN IF NOT EXISTS "client_uuid" UUID;
+
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint WHERE conname = 'Nota_Operatoria_client_uuid_key'
+	) THEN
+		ALTER TABLE "Nota_Operatoria"
+		ADD CONSTRAINT "Nota_Operatoria_client_uuid_key" UNIQUE ("client_uuid");
+	END IF;
+END
+$$;

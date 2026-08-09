@@ -227,6 +227,19 @@ func CreateNota(w http.ResponseWriter, r *http.Request) {
 		newnotas.Medico_Encargado = session.UserID
 	}
 
+	// Nota redactada sin conexión que ya se había subido: se responde la que
+	// está guardada en vez de duplicar la cirugía. Ver CrearNotaIdempotente.
+	if existente, err := notas2.BuscarPorClientUUID(config.PsqlDB, newnotas.ClientUUID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to create notas"))
+		return
+	} else if existente != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Add("Status-Code", "200")
+		json.NewEncoder(w).Encode(existente)
+		return
+	}
+
 	if !validarEquipo(w, append([]string{newnotas.Medico_Encargado}, newnotas.Equipo...)) {
 		return
 	}

@@ -19,7 +19,12 @@ import {
   todasLasNotas,
 } from "../api/endpoints/notas";
 import type { PaginationParams } from "../api/types";
+import { isRedError } from "../api/errors";
 import type { FiltrosNota, Nota, RangoFechas } from "../domain/models";
+import { encolarNota, nuevoId } from "../offline/outbox";
+import { pendientesKey } from "../offline/useSincronizacion";
+import { haySinConexion } from "../stores/conexionStore";
+import { useSessionStore } from "../stores/sessionStore";
 
 export const notaKeys = {
   misNotas: (rango?: RangoFechas) => ["misNotas", rango ?? null] as const,
@@ -96,18 +101,57 @@ export function useNotasDePaciente(pacienteId: string, rango?: RangoFechas) {
  * En éxito: invalida "Mis notas" y "Todas las notas" para que aparezca
  * inmediatamente en ambos listados.
  */
+/**
+ * Cómo terminó el guardado de una nota. La pantalla necesita distinguirlo:
+ * una nota subida tiene id y ficha propia a la que navegar; una encolada
+ * todavía no existe para nadie más que este dispositivo.
+ */
+export type ResultadoGuardado =
+  | { estado: "subida"; nota: Nota }
+  | { estado: "en-cola"; clientUuid: string };
+
 export function useCrearNota() {
   const queryClient = useQueryClient();
+  // Dueño de la cola: quien está redactando, que puede no ser el encargado de
+  // la operación.
+  const usuarioId = useSessionStore((s) => s.perfil?.id);
 
-  return useMutation({
-    mutationFn: ({
-      nota,
-      medicoEncargadoId,
-    }: {
-      nota: Nota;
-      medicoEncargadoId: string;
-    }) => crearNota(nota, medicoEncargadoId),
-    onSuccess: () => {
+  return useMutation<
+    ResultadoGuardado,
+    unknown,
+    { nota: Nota; medicoEncargadoId: string }
+  >({
+    mutationFn: async ({ nota, medicoEncargadoId }) => {
+      // El identificador se genera antes de intentar nada: es el mismo tanto si
+      // la nota sale ahora por la red como si se queda esperando en la cola, y
+      // es lo que impide que acabe duplicada si ocurren las dos cosas.
+      const clientUuid = nuevoId();
+
+      const encolar = async (): Promise<ResultadoGuardado> => {
+        await encolarNota(nota, medicoEncargadoId, { id: clientUuid, usuarioId });
+        return { estado: "en-cola", clientUuid };
+      };
+
+      // Ya sabemos que no hay servidor: no se gasta un intento condenado a
+      // fallar ni se hace esperar al médico su timeout.
+      if (haySinConexion()) return encolar();
+
+      try {
+        return { estado: "subida", nota: await crearNota(nota, medicoEncargadoId, clientUuid) };
+      } catch (error) {
+        // La red se cayó entre que se comprobó y que se pulsó guardar. La nota
+        // no se pierde: pasa a la cola igual que si nunca hubiera habido red.
+        if (isRedError(error)) return encolar();
+        // Cualquier otro error es el servidor rechazando los datos, y eso sí
+        // tiene que verlo el médico: encolarlo solo aplazaría el problema.
+        throw error;
+      }
+    },
+    onSuccess: (resultado) => {
+      if (resultado.estado === "en-cola") {
+        queryClient.invalidateQueries({ queryKey: pendientesKey });
+        return;
+      }
       // Requisito 14.7: invalidar caché de "Mis notas"
       queryClient.invalidateQueries({ queryKey: ["misNotas"] });
       queryClient.invalidateQueries({ queryKey: ["todasNotas"] });

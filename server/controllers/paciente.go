@@ -40,15 +40,30 @@ func CreatePaciente(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := newpaciente.Get(config.PsqlDB)
-	if err == nil {
+	// Paciente registrado sin conexión: el dispositivo ya le asignó un UUID y lo
+	// manda con el alta. Si ese id ya está en la base, es que la subida anterior
+	// sí llegó (o el médico tocó "sincronizar" dos veces) y se responde el
+	// paciente que existe, no un error: para la cola local es un éxito.
+	if newpaciente.ID != "" {
+		yaRegistrado := models.Pacientes{ID: newpaciente.ID}
+		if err := yaRegistrado.Get(config.PsqlDB); err == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Add("Status-Code", "200")
+			json.NewEncoder(w).Encode(yaRegistrado)
+			return
+		}
+	}
+
+	// El choque por historia médica sigue siendo un error: son dos pacientes
+	// distintos peleando por el mismo número, y eso lo resuelve una persona.
+	porHistoria := models.Pacientes{Historia_Medica: newpaciente.Historia_Medica}
+	if err := porHistoria.Get(config.PsqlDB); err == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("paciente already exists"))
 		return
 	}
 
-	err = newpaciente.Create(config.PsqlDB)
-	if err != nil {
+	if err := newpaciente.Create(config.PsqlDB); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to create paciente"))
 		return

@@ -29,6 +29,10 @@ type Notas struct {
 	// Equipo son los UUID que se mandan al crear o actualizar la nota (HU-15).
 	// El médico encargado se agrega solo, no hace falta repetirlo aquí.
 	Equipo []string `json:"equipo"`
+	// ClientUUID lo genera el dispositivo cuando la nota se redacta sin
+	// conexión. Al subirla, es lo que permite reconocer que una nota ya entró y
+	// no volver a insertarla. Vacío en las notas creadas en línea.
+	ClientUUID string `json:"client_uuid,omitempty"`
 }
 
 // FiltroNotas acota la vista global del servicio (HU-16, HU-17). Los campos en

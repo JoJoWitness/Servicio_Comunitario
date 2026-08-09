@@ -10,6 +10,7 @@ import {
   desactivarUsuario,
   editarUsuario,
   listarUsuarios,
+  todosLosUsuarios,
   type CrearUsuarioInput,
   type EditarUsuarioInput,
 } from "../api/endpoints/usuarios";
@@ -18,7 +19,17 @@ import type { FiltrosUsuariosParams, PaginationParams } from "../api/types";
 export const usuarioKeys = {
   all: (filtros?: FiltrosUsuariosParams, params?: PaginationParams) =>
     ["usuarios", filtros ?? {}, params ?? {}] as const,
+  todos: ["usuarios", "todos"] as const,
 };
+
+/** Listado entero para el selector de equipo quirúrgico (Req 16.1). */
+export function useTodosLosUsuarios() {
+  return useQuery({
+    queryKey: usuarioKeys.todos,
+    queryFn: todosLosUsuarios,
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useListarUsuarios(
   filtros?: FiltrosUsuariosParams,

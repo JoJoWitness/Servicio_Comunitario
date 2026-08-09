@@ -32,6 +32,37 @@ export class ApiError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// RedError — no hubo respuesta
+// ---------------------------------------------------------------------------
+
+/**
+ * La petición nunca llegó a destino: no hay red, el servidor no responde o se
+ * agotó el tiempo de espera.
+ *
+ * Es la distinción que sostiene todo el trabajo sin conexión. Un `ApiError` es
+ * el servidor diciendo que no (el equipo quirúrgico es inválido, la sesión
+ * expiró): reintentar sin cambiar nada dará el mismo resultado, así que se le
+ * muestra al médico. Un `RedError` no es un juicio sobre la nota, sino sobre el
+ * momento: la misma petición funcionará cuando vuelva la señal, y por eso lo que
+ * corresponde es guardar en la cola y seguir, no molestar con un error.
+ */
+export class RedError extends Error {
+  readonly causa?: unknown;
+
+  constructor(causa?: unknown) {
+    super("No hay conexión con el servidor");
+    this.name = "RedError";
+    this.causa = causa;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+/** Comprueba si un error capturado es un `RedError`. */
+export function isRedError(error: unknown): error is RedError {
+  return error instanceof RedError;
+}
+
+// ---------------------------------------------------------------------------
 // Clasificador de errores 403 de notas (Requisitos 21.4, 23.4)
 // ---------------------------------------------------------------------------
 

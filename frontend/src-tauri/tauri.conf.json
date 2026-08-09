@@ -1,20 +1,20 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "frontend",
+  "productName": "Notas Operatorias HCSC",
   "version": "0.1.0",
   "identifier": "com.hospitalcentral.oftalmologia",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:4321",
+    "beforeBuildCommand": "npm run build:tauri",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "frontend",
-        "width": 800,
-        "height": 600
+        "title": "Notas Operatorias — HCSC Oftalmología",
+        "width": 1280,
+        "height": 800
       }
     ],
     "security": {

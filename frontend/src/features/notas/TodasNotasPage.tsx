@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { ControlsPaginacion } from "@/components/ControlsPaginacion";
 import { NotaCard } from "./NotaCard";
+import { BarraDescargaNotas } from "./BarraDescargaNotas";
+import { useDescargaMultiple } from "./useDescargaMultiple";
 import { useTodasLasNotas } from "@/hooks/useNotas";
 import { useListarUsuarios } from "@/hooks/useUsuarios";
 import { useListarPacientes } from "@/hooks/usePacientes";
@@ -83,6 +85,8 @@ export default function TodasNotasPage() {
     const m = medicos.find((u) => u.id === idMedico);
     return m ? `${m.nombres} ${m.apellidos}`.trim() : undefined;
   };
+
+  const descarga = useDescargaMultiple(notas);
 
   // Requisito 19.3: secretaria → solo lectura (sin botón de crear)
   const puedeCrear = perfil?.rol === "admin" || perfil?.rol === "medico";
@@ -192,6 +196,17 @@ export default function TodasNotasPage() {
           </div>
         )}
 
+        {notas.length > 0 && (
+          <BarraDescargaNotas
+            cantidadSeleccionada={descarga.seleccionadas.length}
+            todasMarcadas={descarga.todasMarcadas}
+            onMarcarTodas={descarga.marcarTodas}
+            onDescargar={descarga.descargar}
+            generando={descarga.generando}
+            error={descarga.error}
+          />
+        )}
+
         {/* Requisito 19.4: navegar al detalle al seleccionar */}
         <div className="space-y-2">
           {notas.map((nota) => {
@@ -203,6 +218,11 @@ export default function TodasNotasPage() {
                 mostrarPaciente
                 nombrePaciente={paciente?.nombre}
                 nombreMedico={getNombreMedico(nota.medicoEncargado)}
+                seleccionable
+                seleccionada={descarga.estaSeleccionada(nota.id)}
+                onSeleccionar={(marcada) =>
+                  nota.id !== undefined && descarga.alternar(nota.id, marcada)
+                }
               />
             );
           })}

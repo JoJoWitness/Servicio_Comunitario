@@ -31,15 +31,25 @@ import {
   tecnicaToDto,
 } from "../dto/catalogo.dto";
 import { request } from "../httpClient";
+import { conEspejo } from "@/offline/espejo";
 
 // ===========================================================================
 // Diagnósticos
 // ===========================================================================
 
-/** GET /diagnosticos — Requisito 17.1 */
+/**
+ * GET /diagnosticos — Requisito 17.1
+ *
+ * Los tres catálogos se reflejan en el dispositivo porque son la materia prima
+ * de la nota: sin diagnósticos, procedimientos y técnicas el formulario no
+ * tiene nada que ofrecer y no se puede redactar sin conexión. Además cambian
+ * poco, así que una copia local envejece bien.
+ */
 export async function listarDiagnosticos(): Promise<Diagnostico[]> {
-  const dtos = await request<DiagnosticoDTO[]>("/diagnosticos");
-  return dtos.map(diagnosticoToDomain);
+  return conEspejo("catalogo:diagnosticos", async () => {
+    const dtos = await request<DiagnosticoDTO[]>("/diagnosticos");
+    return dtos.map(diagnosticoToDomain);
+  });
 }
 
 /** POST /diagnosticos — Requisito 27.2 */
@@ -76,8 +86,10 @@ export async function eliminarDiagnostico(id: number): Promise<void> {
 
 /** GET /procedimientos — Requisito 17.1 */
 export async function listarProcedimientos(): Promise<Procedimiento[]> {
-  const dtos = await request<ProcedimientoDTO[]>("/procedimientos");
-  return dtos.map(procedimientoToDomain);
+  return conEspejo("catalogo:procedimientos", async () => {
+    const dtos = await request<ProcedimientoDTO[]>("/procedimientos");
+    return dtos.map(procedimientoToDomain);
+  });
 }
 
 /** POST /procedimientos — Requisito 27.3 */
@@ -114,8 +126,10 @@ export async function eliminarProcedimiento(id: number): Promise<void> {
 
 /** GET /tecnicas — Requisito 17.1 */
 export async function listarTecnicas(): Promise<Tecnica[]> {
-  const dtos = await request<TecnicaDTO[]>("/tecnicas");
-  return dtos.map(tecnicaToDomain);
+  return conEspejo("catalogo:tecnicas", async () => {
+    const dtos = await request<TecnicaDTO[]>("/tecnicas");
+    return dtos.map(tecnicaToDomain);
+  });
 }
 
 /** POST /tecnicas — Requisito 27.4 */

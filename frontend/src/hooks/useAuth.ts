@@ -13,6 +13,7 @@ import {
   type LoginInput,
 } from "../api/endpoints/auth";
 import { isApiError } from "../api/errors";
+import { recordarCredencial, verificarOffline } from "../offline/credencialLocal";
 import { useSessionStore } from "../stores/sessionStore";
 
 export const authKeys = {
@@ -61,10 +62,41 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: (input: LoginInput) => login(input),
-    onSuccess: (perfil) => {
+    onSuccess: (perfil, input) => {
       setPerfil(perfil);
       queryClient.setQueryData(authKeys.session, perfil);
+
+      // Este es el único instante en que se tienen a la vez la contraseña en
+      // claro y la certeza de que el backend la dio por buena. Se aprovecha
+      // para dejar en el equipo con qué verificarla la próxima vez que no haya
+      // red. Va sin await: que falle no debe estropear un login correcto.
+      void recordarCredencial(input.correo, input.contrasena, perfil);
     },
+  });
+}
+
+/**
+ * Inicio de sesión sin servidor, contra la credencial guardada en el equipo.
+ *
+ * No es un login alternativo que el médico pueda elegir: es el camino al que
+ * cae `LoginPage` cuando el intento normal falla por falta de red. Lo que
+ * concede es exactamente lo mismo que ya tenía —su perfil, su rol— y solo a
+ * quien acierte la contraseña con la que entró la última vez desde ese equipo.
+ *
+ * @see offline/credencialLocal.ts — cómo se guarda y por qué es un PBKDF2
+ */
+export function useLoginOffline() {
+  const abrirSesionOffline = useSessionStore((s) => s.abrirSesionOffline);
+
+  return useMutation({
+    mutationFn: async (input: LoginInput) => {
+      const resultado = await verificarOffline(input.correo, input.contrasena);
+      if (!resultado.ok || !resultado.perfil) {
+        throw new Error(resultado.motivo ?? "No se pudo entrar sin conexión.");
+      }
+      return resultado.perfil;
+    },
+    onSuccess: (perfil) => abrirSesionOffline(perfil),
   });
 }
 

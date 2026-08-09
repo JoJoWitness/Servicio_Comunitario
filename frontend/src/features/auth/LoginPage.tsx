@@ -8,7 +8,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useLogin } from "@/hooks/useAuth";
-import { isApiError } from "@/api/errors";
+import { useLogin, useLoginOffline } from "@/hooks/useAuth";
+import { isApiError, isRedError } from "@/api/errors";
+import { correoRecordado } from "@/offline/credencialLocal";
+import { haySinConexion, useConexionStore } from "@/stores/conexionStore";
 import { rutaInicialPorRol } from "@/routes/roleRoutes";
 
 // ---------------------------------------------------------------------------
@@ -62,8 +64,12 @@ export default function LoginPage() {
   const from = (location.state as { from?: Location } | null)?.from?.pathname;
 
   const { mutate: login, isPending } = useLogin();
+  const { mutateAsync: loginOffline, isPending: verificandoLocal } = useLoginOffline();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mostrarPassword, setMostrarPassword] = useState(false);
+
+  const sinConexion = useConexionStore((s) => s.estado) === "sin-conexion";
+  const correoGuardado = correoRecordado();
 
   const {
     register,
@@ -74,20 +80,56 @@ export default function LoginPage() {
     resolver: zodResolver(LoginSchema),
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  // Entra con la credencial guardada la última vez que sí hubo servidor. Es lo
+  // que permite abrir la aplicación en un quirófano sin señal.
+  const entrarOffline = async (data: LoginFormValues) => {
+    try {
+      const perfil = await loginOffline({
+        correo: data.correo,
+        contrasena: data.contrasena,
+      });
+      navigate(from ?? rutaInicialPorRol(perfil.rol), { replace: true });
+    } catch (errorLocal) {
+      setErrorMsg(
+        errorLocal instanceof Error
+          ? errorLocal.message
+          : "No se pudo entrar sin conexión."
+      );
+    }
+  };
+
+  const onSubmit = async (data: LoginFormValues) => {
     setErrorMsg(null);
+
+    // Si ya sabemos que no hay servidor, NO se intenta la red: ese intento se
+    // cuelga (el fetch se queda esperando y nunca falla), dejando el botón en
+    // "Iniciando sesión..." para siempre. Se va directo al login local, igual
+    // que hacen crear-nota y crear-paciente al detectar que no hay conexión.
+    if (haySinConexion()) {
+      await entrarOffline(data);
+      return;
+    }
+
     login(
       { correo: data.correo, contrasena: data.contrasena },
       {
         onSuccess: (perfil) => {
           navigate(from ?? rutaInicialPorRol(perfil.rol), { replace: true });
         },
-        onError: (err) => {
+        onError: async (err) => {
           if (isApiError(err) && err.status === 401) {
             setErrorMsg("Correo o contraseña incorrectos.");
-          } else {
-            setErrorMsg("Error al iniciar sesión. Intenta de nuevo.");
+            return;
           }
+
+          // El fetch falló de verdad (sin red) o la red se cayó justo ahora:
+          // se cae al login local en vez de dar un error de servidor.
+          if (isRedError(err) || haySinConexion()) {
+            await entrarOffline(data);
+            return;
+          }
+
+          setErrorMsg("Error al iniciar sesión. Intenta de nuevo.");
         },
       }
     );
@@ -115,6 +157,29 @@ export default function LoginPage() {
               {errorMsg && (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{errorMsg}</AlertDescription>
+                </Alert>
+              )}
+
+            {/* Sin conexión: se explica de entrada quién puede entrar y quién
+                no, en vez de dejar que lo descubra fallando. */}
+              {sinConexion && (
+                <Alert role="status">
+                  <WifiOff className="h-4 w-4" />
+                  <AlertDescription>
+                    {correoGuardado ? (
+                      <>
+                        Sin conexión con el servidor. Puedes entrar con la
+                        contraseña de <strong>{correoGuardado}</strong>, la
+                        última cuenta que inició sesión en este equipo.
+                      </>
+                    ) : (
+                      <>
+                        Sin conexión con el servidor. Este equipo todavía no
+                        tiene ninguna sesión guardada, así que hay que
+                        conectarse al menos una vez para poder entrar sin red.
+                      </>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -167,8 +232,16 @@ export default function LoginPage() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? "Iniciando sesión..." : "Iniciar sesión"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isPending || verificandoLocal}
+              >
+                {verificandoLocal
+                  ? "Verificando en este equipo..."
+                  : isPending
+                    ? "Iniciando sesión..."
+                    : "Iniciar sesión"}
               </Button>
             </form>
           </CardContent>

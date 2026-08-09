@@ -11,15 +11,31 @@ import {
   editarPaciente,
   listarPacientes,
   obtenerPaciente,
+  todosLosPacientes,
 } from "../api/endpoints/pacientes";
 import type { FiltrosPacientesParams, PaginationParams } from "../api/types";
+import { isRedError } from "../api/errors";
 import type { Paciente } from "../domain/models";
+import { encolarPaciente, nuevoId } from "../offline/outbox";
+import { pendientesKey } from "../offline/useSincronizacion";
+import { haySinConexion } from "../stores/conexionStore";
+import { useSessionStore } from "../stores/sessionStore";
 
 export const pacienteKeys = {
   all: (filtros?: FiltrosPacientesParams, params?: PaginationParams) =>
     ["pacientes", filtros ?? {}, params ?? {}] as const,
   detail: (id: string) => ["pacientes", id] as const,
+  todos: ["pacientes", "todos"] as const,
 };
+
+/** Padrón entero para los selectores de paciente, que filtran en el cliente. */
+export function useTodosLosPacientes() {
+  return useQuery({
+    queryKey: pacienteKeys.todos,
+    queryFn: todosLosPacientes,
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 /**
  * Obtiene los pacientes paginados desde el servidor con filtros opcionales.
@@ -49,11 +65,50 @@ export function useObtenerPaciente(id: string) {
   });
 }
 
+/**
+ * Registra un paciente.
+ *
+ * Sin conexión el alta se encola, y con una diferencia importante respecto a
+ * las notas: el UUID lo pone el dispositivo y el servidor lo respeta tal cual.
+ * Gracias a eso, la nota que se redacte a continuación puede referenciar a este
+ * paciente de inmediato y seguir apuntando al lugar correcto después de subir,
+ * sin tener que reescribir nada al sincronizar.
+ *
+ * Devuelve siempre el paciente con su id definitivo, esté ya en el servidor o
+ * todavía en la cola, para que la pantalla que lo pidió pueda seguir su curso.
+ */
 export function useCrearPaciente() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (paciente: Paciente) => crearPaciente(paciente),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pacientes"] }),
+  const usuarioId = useSessionStore((s) => s.perfil?.id);
+
+  return useMutation<Paciente, unknown, Paciente>({
+    mutationFn: async (paciente) => {
+      const encolar = async (): Promise<Paciente> => {
+        if (!usuarioId) {
+          throw new Error("No hay sesión con la que registrar el paciente.");
+        }
+        const pendiente = await encolarPaciente(
+          { ...paciente, id: paciente.id || nuevoId() },
+          usuarioId
+        );
+        return pendiente.datos;
+      };
+
+      if (haySinConexion()) return encolar();
+
+      try {
+        return await crearPaciente(paciente);
+      } catch (error) {
+        if (isRedError(error)) return encolar();
+        // Historia médica duplicada y demás rechazos del servidor: son datos
+        // que hay que corregir, no algo que resuelva esperar a tener red.
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pacientes"] });
+      queryClient.invalidateQueries({ queryKey: pendientesKey });
+    },
   });
 }
 

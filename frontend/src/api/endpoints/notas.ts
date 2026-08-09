@@ -21,6 +21,7 @@ import type { NotaDTO } from "../dto/nota.dto";
 import { notaToDomain, notaToDto } from "../dto/nota.dto";
 import { request, requestBlob } from "../httpClient";
 import { parseFilename } from "../../lib/contentDisposition";
+import { conEspejo } from "@/offline/espejo";
 import type { PaginatedResponse, PaginationParams } from "../types";
 import { buildPaginationQuery } from "./queryUtils";
 
@@ -58,11 +59,16 @@ function buildQuery(
  */
 export async function crearNota(
   nota: Nota,
-  medicoEncargadoId: string
+  medicoEncargadoId: string,
+  clientUuid?: string
 ): Promise<Nota> {
   const dto = await request<NotaDTO>("/notas", {
     method: "POST",
-    body: notaToDto(nota, { medicoEncargadoId }),
+    // El `client_uuid` viaja también en el alta normal, no solo al sincronizar.
+    // Cuesta nada y cubre el caso feo: la nota se guarda en el servidor pero la
+    // respuesta se pierde, el médico ve un error y vuelve a darle a guardar. Sin
+    // esta llave, esa cirugía quedaría dos veces en la historia clínica.
+    body: { ...notaToDto(nota, { medicoEncargadoId }), client_uuid: clientUuid },
   });
   return notaToDomain(dto);
 }
@@ -117,14 +123,24 @@ export async function obtenerNota(id: number): Promise<Nota> {
  * Requisitos 18.1, 18.4
  */
 export async function misNotas(rango?: RangoFechas): Promise<Nota[]> {
-  let path: string;
-  if (rango?.from || rango?.to) {
-    path = `/notas/medics/dates${buildQuery({ from: rango.from, to: rango.to })}`;
-  } else {
-    path = "/notas/medics";
+  const cargar = async () => {
+    let path: string;
+    if (rango?.from || rango?.to) {
+      path = `/notas/medics/dates${buildQuery({ from: rango.from, to: rango.to })}`;
+    } else {
+      path = "/notas/medics";
+    }
+    const dtos = await request<NotaDTO[]>(path);
+    return dtos.map(notaToDomain);
+  };
+
+  // Sin rango es el historial completo del médico: lo que se refleja para que
+  // pueda consultar sus operaciones anteriores en un quirófano sin señal.
+  // Con rango es una consulta puntual y se deja pasar a la red.
+  if (!rango?.from && !rango?.to) {
+    return conEspejo("mis-notas", cargar);
   }
-  const dtos = await request<NotaDTO[]>(path);
-  return dtos.map(notaToDomain);
+  return cargar();
 }
 
 /**

@@ -15,9 +15,11 @@
 import type { Rol, Usuario } from "../../domain/models";
 import type { UsuarioDTO } from "../dto/usuario.dto";
 import { usuarioToDomain } from "../dto/usuario.dto";
+import { isRedError } from "../errors";
 import { request } from "../httpClient";
 import type { FiltrosUsuariosParams, PaginatedResponse, PaginationParams } from "../types";
-import { buildFilterQuery } from "./queryUtils";
+import { buildFilterQuery, coincide, paginarEnLocal, TAMANO_PAGINA_MAX } from "./queryUtils";
+import { listaReflejada, reflejar } from "@/offline/espejo";
 
 // ---------------------------------------------------------------------------
 // Tipos de entrada
@@ -50,6 +52,22 @@ export async function listarUsuarios(
   filtros?: FiltrosUsuariosParams,
   params?: PaginationParams
 ): Promise<PaginatedResponse<Usuario>> {
+  try {
+    return await pedirUsuarios(filtros, params);
+  } catch (error) {
+    // Sin red: espejo, filtrando y paginando aquí mismo.
+    if (!isRedError(error)) throw error;
+
+    const espejo = await listaReflejada<Usuario>("medicos");
+    if (!espejo) throw error;
+    return paginarEnLocal(filtrarUsuarios(espejo, filtros), params);
+  }
+}
+
+async function pedirUsuarios(
+  filtros?: FiltrosUsuariosParams,
+  params?: PaginationParams
+): Promise<PaginatedResponse<Usuario>> {
   const qs = buildFilterQuery(filtros as Record<string, string | undefined>, params);
   const raw = await request<PaginatedResponse<UsuarioDTO>>(`/usuarios${qs}`);
   return {
@@ -59,6 +77,55 @@ export async function listarUsuarios(
     meta: raw.meta,
   };
 }
+
+function filtrarUsuarios(
+  usuarios: Usuario[],
+  filtros?: FiltrosUsuariosParams
+): Usuario[] {
+  if (!filtros) return usuarios;
+
+  return usuarios.filter((u) => {
+    if (filtros.nombre && !coincide(`${u.nombres} ${u.apellidos}`, filtros.nombre)) return false;
+    if (filtros.correo && !coincide(u.correo, filtros.correo)) return false;
+    if (filtros.rol && u.rol !== filtros.rol) return false;
+    return true;
+  });
+}
+
+/**
+ * El listado entero, página a página. Llena el selector de equipo quirúrgico
+ * (HU-15) y es el único que escribe el espejo: una página suelta lo dejaría
+ * incompleto.
+ */
+export async function todosLosUsuarios(): Promise<Usuario[]> {
+  try {
+    const acumulado: Usuario[] = [];
+    let pagina = 1;
+    let totalPaginas = 1;
+
+    do {
+      const respuesta = await pedirUsuarios(undefined, {
+        page: pagina,
+        size: TAMANO_PAGINA_MAX,
+      });
+      acumulado.push(...respuesta.data);
+      totalPaginas = respuesta.meta?.totalPages ?? 1;
+      pagina++;
+    } while (pagina <= totalPaginas && pagina <= LIMITE_PAGINAS);
+
+    await reflejar("medicos", acumulado);
+    return acumulado;
+  } catch (error) {
+    if (!isRedError(error)) throw error;
+
+    const espejo = await listaReflejada<Usuario>("medicos");
+    if (!espejo) throw error;
+    return espejo;
+  }
+}
+
+/** Tope por si el meta viniera mal. */
+const LIMITE_PAGINAS = 50;
 
 /**
  * Crea un usuario nuevo (admin).

@@ -40,9 +40,9 @@ const NEGRO = "#000";
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 8,
-    paddingTop: 24,
-    paddingBottom: 24,
+    fontSize: 10,
+    paddingTop: 20,
+    paddingBottom: 18,
     paddingHorizontal: 28,
     color: NEGRO,
   },
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   logoServicio: { width: 118, marginLeft: "auto" },
   titulo: {
     width: "46%",
-    fontSize: 15,
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
   },
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   caja: {
     borderWidth: 1,
     borderColor: NEGRO,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   fila: { flexDirection: "row" },
   filaSeparada: {
@@ -83,22 +83,33 @@ const styles = StyleSheet.create({
     borderTopColor: NEGRO,
   },
   celda: { paddingHorizontal: 4, paddingVertical: 3, flexGrow: 1 },
+  // Reparte la fila a mitad y mitad. Con el `flexBasis` por defecto (auto) el
+  // ancho arranca en el del contenido y la celda con más texto se lleva más
+  // espacio. Solo se usa en celdas que comparten fila: dentro de una caja, que
+  // apila en columna, `flexBasis: 0` anularía el alto del contenido.
+  celdaMitad: { flexBasis: 0 },
   celdaDividida: {
     borderLeftWidth: 1,
     borderLeftColor: NEGRO,
   },
-  etiqueta: { fontSize: 7 },
-  valor: { fontFamily: "Helvetica-Bold" },
+  etiqueta: { fontSize: 10 },
+  // El contenido va en redonda: en el formulario lo que distingue al dato del
+  // rótulo es que el rótulo está en mayúsculas, no el grosor. Poner en negrita
+  // todo lo escrito deja la hoja sin jerarquía y cuesta leer los párrafos.
+  valor: {},
+  // Solo el nombre del paciente se resalta: es el dato con el que se busca la
+  // hoja en el archivo.
+  valorDestacado: { fontFamily: "Helvetica-Bold" },
   // Los diagnósticos y la intervención se escriben debajo de su rótulo y
   // necesitan alto suficiente para varias líneas.
-  bloqueTexto: { minHeight: 46 },
-  bloqueTextoCorto: { minHeight: 34 },
+  bloqueTexto: { minHeight: 50 },
+  bloqueTextoCorto: { minHeight: 38 },
 
   // ── Casillas de verificación ──────────────────────────────────────────
   casillaFila: { flexDirection: "row", alignItems: "center" },
   casilla: {
-    width: 13,
-    height: 11,
+    width: 16,
+    height: 14,
     borderWidth: 1,
     borderColor: NEGRO,
     marginLeft: 4,
@@ -107,11 +118,11 @@ const styles = StyleSheet.create({
   },
   // `lineHeight: 1` es necesario: con el interlineado por defecto la X mide
   // más que la casilla y el renderizador la recorta entera.
-  casillaMarca: { fontSize: 8, fontFamily: "Helvetica-Bold", lineHeight: 1 },
+  casillaMarca: { fontSize: 10, fontFamily: "Helvetica-Bold", lineHeight: 1 },
 
   // ── Equipo quirúrgico ─────────────────────────────────────────────────
   tituloEquipo: {
-    fontSize: 8,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
     paddingVertical: 3,
@@ -122,21 +133,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: NEGRO,
     paddingHorizontal: 4,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
 
   // ── Resumen ───────────────────────────────────────────────────────────
   tituloResumen: {
-    fontSize: 9,
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
-    marginTop: 4,
-    marginBottom: 6,
+    marginTop: 2,
+    marginBottom: 4,
   },
   parrafoResumen: {
-    fontSize: 8,
+    fontSize: 12,
     textAlign: "justify",
-    lineHeight: 1.5,
+    lineHeight: 1.35,
   },
 
   // ── Firmas ────────────────────────────────────────────────────────────
@@ -145,16 +156,17 @@ const styles = StyleSheet.create({
   firmas: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 46,
+    marginTop: 14,
   },
   columnaFirmas: { width: "45%" },
   lineaFirma: {
     borderTopWidth: 1,
     borderTopColor: NEGRO,
     paddingTop: 3,
+    marginTop: 48,
   },
-  segundaFirma: { marginTop: 44 },
-  pieFirma: { fontSize: 8, textAlign: "center" },
+  segundaFirma: { marginTop: 52 },
+  pieFirma: { fontSize: 12, textAlign: "center" },
 });
 
 // ---------------------------------------------------------------------------
@@ -187,11 +199,21 @@ function CampoCasilla({
 }
 
 /** Rótulo y valor en la misma línea, el formato de los datos cortos. */
-function Dato({ etiqueta, valor }: { etiqueta: string; valor?: string }) {
+function Dato({
+  etiqueta,
+  valor,
+  destacado = false,
+}: {
+  etiqueta: string;
+  valor?: string;
+  destacado?: boolean;
+}) {
   return (
     <Text style={styles.etiqueta}>
       {etiqueta}{" "}
-      <Text style={styles.valor}>{valor && valor.trim() ? valor : "—"}</Text>
+      <Text style={destacado ? styles.valorDestacado : styles.valor}>
+        {valor && valor.trim() ? valor : "—"}
+      </Text>
     </Text>
   );
 }
@@ -250,7 +272,8 @@ interface NotaDocumentProps {
   paciente: Paciente;
 }
 
-function NotaDocument({ nota, paciente }: NotaDocumentProps) {
+/** Una hoja de nota operatoria, reutilizable en documentos de varias notas. */
+function PaginaNota({ nota, paciente }: NotaDocumentProps) {
   const cirujano = nota.medicos.find((m) => m.id === nota.medicoEncargado);
   const ayudantes = nota.medicos.filter((m) => m.id !== nota.medicoEncargado);
   // El papel reserva tres renglones de ayudantes; se mantienen aunque estén
@@ -260,13 +283,9 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
   const anestesiaLocal = nota.anestesia?.trim().toLowerCase() === "local";
   const anestesiaGeneral = nota.anestesia?.trim().toLowerCase() === "general";
 
+  // Carta: es el papel con el que trabaja el servicio.
   return (
-    <Document
-      title={`Nota operatoria — ${paciente.nombre}`}
-      author="HCSC Oftalmología"
-    >
-      {/* Carta: es el papel con el que trabaja el servicio. */}
-      <Page size="LETTER" style={styles.page}>
+    <Page size="LETTER" style={styles.page}>
         {/* ── Encabezado ── */}
         <View style={styles.encabezado}>
           <View style={styles.encabezadoLado}>
@@ -283,10 +302,10 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
           <View style={styles.columnaIzq}>
             <View style={styles.caja}>
               <View style={styles.celda}>
-                <Dato etiqueta="NOMBRE Y APELLIDO" valor={paciente.nombre} />
+                <Dato etiqueta="NOMBRE Y APELLIDO" valor={paciente.nombre} destacado />
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <Dato
                     etiqueta="EDAD"
                     valor={`${edadEnLaFecha(
@@ -295,15 +314,15 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
                     )} AÑOS`}
                   />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Dato etiqueta="GÉNERO" valor={paciente.genero} />
                 </View>
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <Dato etiqueta="HISTORIA N°" valor={paciente.historiaMedica} />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Dato
                     etiqueta="C.I."
                     valor={`${paciente.tipoDocumento}-${paciente.numeroIdentificacion}`}
@@ -343,23 +362,23 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
 
             <View style={styles.caja}>
               <View style={styles.fila}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <Text style={styles.etiqueta}>COMIENZO DE INTERVENCIÓN</Text>
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Text style={styles.etiqueta}>
                     CULMINACIÓN DE INTERVENCIÓN
                   </Text>
                 </View>
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <Dato
                     etiqueta="FECHA"
                     valor={formatFechaUI(nota.fechaComienzo)}
                   />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Dato
                     etiqueta="FECHA"
                     valor={formatFechaUI(nota.fechaCulminacion)}
@@ -367,10 +386,10 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
                 </View>
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <Dato etiqueta="HORA" valor={nota.horaComienzo} />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Dato etiqueta="HORA" valor={nota.horaCulminacion} />
                 </View>
               </View>
@@ -385,15 +404,15 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
               </View>
 
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <CampoCasilla etiqueta="ELECTIVA" marcada={nota.esElectiva} />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <Text style={styles.etiqueta}>BIOPSIA</Text>
                 </View>
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <CampoCasilla
                     etiqueta="EMERGENCIA"
                     marcada={nota.esEmergencia}
@@ -402,6 +421,7 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
                 <View
                   style={[
                     styles.celda,
+                    styles.celdaMitad,
                     styles.celdaDividida,
                     styles.casillaFila,
                   ]}
@@ -435,10 +455,10 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
                 <Dato etiqueta="ANESTESIA" valor={nota.anestesia} />
               </View>
               <View style={styles.filaSeparada}>
-                <View style={styles.celda}>
+                <View style={[styles.celda, styles.celdaMitad]}>
                   <CampoCasilla etiqueta="GENERAL" marcada={anestesiaGeneral} />
                 </View>
-                <View style={[styles.celda, styles.celdaDividida]}>
+                <View style={[styles.celda, styles.celdaMitad, styles.celdaDividida]}>
                   <CampoCasilla etiqueta="LOCAL" marcada={anestesiaLocal} />
                 </View>
               </View>
@@ -453,7 +473,7 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
         <Text style={styles.parrafoResumen}>{nota.resumenIntervencion}</Text>
 
         {/* ── Firmas ── */}
-        <View style={styles.firmas}>
+        <View style={styles.firmas} wrap={false}>
           <View style={styles.columnaFirmas}>
             <View style={styles.lineaFirma}>
               <Text style={styles.pieFirma}>MÉDICO TRATANTE</Text>
@@ -463,7 +483,18 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
             </View>
           </View>
         </View>
-      </Page>
+    </Page>
+  );
+}
+
+/** Documento de una sola nota. */
+function NotaDocument({ nota, paciente }: NotaDocumentProps) {
+  return (
+    <Document
+      title={`Nota operatoria — ${paciente.nombre}`}
+      author="HCSC Oftalmología"
+    >
+      <PaginaNota nota={nota} paciente={paciente} />
     </Document>
   );
 }
@@ -485,10 +516,62 @@ export async function descargarNotaPDF(
   const blob = await pdf(
     <NotaDocument nota={nota} paciente={paciente} />
   ).toBlob();
+  descargarBlob(blob, `nota-${nota.id ?? "nueva"}-${paciente.historiaMedica}.pdf`);
+}
+
+// ---------------------------------------------------------------------------
+// Varias notas en un solo documento
+// ---------------------------------------------------------------------------
+
+export interface NotaConPaciente {
+  nota: Nota;
+  paciente: Paciente;
+}
+
+/**
+ * Documento con una hoja por nota. Un único archivo en vez de una descarga por
+ * nota: el navegador bloquea las descargas múltiples seguidas, y un solo PDF se
+ * imprime de corrido.
+ */
+function NotasDocument({ items }: { items: NotaConPaciente[] }) {
+  return (
+    <Document title="Notas operatorias" author="HCSC Oftalmología">
+      {items.map(({ nota, paciente }) => (
+        <PaginaNota
+          key={nota.id ?? `${paciente.id}-${nota.fechaComienzo.getTime()}`}
+          nota={nota}
+          paciente={paciente}
+        />
+      ))}
+    </Document>
+  );
+}
+
+/** Genera y descarga un PDF con todas las notas indicadas. */
+export async function descargarNotasPDF(
+  items: NotaConPaciente[]
+): Promise<void> {
+  if (items.length === 0) return;
+
+  // Cronológico, como se archiva en papel: quien selecciona en pantalla no lo
+  // hace en orden, y el PDF no debería depender de eso.
+  const ordenados = [...items].sort(
+    (a, b) => a.nota.fechaComienzo.getTime() - b.nota.fechaComienzo.getTime()
+  );
+
+  const blob = await pdf(<NotasDocument items={ordenados} />).toBlob();
+  const sufijo =
+    items.length === 1
+      ? `nota-${ordenados[0]!.nota.id ?? "nueva"}`
+      : `${items.length}-notas`;
+  descargarBlob(blob, `notas-operatorias-${sufijo}.pdf`);
+}
+
+function descargarBlob(blob: Blob, nombreArchivo: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `nota-${nota.id ?? "nueva"}-${paciente.historiaMedica}.pdf`;
+  a.download = nombreArchivo;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

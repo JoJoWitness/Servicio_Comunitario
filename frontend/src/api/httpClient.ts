@@ -12,8 +12,9 @@
  *    EXCEPTO si el path es de login (para no redirigir en credenciales inválidas).
  */
 
+import { haySinConexion, useConexionStore } from "@/stores/conexionStore";
 import { BASE_URL } from "./config";
-import { ApiError } from "./errors";
+import { ApiError, RedError } from "./errors";
 import { notifyUnauthorized } from "./interceptor";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,52 @@ function buildUrl(path: string): string {
   const base = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${base}${normalizedPath}`;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: fetch que distingue "sin red" de "el servidor respondió mal"
+// ---------------------------------------------------------------------------
+
+/**
+ * Envuelve `fetch` traduciendo su fallo a `RedError`.
+ *
+ * `fetch` solo rechaza cuando no hubo respuesta: DNS que no resuelve, conexión
+ * rechazada, timeout. Un 500 o un 401 llegan como respuesta normal. Esa
+ * frontera es exactamente la que separa "la nota se encola y se sube después"
+ * de "hay que avisarle al médico", así que se marca aquí con un tipo propio en
+ * vez de dejar que cada llamador interprete un `TypeError` genérico.
+ *
+ * De paso avisa al Store_Conexion: la primera petición que falla es la señal
+ * más temprana de que se cayó la red, mucho antes de que lo note el sondeo
+ * periódico a /health.
+ */
+/**
+ * En modo sin conexión la petición no sale. Importa cuando el servidor sí es
+ * alcanzable (simulador de desarrollo, o red recuperada antes del sondeo): sin
+ * cookie válida respondería 401 y el Interceptor_401 cerraría la sesión.
+ */
+function cortarSiNoHayServidor(): void {
+  if (haySinConexion()) {
+    throw new RedError(new Error("La aplicación está en modo sin conexión"));
+  }
+}
+
+async function fetchOFallarPorRed(
+  url: string,
+  init: RequestInit
+): Promise<Response> {
+  cortarSiNoHayServidor();
+
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    // Una cancelación deliberada (cambio de pantalla, búsqueda que se
+    // reescribe) no es un problema de red: se deja pasar tal cual.
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+
+    useConexionStore.getState().marcarSinConexion();
+    throw new RedError(error);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +113,7 @@ export async function request<T = void>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(buildUrl(path), {
+  const response = await fetchOFallarPorRed(buildUrl(path), {
     method,
     credentials: "include", // Requisito 1.1
     headers,
@@ -129,7 +176,7 @@ export async function requestBlob(
   path: string,
   options: { signal?: AbortSignal } = {}
 ): Promise<{ blob: Blob; contentDisposition: string | null }> {
-  const response = await fetch(buildUrl(path), {
+  const response = await fetchOFallarPorRed(buildUrl(path), {
     method: "GET",
     credentials: "include",
     signal: options.signal,

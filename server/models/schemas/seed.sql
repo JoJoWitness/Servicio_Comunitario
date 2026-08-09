@@ -901,4 +901,350 @@ JOIN "Procedimientos" p ON p.intervencion = v.procedimiento
 JOIN "Intervencion"   i ON i.tecnica      = v.tecnica
 ON CONFLICT (id_procedimiento, id_tecnica) DO NOTHING;
 
+-- =====================================================================
+-- Oculoplastia, vía lagrimal y órbita (2026-08)
+--
+-- Estos procedimientos no salen de las 169 notas de docs/*.pptx: los aportó
+-- el servicio como cirugías que sí se hacen pero que no habían quedado
+-- registradas en el análisis. Van en un bloque aparte para que se sepa de
+-- dónde vienen; el formato y las reglas son las mismas que arriba (nombres
+-- únicos, resumen precargado y editable, ON CONFLICT DO NOTHING).
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Técnicas nuevas (46): los pasos que estos procedimientos necesitan y que
+-- el catálogo original no tenía. Las de asepsia, montaje y cierre se reusan.
+-- ---------------------------------------------------------------------
+INSERT INTO "Intervencion" (tecnica, frase, huecos) VALUES
+  -- Vía lagrimal
+  ('Ampliación del punto lagrimal en tres cortes',
+   'se realiza ampliación del punto lagrimal mediante técnica de tres cortes con tijera de Vannas', NULL),
+  ('Medición del punto lagrimal con calibrador',
+   'se mide el diámetro del punto lagrimal con calibrador para seleccionar el tapón', NULL),
+  ('Colocación de tapón fenestrado en punto lagrimal',
+   'se coloca tapón fenestrado en punto lagrimal {punto}', '[{"nombre":"punto","default":"inferior"}]'::jsonb),
+  ('Intubación bicanalicular con set de silicón',
+   'se procede a realizar intubación bicanalicular con set de silicón, recuperando ambos extremos en meato inferior', NULL),
+  ('Anudado y fijación del tubo de silicón en meato inferior',
+   'se anuda y fija el tubo de silicón en meato inferior', NULL),
+  ('Incisión cutánea en dorso nasal',
+   'se realiza incisión cutánea de {longitud} mm en dorso nasal a {distancia} mm del canto interno', '[{"nombre":"longitud","default":"15"},{"nombre":"distancia","default":"10"}]'::jsonb),
+  ('Disección por planos hasta la cresta lagrimal anterior',
+   'se diseca por planos hasta exponer la cresta lagrimal anterior', NULL),
+  ('Osteotomía con gubia de Kerrison',
+   'se realiza osteotomía de {tamano} mm con gubia de Kerrison', '[{"nombre":"tamano","default":"10"}]'::jsonb),
+  ('Apertura del saco lagrimal y la mucosa nasal en H',
+   'se abre el saco lagrimal en H y la mucosa nasal en H, conformando colgajos anterior y posterior', NULL),
+  ('Sutura de colgajos mucosos',
+   'se suturan los colgajos posteriores y anteriores con vicryl 6-0', NULL),
+  ('Abordaje endonasal con endoscopio',
+   'se realiza abordaje endonasal bajo visión endoscópica, con transiluminación del saco lagrimal', NULL),
+  ('Taponamiento nasal',
+   'se coloca taponamiento nasal con merocel', NULL),
+  ('Cierre por planos',
+   'se cierra por planos con vicryl 6-0 y nylon 6-0 en piel', NULL),
+
+  -- Párpados
+  ('Anestesia local infiltrativa con lidocaína al 2 %',
+   'bajo anestesia local infiltrativa con lidocaína al {concentracion} % con epinefrina', '[{"nombre":"concentracion","default":"2"}]'::jsonb),
+  ('Marcaje del pliegue palpebral',
+   'se marca el pliegue palpebral superior y los puntos de abordaje', NULL),
+  ('Incisión en pliegue palpebral superior',
+   'se realiza incisión en pliegue palpebral superior con hoja de bisturí n.° 15', NULL),
+  ('Apertura del septum orbitario',
+   'se apertura septum orbitario exponiendo la grasa preaponeurótica', NULL),
+  ('Reinserción de la aponeurosis del elevador al tarso',
+   'se identifica la aponeurosis del músculo elevador y se reinserta al tercio superior del tarso con {puntos} puntos de nylon 6-0', '[{"nombre":"puntos","default":"3"}]'::jsonb),
+  ('Ajuste de la altura palpebral en sedestación',
+   'se ajusta la altura y el contorno palpebral con el paciente en sedestación', NULL),
+  ('Eversión palpebral con separador de Desmarres',
+   'se everte el párpado con separador de Desmarres', NULL),
+  ('Resección de músculo de Müller y conjuntiva',
+   'se resecan {milimetros} mm de músculo de Müller y conjuntiva tarsal con pinza de Putterman', '[{"nombre":"milimetros","default":"8"}]'::jsonb),
+  ('Sutura continua conjuntival con nylon 6-0',
+   'se afronta el borde conjuntival con sutura continua de nylon 6-0', NULL),
+  ('Paso del set de silicón en pentágono',
+   'se realizan incisiones en párpado y región frontal, se pasa el set de silicón conformando un pentágono y se fija al tarso', NULL),
+  ('Ajuste y sepultamiento del nudo frontal',
+   'se ajusta la tensión hasta la altura palpebral deseada y se sepulta el nudo en la incisión frontal', NULL),
+  ('Incisión subciliar',
+   'se realiza incisión subciliar en párpado inferior', NULL),
+  ('Reinserción de los retractores del párpado inferior',
+   'se identifican los retractores del párpado inferior y se reinsertan al borde inferior del tarso con vicryl 6-0', NULL),
+  ('Cantotomía lateral y cantólisis inferior',
+   'se realiza cantotomía lateral y cantólisis del brazo inferior del tendón cantal', NULL),
+  ('Confección de la tira tarsal',
+   'se confecciona tira tarsal desepitelizando el borde y removiendo la conjuntiva palpebral', NULL),
+  ('Fijación de la tira tarsal al periostio',
+   'se fija la tira tarsal al periostio del reborde orbitario lateral con prolene 5-0', NULL),
+  ('Cierre de piel con nylon 6-0',
+   'se cierra piel con puntos separados de nylon {calibre}', '[{"nombre":"calibre","default":"6-0"}]'::jsonb),
+
+  -- Órbita y cavidad anoftálmica
+  ('Peritomía conjuntival en 360°',
+   'se realiza peritomía conjuntival en 360°', NULL),
+  ('Desinserción de los cuatro músculos rectos',
+   'se desinsertan los cuatro músculos rectos previa referencia con vicryl 6-0', NULL),
+  ('Queratectomía y evisceración del contenido uveal',
+   'se realiza queratectomía y se eviscera el contenido uveal con cucharilla de evisceración, dejando la esclera limpia', NULL),
+  ('Esclerotomías relajantes posteriores',
+   'se realizan esclerotomías relajantes posteriores', NULL),
+  ('Sección del nervio óptico con tijera de enucleación',
+   'se secciona el nervio óptico con tijera curva de enucleación', NULL),
+  ('Colocación de implante orbitario',
+   'se coloca implante orbitario de {material} de {tamano} mm', '[{"nombre":"material","default":"silicón"},{"nombre":"tamano","default":"18"}]'::jsonb),
+  ('Sutura de Tenon y conjuntiva por planos',
+   'se sutura cápsula de Tenon y conjuntiva por planos con vicryl 6-0', NULL),
+  ('Colocación de conformador',
+   'se coloca conformador en fondo de saco', NULL),
+  ('Liberación de bridas de la cavidad anoftálmica',
+   'se liberan las bridas de la cavidad anoftálmica y se diseca el plano hasta los fondos de saco', NULL),
+  ('Injerto dermograso',
+   'se coloca injerto dermograso obtenido de región glútea en el fondo de saco', NULL),
+  ('Injerto de mucosa oral',
+   'se toma injerto de mucosa oral de labio inferior y se fija a los fondos de saco con vicryl 6-0', NULL),
+  ('Molde de silicón en fondos de saco',
+   'se coloca molde de silicón en los fondos de saco y se fija con puntos transcutáneos de prolene 4-0', NULL),
+  ('Exenteración del contenido orbitario',
+   'se realiza incisión perióstica en el reborde orbitario y se diseca el contenido orbitario en bloque hasta el ápex, seccionándolo con tijera curva', NULL),
+  ('Hemostasia del ápex orbitario',
+   'se realiza hemostasia del ápex orbitario con cera de hueso y electrocauterio', NULL),
+  ('Relleno de la cavidad con gasa vaselinada',
+   'se rellena la cavidad con gasa vaselinada', NULL),
+  ('Vendaje compresivo',
+   'se coloca vendaje compresivo', NULL)
+ON CONFLICT (tecnica) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- Procedimientos nuevos (14).
+-- «Cura/drenaje de chalazión», «Puntoplastia» y «Sondaje de vía lagrimal»
+-- ya estaban en el catálogo original y no se repiten aquí.
+-- ---------------------------------------------------------------------
+INSERT INTO "Procedimientos" (intervencion, resumen) VALUES
+  ('Dacriointubación cerrada con set de silicón',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza lavado de superficie con iodopovidona al 10 % durante 3 minutos, se procede a dilatar puntos lagrimales superiores e inferiores con dilatador de vía lagrimal, se procede a permeabilizar vía lagrimal introduciendo sonda de Bowman N.° 2, se procede a realizar intubación bicanalicular con set de silicón, recuperando ambos extremos en meato inferior, se anuda y fija el tubo de silicón en meato inferior, se comprueba permeabilidad introduciendo cánula unida a inyectadora cargada con 5 cc de solución salina al 0,9 %, asepsia final, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.'),
+  ('Implantación de tapones fenestrados en punto lagrimal',
+   'Bajo anestesia tópica, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se procede a dilatar puntos lagrimales superiores e inferiores con dilatador de vía lagrimal, se mide el diámetro del punto lagrimal con calibrador para seleccionar el tapón, se coloca tapón fenestrado en punto lagrimal inferior, asepsia final, antibiótico tópico, acto culminado sin complicaciones.'),
+  ('Dacriocistorrinostomía abierta',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza lavado de superficie con iodopovidona al 10 % durante 3 minutos, se realiza incisión cutánea de 15 mm en dorso nasal a 10 mm del canto interno, se diseca por planos hasta exponer la cresta lagrimal anterior, cauterización de vasos sangrantes, se realiza osteotomía de 10 mm con gubia de Kerrison, se abre el saco lagrimal en H y la mucosa nasal en H, conformando colgajos anterior y posterior, se procede a realizar intubación bicanalicular con set de silicón, recuperando ambos extremos en meato inferior, se suturan los colgajos posteriores y anteriores con vicryl 6-0, se anuda y fija el tubo de silicón en meato inferior, se cierra por planos con vicryl 6-0 y nylon 6-0 en piel, verificación de hemostasia, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.'),
+  ('Dacriocistorrinostomía cerrada',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza abordaje endonasal bajo visión endoscópica, con transiluminación del saco lagrimal, se realiza osteotomía de 10 mm con gubia de Kerrison, se abre el saco lagrimal en H y la mucosa nasal en H, conformando colgajos anterior y posterior, se procede a realizar intubación bicanalicular con set de silicón, recuperando ambos extremos en meato inferior, se anuda y fija el tubo de silicón en meato inferior, se comprueba permeabilidad introduciendo cánula unida a inyectadora cargada con 5 cc de solución salina al 0,9 %, se coloca taponamiento nasal con merocel, verificación de hemostasia, antibiótico tópico, acto culminado sin complicaciones.'),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior',
+   'Bajo anestesia local infiltrativa con lidocaína al 2 % con epinefrina, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se marca el pliegue palpebral superior y los puntos de abordaje, se realiza incisión en pliegue palpebral superior con hoja de bisturí n.° 15, cauterización de vasos sangrantes, se apertura septum orbitario exponiendo la grasa preaponeurótica, se identifica la aponeurosis del músculo elevador y se reinserta al tercio superior del tarso con 3 puntos de nylon 6-0, se ajusta la altura y el contorno palpebral con el paciente en sedestación, se cierra piel con puntos separados de nylon 6-0, antibiótico tópico, acto culminado sin complicaciones.'),
+  ('Mullerectomía',
+   'Bajo anestesia local infiltrativa con lidocaína al 2 % con epinefrina, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se everte el párpado con separador de Desmarres, se resecan 8 mm de músculo de Müller y conjuntiva tarsal con pinza de Putterman, se afronta el borde conjuntival con sutura continua de nylon 6-0, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.'),
+  ('Suspensión al frontal con set de silicón',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se marca el pliegue palpebral superior y los puntos de abordaje, se realizan incisiones en párpado y región frontal, se pasa el set de silicón conformando un pentágono y se fija al tarso, se ajusta la tensión hasta la altura palpebral deseada y se sepulta el nudo en la incisión frontal, se cierra piel con puntos separados de nylon 6-0, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.'),
+  ('Reinserción de retractores del párpado inferior',
+   'Bajo anestesia local infiltrativa con lidocaína al 2 % con epinefrina, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza incisión subciliar en párpado inferior, cauterización de vasos sangrantes, se identifican los retractores del párpado inferior y se reinsertan al borde inferior del tarso con vicryl 6-0, se cierra piel con puntos separados de nylon 6-0, antibiótico tópico, acto culminado sin complicaciones.'),
+  ('Tira tarsal',
+   'Bajo anestesia local infiltrativa con lidocaína al 2 % con epinefrina, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza cantotomía lateral y cantólisis del brazo inferior del tendón cantal, se confecciona tira tarsal desepitelizando el borde y removiendo la conjuntiva palpebral, se fija la tira tarsal al periostio del reborde orbitario lateral con prolene 5-0, se cierra piel con puntos separados de nylon 6-0, antibiótico tópico, acto culminado sin complicaciones.'),
+  ('Reconstrucción de socket a oftálmico',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, blefaróstato, se liberan las bridas de la cavidad anoftálmica y se diseca el plano hasta los fondos de saco, se coloca injerto dermograso obtenido de región glútea en el fondo de saco, se sutura cápsula de Tenon y conjuntiva por planos con vicryl 6-0, se coloca conformador en fondo de saco, antibiótico tópico, se coloca vendaje compresivo, acto culminado sin complicaciones.'),
+  ('Reconstrucción de fondos de saco',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, blefaróstato, se liberan las bridas de la cavidad anoftálmica y se diseca el plano hasta los fondos de saco, se toma injerto de mucosa oral de labio inferior y se fija a los fondos de saco con vicryl 6-0, se coloca molde de silicón en los fondos de saco y se fija con puntos transcutáneos de prolene 4-0, antibiótico tópico, se coloca vendaje compresivo, acto culminado sin complicaciones.'),
+  ('Evisceración',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, blefaróstato, se realiza peritomía conjuntival en 360°, se realiza queratectomía y se eviscera el contenido uveal con cucharilla de evisceración, dejando la esclera limpia, se realizan esclerotomías relajantes posteriores, cauterización de vasos sangrantes, se coloca implante orbitario de silicón de 18 mm, se sutura cápsula de Tenon y conjuntiva por planos con vicryl 6-0, se coloca conformador en fondo de saco, se administra antibiótico subconjuntival, antibiótico tópico, se coloca vendaje compresivo, acto culminado sin complicaciones.'),
+  ('Enucleación',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, blefaróstato, se realiza peritomía conjuntival en 360°, se desinsertan los cuatro músculos rectos previa referencia con vicryl 6-0, se secciona el nervio óptico con tijera curva de enucleación, verificación de hemostasia, se coloca implante orbitario de silicón de 18 mm, se sutura cápsula de Tenon y conjuntiva por planos con vicryl 6-0, se coloca conformador en fondo de saco, se administra antibiótico subconjuntival, antibiótico tópico, se coloca vendaje compresivo, acto culminado sin complicaciones.'),
+  ('Exenteración',
+   'Bajo anestesia general, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se realiza incisión perióstica en el reborde orbitario y se diseca el contenido orbitario en bloque hasta el ápex, seccionándolo con tijera curva, se realiza hemostasia del ápex orbitario con cera de hueso y electrocauterio, se rellena la cavidad con gasa vaselinada, antibiótico tópico, se coloca vendaje compresivo, acto culminado sin complicaciones.')
+ON CONFLICT (intervencion) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- Qué técnica se usa en qué procedimiento, para los 14 nuevos.
+-- ---------------------------------------------------------------------
+INSERT INTO "Procedimiento_Tecnica" (id_procedimiento, id_tecnica, orden, por_defecto)
+SELECT p.id, i.id, v.orden, v.por_defecto
+FROM (VALUES
+  ('Dacriointubación cerrada con set de silicón', 'Anestesia general', 1, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Anestesia local', 2, FALSE),
+  ('Dacriointubación cerrada con set de silicón', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Lavado de superficie con iodopovidona al 10 %', 5, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Dilatación de puntos lagrimales', 6, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Sondaje con sonda de Bowman N.° 2', 7, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Intubación bicanalicular con set de silicón', 8, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Anudado y fijación del tubo de silicón en meato inferior', 9, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Prueba de permeabilidad con solución salina', 10, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Asepsia final', 11, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Antibiótico tópico', 12, TRUE),
+  ('Dacriointubación cerrada con set de silicón', 'Parchado ocular', 13, TRUE),
+
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Anestesia tópica', 1, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Dilatación de puntos lagrimales', 4, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Medición del punto lagrimal con calibrador', 5, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Colocación de tapón fenestrado en punto lagrimal', 6, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Asepsia final', 7, TRUE),
+  ('Implantación de tapones fenestrados en punto lagrimal', 'Antibiótico tópico', 8, TRUE),
+
+  ('Dacriocistorrinostomía abierta', 'Anestesia general', 1, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Anestesia local infiltrativa con lidocaína al 2 %', 2, FALSE),
+  ('Dacriocistorrinostomía abierta', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Lavado de superficie con iodopovidona al 10 %', 5, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Incisión cutánea en dorso nasal', 6, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Disección por planos hasta la cresta lagrimal anterior', 7, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Cauterización de vasos sangrantes', 8, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Osteotomía con gubia de Kerrison', 9, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Apertura del saco lagrimal y la mucosa nasal en H', 10, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Intubación bicanalicular con set de silicón', 11, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Sutura de colgajos mucosos', 12, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Anudado y fijación del tubo de silicón en meato inferior', 13, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Cierre por planos', 14, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Verificación de hemostasia', 15, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Taponamiento nasal', 16, FALSE),
+  ('Dacriocistorrinostomía abierta', 'Antibiótico tópico', 17, TRUE),
+  ('Dacriocistorrinostomía abierta', 'Parchado ocular', 18, TRUE),
+
+  ('Dacriocistorrinostomía cerrada', 'Anestesia general', 1, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Abordaje endonasal con endoscopio', 4, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Osteotomía con gubia de Kerrison', 5, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Apertura del saco lagrimal y la mucosa nasal en H', 6, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Intubación bicanalicular con set de silicón', 7, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Anudado y fijación del tubo de silicón en meato inferior', 8, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Prueba de permeabilidad con solución salina', 9, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Taponamiento nasal', 10, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Verificación de hemostasia', 11, TRUE),
+  ('Dacriocistorrinostomía cerrada', 'Antibiótico tópico', 12, TRUE),
+
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Anestesia local infiltrativa con lidocaína al 2 %', 1, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Sedación', 2, FALSE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Marcaje del pliegue palpebral', 5, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Incisión en pliegue palpebral superior', 6, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Cauterización de vasos sangrantes', 7, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Apertura del septum orbitario', 8, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Reinserción de la aponeurosis del elevador al tarso', 9, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Ajuste de la altura palpebral en sedestación', 10, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Cierre de piel con nylon 6-0', 11, TRUE),
+  ('Reinserción de aponeurosis del músculo elevador del párpado superior', 'Antibiótico tópico', 12, TRUE),
+
+  ('Mullerectomía', 'Anestesia local infiltrativa con lidocaína al 2 %', 1, TRUE),
+  ('Mullerectomía', 'Sedación', 2, FALSE),
+  ('Mullerectomía', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Mullerectomía', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Mullerectomía', 'Eversión palpebral con separador de Desmarres', 5, TRUE),
+  ('Mullerectomía', 'Resección de músculo de Müller y conjuntiva', 6, TRUE),
+  ('Mullerectomía', 'Sutura continua conjuntival con nylon 6-0', 7, TRUE),
+  ('Mullerectomía', 'Antibiótico tópico', 8, TRUE),
+  ('Mullerectomía', 'Parchado ocular', 9, TRUE),
+
+  ('Suspensión al frontal con set de silicón', 'Anestesia general', 1, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Anestesia local infiltrativa con lidocaína al 2 %', 2, FALSE),
+  ('Suspensión al frontal con set de silicón', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Marcaje del pliegue palpebral', 5, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Paso del set de silicón en pentágono', 6, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Ajuste y sepultamiento del nudo frontal', 7, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Cierre de piel con nylon 6-0', 8, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Antibiótico tópico', 9, TRUE),
+  ('Suspensión al frontal con set de silicón', 'Parchado ocular', 10, TRUE),
+
+  ('Reinserción de retractores del párpado inferior', 'Anestesia local infiltrativa con lidocaína al 2 %', 1, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Incisión subciliar', 4, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Cauterización de vasos sangrantes', 5, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Reinserción de los retractores del párpado inferior', 6, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Cantotomía lateral y cantólisis inferior', 7, FALSE),
+  ('Reinserción de retractores del párpado inferior', 'Cierre de piel con nylon 6-0', 8, TRUE),
+  ('Reinserción de retractores del párpado inferior', 'Antibiótico tópico', 9, TRUE),
+
+  ('Tira tarsal', 'Anestesia local infiltrativa con lidocaína al 2 %', 1, TRUE),
+  ('Tira tarsal', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Tira tarsal', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Tira tarsal', 'Cantotomía lateral y cantólisis inferior', 4, TRUE),
+  ('Tira tarsal', 'Confección de la tira tarsal', 5, TRUE),
+  ('Tira tarsal', 'Fijación de la tira tarsal al periostio', 6, TRUE),
+  ('Tira tarsal', 'Cauterización de vasos sangrantes', 7, FALSE),
+  ('Tira tarsal', 'Cierre de piel con nylon 6-0', 8, TRUE),
+  ('Tira tarsal', 'Antibiótico tópico', 9, TRUE),
+
+  ('Reconstrucción de socket a oftálmico', 'Anestesia general', 1, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Blefaróstato', 4, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Liberación de bridas de la cavidad anoftálmica', 5, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Injerto dermograso', 6, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Injerto de mucosa oral', 7, FALSE),
+  ('Reconstrucción de socket a oftálmico', 'Sutura de Tenon y conjuntiva por planos', 8, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Colocación de conformador', 9, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Antibiótico tópico', 10, TRUE),
+  ('Reconstrucción de socket a oftálmico', 'Vendaje compresivo', 11, TRUE),
+
+  ('Reconstrucción de fondos de saco', 'Anestesia general', 1, TRUE),
+  ('Reconstrucción de fondos de saco', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Reconstrucción de fondos de saco', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Reconstrucción de fondos de saco', 'Blefaróstato', 4, TRUE),
+  ('Reconstrucción de fondos de saco', 'Liberación de bridas de la cavidad anoftálmica', 5, TRUE),
+  ('Reconstrucción de fondos de saco', 'Injerto de mucosa oral', 6, TRUE),
+  ('Reconstrucción de fondos de saco', 'Colocación de membrana amniótica', 7, FALSE),
+  ('Reconstrucción de fondos de saco', 'Molde de silicón en fondos de saco', 8, TRUE),
+  ('Reconstrucción de fondos de saco', 'Colocación de conformador', 9, FALSE),
+  ('Reconstrucción de fondos de saco', 'Antibiótico tópico', 10, TRUE),
+  ('Reconstrucción de fondos de saco', 'Vendaje compresivo', 11, TRUE),
+
+  ('Evisceración', 'Anestesia general', 1, TRUE),
+  ('Evisceración', 'Anestesia retrobulbar', 2, FALSE),
+  ('Evisceración', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Evisceración', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Evisceración', 'Blefaróstato', 5, TRUE),
+  ('Evisceración', 'Peritomía conjuntival en 360°', 6, TRUE),
+  ('Evisceración', 'Queratectomía y evisceración del contenido uveal', 7, TRUE),
+  ('Evisceración', 'Esclerotomías relajantes posteriores', 8, TRUE),
+  ('Evisceración', 'Cauterización de vasos sangrantes', 9, TRUE),
+  ('Evisceración', 'Colocación de implante orbitario', 10, TRUE),
+  ('Evisceración', 'Sutura de Tenon y conjuntiva por planos', 11, TRUE),
+  ('Evisceración', 'Colocación de conformador', 12, TRUE),
+  ('Evisceración', 'Antibiótico subconjuntival', 13, TRUE),
+  ('Evisceración', 'Antibiótico tópico', 14, TRUE),
+  ('Evisceración', 'Vendaje compresivo', 15, TRUE),
+
+  ('Enucleación', 'Anestesia general', 1, TRUE),
+  ('Enucleación', 'Anestesia retrobulbar', 2, FALSE),
+  ('Enucleación', 'Asepsia y antisepsia del área operatoria', 3, TRUE),
+  ('Enucleación', 'Colocación de campos quirúrgicos estériles', 4, TRUE),
+  ('Enucleación', 'Blefaróstato', 5, TRUE),
+  ('Enucleación', 'Peritomía conjuntival en 360°', 6, TRUE),
+  ('Enucleación', 'Desinserción de los cuatro músculos rectos', 7, TRUE),
+  ('Enucleación', 'Sección del nervio óptico con tijera de enucleación', 8, TRUE),
+  ('Enucleación', 'Verificación de hemostasia', 9, TRUE),
+  ('Enucleación', 'Colocación de implante orbitario', 10, TRUE),
+  ('Enucleación', 'Sutura de Tenon y conjuntiva por planos', 11, TRUE),
+  ('Enucleación', 'Colocación de conformador', 12, TRUE),
+  ('Enucleación', 'Antibiótico subconjuntival', 13, TRUE),
+  ('Enucleación', 'Antibiótico tópico', 14, TRUE),
+  ('Enucleación', 'Vendaje compresivo', 15, TRUE),
+
+  ('Exenteración', 'Anestesia general', 1, TRUE),
+  ('Exenteración', 'Asepsia y antisepsia del área operatoria', 2, TRUE),
+  ('Exenteración', 'Colocación de campos quirúrgicos estériles', 3, TRUE),
+  ('Exenteración', 'Exenteración del contenido orbitario', 4, TRUE),
+  ('Exenteración', 'Hemostasia del ápex orbitario', 5, TRUE),
+  ('Exenteración', 'Injerto dermograso', 6, FALSE),
+  ('Exenteración', 'Relleno de la cavidad con gasa vaselinada', 7, TRUE),
+  ('Exenteración', 'Antibiótico tópico', 8, TRUE),
+  ('Exenteración', 'Vendaje compresivo', 9, TRUE),
+
+  -- La puntoplastia venía sin su paso propio: el resumen sembrado era el del
+  -- sondaje. Se añade el corte y se corrige el relato más abajo.
+  ('Puntoplastia', 'Ampliación del punto lagrimal en tres cortes', 5, TRUE)
+) AS v(procedimiento, tecnica, orden, por_defecto)
+JOIN "Procedimientos" p ON p.intervencion = v.procedimiento
+JOIN "Intervencion"   i ON i.tecnica      = v.tecnica
+ON CONFLICT (id_procedimiento, id_tecnica) DO NOTHING;
+
+-- Corrige el resumen de la puntoplastia solo si sigue siendo el texto sembrado
+-- (idéntico al del sondaje). Si el admin ya lo editó, no se toca — HU-20.
+UPDATE "Procedimientos"
+SET resumen = 'Bajo anestesia local, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se procede a dilatar puntos lagrimales superiores e inferiores con dilatador de vía lagrimal, se realiza ampliación del punto lagrimal mediante técnica de tres cortes con tijera de Vannas, se procede a permeabilizar vía lagrimal introduciendo sonda de Bowman N.° 2, se comprueba permeabilidad introduciendo cánula unida a inyectadora cargada con 5 cc de solución salina al 0,9 %, asepsia final, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.'
+WHERE intervencion = 'Puntoplastia'
+  AND resumen = 'Bajo anestesia local, previa asepsia y antisepsia del área operatoria, colocación de campos quirúrgicos estériles, se procede a dilatar puntos lagrimales superiores e inferiores con dilatador de vía lagrimal, se procede a permeabilizar vía lagrimal introduciendo sonda de Bowman N.° 2, se comprueba permeabilidad introduciendo cánula unida a inyectadora cargada con 5 cc de solución salina al 0,9 %, asepsia final, antibiótico tópico, parchado ocular, acto culminado sin complicaciones.';
+
 COMMIT;

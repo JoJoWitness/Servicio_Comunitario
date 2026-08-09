@@ -6,6 +6,7 @@
  */
 
 import { useNavigate } from "react-router-dom";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatFechaUI } from "@/lib/datetime";
 import type { Nota } from "@/domain/models";
 
@@ -20,6 +21,10 @@ interface NotaCardProps {
    * quirúrgico que trae la propia nota.
    */
   nombreMedico?: string;
+  /** Muestra la casilla para incluir la nota en una descarga en bloque. */
+  seleccionable?: boolean;
+  seleccionada?: boolean;
+  onSeleccionar?: (seleccionada: boolean) => void;
 }
 
 export function NotaCard({
@@ -27,6 +32,9 @@ export function NotaCard({
   mostrarPaciente = true,
   nombrePaciente,
   nombreMedico,
+  seleccionable = false,
+  seleccionada = false,
+  onSeleccionar,
 }: NotaCardProps) {
   const navigate = useNavigate();
 
@@ -53,6 +61,23 @@ export function NotaCard({
       }}
       aria-label={`Ver nota del ${formatFechaUI(nota.fechaComienzo)}`}
     >
+  
+      {seleccionable && (
+        <div
+          className="mr-3 flex items-center pt-0.5"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            label=""
+            containerClassName="border-0 bg-transparent p-0 hover:bg-transparent has-[:checked]:bg-transparent has-[:checked]:border-0"
+            checked={seleccionada}
+            onChange={(e) => onSeleccionar?.(e.target.checked)}
+            aria-label={`Seleccionar nota del ${formatFechaUI(nota.fechaComienzo)}`}
+          />
+        </div>
+      )}
+
       <div className="space-y-1 flex-1 min-w-0">
         {/* Fecha — siempre visible */}
         <p className="text-xs text-muted-foreground">{formatFechaUI(nota.fechaComienzo)}</p>
@@ -80,8 +105,8 @@ export function NotaCard({
           </span>
         )}
         {ayudantes.length > 0 && (
-          <span className="max-w-44 truncate text-xs text-muted-foreground">
-            Ayudantes: {ayudantes.join(", ")}
+          <span className="max-w-44 text-xs text-muted-foreground">
+            Ayudantes: {ayudantes.join("\n ")}
           </span>
         )}
       </div>

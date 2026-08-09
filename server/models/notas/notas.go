@@ -2,6 +2,7 @@ package notas
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"server/config"
@@ -41,14 +42,14 @@ func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
 func (n *Notas) Get(db *pgxpool.Pool) error {
 	query := `
 		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado
+			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado, COALESCE(client_uuid::text, '')
 		FROM "Nota_Operatoria"
 		WHERE id = @id
 		AND eliminado = FALSE;
 	`
 
 	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": n.ID})
-	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado)
+	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado, &n.ClientUUID)
 	if err != nil {
 		log.Printf("\n\nError getting nota: %v", err)
 		return err
@@ -366,9 +367,9 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 	// `eliminado` no se escribe: la baja es exclusiva de Delete.
 	query := `
 		INSERT INTO "Nota_Operatoria"
-			(dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado)
+			(dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, client_uuid)
 		VALUES
-			(@dx_pre_operatorio, @dx_post_operatorio, @intervencion_realizada, @fecha_comienzo, @fecha_culminacion, @hora_comienzo, @hora_culminacion, @resumen_intevencion, @pabellon, @es_electiva, @es_emergencia, @tuvo_biopsia, @anestesia, @id_paciente, @id_medico_encargado)
+			(@dx_pre_operatorio, @dx_post_operatorio, @intervencion_realizada, @fecha_comienzo, @fecha_culminacion, @hora_comienzo, @hora_culminacion, @resumen_intevencion, @pabellon, @es_electiva, @es_emergencia, @tuvo_biopsia, @anestesia, @id_paciente, @id_medico_encargado, @client_uuid)
 		RETURNING id;
 	`
 
@@ -388,6 +389,9 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 		"anestesia":              n.Anestia,
 		"id_paciente":            n.ID_Paciente,
 		"id_medico_encargado":    n.Medico_Encargado,
+		// La columna es UNIQUE: si fuera "" chocaría entre sí en todas las
+		// notas creadas en línea, así que la ausencia se guarda como NULL.
+		"client_uuid": nullSiVacio(n.ClientUUID),
 	}
 
 	// El id generado hace falta para poblar equipo_quirurgico.
@@ -501,6 +505,59 @@ func (n *Notas) Delete(db *pgxpool.Pool) error {
 	}
 
 	return nil
+}
+
+// nullSiVacio traduce el "sin valor" de Go (cadena vacía) al NULL de SQL. Hace
+// falta en las columnas UNIQUE opcionales: Postgres considera distintos entre sí
+// a todos los NULL, pero no a todas las cadenas vacías.
+func nullSiVacio(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// BuscarPorClientUUID devuelve la nota que ya se subió con ese identificador de
+// dispositivo, o (nil, nil) si todavía no está.
+//
+// Es el corazón de la sincronización: el médico redacta sin conexión, la nota
+// espera en el dispositivo con su client_uuid, y cuando por fin hay red se
+// intenta subir. Si el intento anterior llegó a guardarse pero la respuesta se
+// perdió en el camino, el reintento cae aquí y devuelve la nota que ya existe en
+// vez de crear una segunda copia de la misma cirugía.
+func BuscarPorClientUUID(db *pgxpool.Pool, clientUUID string) (*Notas, error) {
+	if clientUUID == "" {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id
+		FROM "Nota_Operatoria"
+		WHERE client_uuid::text = @client_uuid;
+	`
+
+	var id int
+	// Como texto para que un UUID mal formado responda "no está" en vez de
+	// reventar la consulta: el cliente ya recibirá un 400 por el formato.
+	err := db.QueryRow(context.Background(), query, pgx.NamedArgs{"client_uuid": clientUUID}).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		log.Printf("\n\nError looking up nota by client_uuid: %v", err)
+		return nil, err
+	}
+
+	// Una nota subida y luego eliminada sigue contando como "ya entró": lo que
+	// no puede pasar es que la cola local la reviva.
+	nota := &Notas{ID: id}
+	if err := nota.Get(db); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &Notas{ID: id, ClientUUID: clientUUID, Eliminado: true}, nil
+		}
+		return nil, err
+	}
+	return nota, nil
 }
 
 // Existe indica si la nota está registrada y vigente. Sirve para distinguir un

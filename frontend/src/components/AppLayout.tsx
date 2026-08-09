@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useLogout } from "@/hooks/useAuth";
+import { PanelConexion } from "@/offline/PanelConexion";
 import { cn } from "@/lib/utils";
 import logoServicio from "@/assets/logo-servicio.svg";
 
@@ -113,6 +114,11 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </ul>
         </nav>
+
+        <Separator />
+
+        {/* Conexión y trabajo pendiente de subir */}
+        <PanelConexion />
 
         <Separator />
 

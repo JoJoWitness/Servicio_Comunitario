@@ -31,14 +31,12 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Logout successful"))
 }
 
+// ClearSessionCookie borra la cookie del navegador. Los atributos tienen que
+// ser los mismos con los que se creó (PlantillaCookie) o el navegador la trata
+// como otra cookie distinta y deja viva la original.
 func ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_id",
-		Value:    "", // Clear the value
-		HttpOnly: true,
-		Secure:   false, // TODO: Must match the SessionCookie setting
-		SameSite: http.SameSiteStrictMode,
-		Path:     "/",
-		Expires:  time.Now().Add(-time.Hour),
-	})
+	cookie := PlantillaCookie()
+	cookie.Value = ""
+	cookie.Expires = time.Now().Add(-time.Hour)
+	http.SetCookie(w, cookie)
 }

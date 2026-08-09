@@ -17,9 +17,11 @@ import {
   pacienteToDomain,
   pacienteToWriteDto,
 } from "../dto/paciente.dto";
+import { isRedError } from "../errors";
 import { request } from "../httpClient";
 import type { FiltrosPacientesParams, PaginatedResponse, PaginationParams } from "../types";
-import { buildFilterQuery } from "./queryUtils";
+import { buildFilterQuery, coincide, paginarEnLocal, TAMANO_PAGINA_MAX } from "./queryUtils";
+import { listaReflejada, reflejar } from "@/offline/espejo";
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -35,6 +37,22 @@ export async function listarPacientes(
   filtros?: FiltrosPacientesParams,
   params?: PaginationParams
 ): Promise<PaginatedResponse<Paciente>> {
+  try {
+    return await pedirPacientes(filtros, params);
+  } catch (error) {
+    // Sin red: espejo, filtrando y paginando aquí mismo.
+    if (!isRedError(error)) throw error;
+
+    const espejo = await listaReflejada<Paciente>("pacientes");
+    if (!espejo) throw error;
+    return paginarEnLocal(filtrarPacientes(espejo, filtros), params);
+  }
+}
+
+async function pedirPacientes(
+  filtros?: FiltrosPacientesParams,
+  params?: PaginationParams
+): Promise<PaginatedResponse<Paciente>> {
   const qs = buildFilterQuery(filtros as Record<string, string | undefined>, params);
   const raw = await request<PaginatedResponse<PacienteDTO>>(`/pacientes${qs}`);
   return {
@@ -42,6 +60,55 @@ export async function listarPacientes(
     meta: raw.meta,
   };
 }
+
+function filtrarPacientes(
+  pacientes: Paciente[],
+  filtros?: FiltrosPacientesParams
+): Paciente[] {
+  if (!filtros) return pacientes;
+
+  return pacientes.filter((p) => {
+    if (filtros.nombre && !coincide(p.nombre, filtros.nombre)) return false;
+    if (filtros.documento && !coincide(p.numeroIdentificacion, filtros.documento)) return false;
+    if (filtros.historia_medica && !coincide(p.historiaMedica, filtros.historia_medica)) return false;
+    if (filtros.genero && p.genero !== filtros.genero) return false;
+    return true;
+  });
+}
+
+/**
+ * El padrón completo, página a página. Llena el selector de paciente y es el
+ * único que escribe el espejo.
+ */
+export async function todosLosPacientes(): Promise<Paciente[]> {
+  try {
+    const acumulado: Paciente[] = [];
+    let pagina = 1;
+    let totalPaginas = 1;
+
+    do {
+      const respuesta = await pedirPacientes(undefined, {
+        page: pagina,
+        size: TAMANO_PAGINA_MAX,
+      });
+      acumulado.push(...respuesta.data);
+      totalPaginas = respuesta.meta?.totalPages ?? 1;
+      pagina++;
+    } while (pagina <= totalPaginas && pagina <= LIMITE_PAGINAS);
+
+    await reflejar("pacientes", acumulado);
+    return acumulado;
+  } catch (error) {
+    if (!isRedError(error)) throw error;
+
+    const espejo = await listaReflejada<Paciente>("pacientes");
+    if (!espejo) throw error;
+    return espejo;
+  }
+}
+
+/** Tope: 3000 pacientes. */
+const LIMITE_PAGINAS = 30;
 
 /**
  * Obtiene un paciente por su id.

@@ -1,0 +1,103 @@
+# Compila los instaladores de la app de escritorio (Tauri) y los publica en un
+# Release de GitHub.
+#
+# Cómo se usa:
+#   git tag v1.0.0
+#   git push origin v1.0.0
+# GitHub enciende una máquina Windows y una Linux, compila en cada una y sube
+# los instaladores a un Release en borrador. Lo revisas y le das "Publish".
+#
+# La URL del backend se hornea aquí (VITE_API_URL) porque el frontend la congela
+# en tiempo de compilación. Si cambias de servidor, cámbiala abajo.
+name: Release de escritorio
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Permite lanzarlo a mano desde la pestaña Actions sin crear un tag, útil
+  # para probar que compila antes de sacar una versión.
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      # Necesario para que la acción cree el Release y suba los archivos.
+      contents: write
+
+    strategy:
+      # Si Windows falla, que Linux termine igual (y viceversa).
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest   # genera .msi y .exe
+          - platform: ubuntu-22.04      # genera .AppImage y .deb
+          # macOS queda listo para activar: descomenta la línea. Ojo, en repos
+          # privados los minutos de macOS cuentan x10, así que solo si lo
+          # necesitas de verdad.
+          # - platform: macos-latest    # genera .dmg
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Bajar el código
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust (toolchain estable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Caché de Rust
+        # Sin esto, cada build recompila todas las dependencias de Rust desde
+        # cero (~10 min). Con caché, las builds siguientes tardan la mitad.
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./frontend/src-tauri
+
+      - name: Librerías del sistema (solo Linux)
+        # La WebView de Tauri en Linux se apoya en WebKitGTK, que no viene en
+        # la máquina limpia. En Windows y Mac el motor ya está en el sistema.
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential curl wget file libxdo-dev libssl-dev
+
+      - name: Dependencias del frontend
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Compilar y publicar el instalador
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # === El backend al que apuntará la app instalada ===
+          # Debe ser HTTPS y tener COOKIE_CROSS_SITE=true + el origen de Tauri
+          # en ALLOWED_ORIGINS, o el login fallará desde el binario.
+          VITE_API_URL: https://servicio-comunitario-7ye5.onrender.com
+        with:
+          projectPath: ./frontend
+          # El Release se nombra con el tag que disparó el workflow (v1.0.0…).
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Notas Operatorias HCSC ${{ github.ref_name }}'
+          releaseBody: |
+            Instaladores de la app de escritorio.
+
+            - **Windows**: baja el archivo `.msi` y ejecútalo. Si Windows
+              muestra "editor desconocido", pulsa *Más información → Ejecutar
+              de todas formas*.
+            - **Linux**: baja el `.AppImage`, dale permiso de ejecución y ábrelo.
+
+            Requiere conexión a internet al menos en el primer inicio de sesión.
+          # En borrador: los archivos se suben, pero tú revisas y le das
+          # "Publish" cuando quieras que quede visible.
+          releaseDraft: true
+          prerelease: false

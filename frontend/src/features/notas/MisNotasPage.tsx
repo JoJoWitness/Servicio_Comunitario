@@ -4,8 +4,8 @@
  */
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FilePlus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { CloudOff, FilePlus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -13,16 +13,24 @@ import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NotaCard } from "./NotaCard";
+import { BarraDescargaNotas } from "./BarraDescargaNotas";
+import { useDescargaMultiple } from "./useDescargaMultiple";
 import { ExportarRecord } from "./ExportarRecord";
+import { NotasPendientes } from "@/offline/NotasPendientes";
 import { useMisNotas } from "@/hooks/useNotas";
-import { useListarPacientes } from "@/hooks/usePacientes";
+import { useTodosLosPacientes } from "@/hooks/usePacientes";
 import { ordenarNotasDesc } from "@/lib/sort";
 import type { RangoFechas } from "@/domain/models";
 
 export default function MisNotasPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+
+  const reciénEncolada = Boolean(
+    (location.state as { notaEncolada?: boolean } | null)?.notaEncolada
+  );
 
   const rango: RangoFechas | undefined =
     from || to
@@ -34,13 +42,15 @@ export default function MisNotasPage() {
 
   // Requisito 18.1: GET /notas/medics — Req 18.4: con rango GET /notas/medics/dates
   const { data: notasRaw, isLoading, isError } = useMisNotas(rango);
-  const { data: pacientesResp } = useListarPacientes(undefined, { size: 200 });
+  const { data: pacientes } = useTodosLosPacientes();
 
   // Requisito 18.2: ordenar de más reciente a más antigua
   const notas = notasRaw ? ordenarNotasDesc(notasRaw) : [];
 
+  const descarga = useDescargaMultiple(notas);
+
   const getPaciente = (idPaciente: string) =>
-    (pacientesResp?.data ?? []).find((p) => p.id === idPaciente);
+    (pacientes ?? []).find((p) => p.id === idPaciente);
 
   return (
     <AppLayout>
@@ -52,6 +62,21 @@ export default function MisNotasPage() {
             Nueva nota
           </Button>
         </div>
+
+        {/* Confirmación de que la nota quedó guardada aquí y no en el servidor.
+            Llega como estado de navegación desde el formulario. */}
+        {reciénEncolada && (
+          <Alert role="status" className="border-amber-500/50">
+            <CloudOff className="h-4 w-4" />
+            <AlertDescription>
+              La nota se guardó en este equipo porque no hay conexión. Se subirá
+              sola en cuanto vuelva la red; también puedes forzarlo desde
+              «Sincronizar ahora», en la barra lateral.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <NotasPendientes resolverPaciente={(id) => getPaciente(id)?.nombre} />
 
         <ExportarRecord />
 
@@ -114,6 +139,17 @@ export default function MisNotasPage() {
           </div>
         )}
 
+        {notas.length > 0 && (
+          <BarraDescargaNotas
+            cantidadSeleccionada={descarga.seleccionadas.length}
+            todasMarcadas={descarga.todasMarcadas}
+            onMarcarTodas={descarga.marcarTodas}
+            onDescargar={descarga.descargar}
+            generando={descarga.generando}
+            error={descarga.error}
+          />
+        )}
+
         {/* Requisito 18.3: fecha, paciente, intervención, pabellón */}
         <div className="space-y-2">
           {notas.map((nota) => {
@@ -124,6 +160,11 @@ export default function MisNotasPage() {
                 nota={nota}
                 mostrarPaciente
                 nombrePaciente={paciente?.nombre}
+                seleccionable
+                seleccionada={descarga.estaSeleccionada(nota.id)}
+                onSeleccionar={(marcada) =>
+                  nota.id !== undefined && descarga.alternar(nota.id, marcada)
+                }
               />
             );
           })}

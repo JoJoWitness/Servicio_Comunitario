@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"server/models/usuarios"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -97,13 +98,41 @@ func SessionCookie(id string, rol string, w http.ResponseWriter) {
 	token := hex.EncodeToString(randomBytes)
 
 	LogCache.Add(token, &session)
-	http.SetCookie(w, &http.Cookie{
+	cookie := PlantillaCookie()
+	cookie.Value = token
+	cookie.Expires = time.Now().Add(DuracionSesion)
+	http.SetCookie(w, cookie)
+}
+
+// DuracionSesion es lo que vive una sesión. Coincide con el TTL de LogCache: de
+// nada sirve una cookie que el servidor ya olvidó.
+const DuracionSesion = time.Hour * 32
+
+// PlantillaCookie arma la cookie de sesión con los atributos del entorno.
+//
+// El detalle que decide si la aplicación de escritorio funciona o no es
+// `SameSite`. Con `Strict`, el navegador solo manda la cookie cuando la página y
+// la API comparten sitio; la WebView de Tauri pide desde `tauri://localhost`
+// contra un backend en otro dominio, así que la sesión sencillamente no viaja y
+// todo responde 401. Para ese caso hace falta `SameSite=None`, que el navegador
+// solo acepta junto con `Secure`, y `Secure` exige HTTPS.
+//
+// De ahí que sea configurable en vez de fijo: en desarrollo (HTTP en localhost)
+// se queda en Lax, y el despliegue real —que sí tiene HTTPS— activa
+// COOKIE_CROSS_SITE=true para que el binario pueda autenticarse.
+func PlantillaCookie() *http.Cookie {
+	cookie := &http.Cookie{
 		Name:     "session_id",
-		Value:    token,
 		HttpOnly: true,
-		Secure:   false, //TODO: set this to false on production and set HTTPS
-		SameSite: http.SameSiteStrictMode,
 		Path:     "/",
-		Expires:  time.Now().Add(time.Hour * 32),
-	})
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	if os.Getenv("COOKIE_CROSS_SITE") == "true" {
+		cookie.SameSite = http.SameSiteNoneMode
+		cookie.Secure = true
+	}
+
+	return cookie
 }
