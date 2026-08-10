@@ -62,6 +62,8 @@ function hace(marca: number): string {
 export function PanelConexion() {
   const estado = useConexionStore((s) => s.estado);
   const comprobar = useConexionStore((s) => s.comprobar);
+  const despertar = useConexionStore((s) => s.despertar);
+  const despertando = useConexionStore((s) => s.despertando);
   const modoSesion = useSessionStore((s) => s.modo);
   const { data: pendientes = [] } = usePendientes();
   const { mutate: sincronizar, isPending: sincronizando, data: resumen } =
@@ -169,14 +171,32 @@ export function PanelConexion() {
             {sincronizando ? "Subiendo..." : "Sincronizar ahora"}
           </Button>
 
+          {/*
+            Dos intentos distintos a propósito: reintentar es un vistazo rápido
+            (¿volvió la red?), despertar es esperar de pie a que el servidor
+            dormido termine de arrancar, que lleva cerca de un minuto.
+          */}
           {sinConexion && (
-            <button
-              type="button"
-              onClick={() => void comprobar()}
-              className="w-full px-2 text-left text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              Reintentar la conexión
-            </button>
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => void comprobar()}
+                disabled={despertando}
+                className="w-full px-2 text-left text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+              >
+                Reintentar la conexión
+              </button>
+              <button
+                type="button"
+                onClick={() => void despertar()}
+                disabled={despertando}
+                className="w-full px-2 text-left text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+              >
+                {despertando
+                  ? "Despertando el servidor…"
+                  : "Despertar el servidor"}
+              </button>
+            </div>
           )}
 
           {/* Resultado del último intento manual */}

@@ -35,6 +35,21 @@ const INTERVALO_EN_LINEA = 60_000;
  */
 const TIMEOUT_SONDEO = 5_000;
 
+/**
+ * El hosting gratuito apaga el servidor tras un rato sin visitas y lo vuelve a
+ * levantar con la primera petición que llega, tardando entre medio minuto y
+ * uno entero. Para el sondeo normal eso es indistinguible de un servidor
+ * caído, y está bien que lo sea: nadie debe esperar un minuto mirando una
+ * pantalla. Pero cuando alguien pide despertarlo a propósito, sí se espera.
+ */
+const TIMEOUT_DESPERTAR = 20_000;
+
+/** Cuánto se insiste en total antes de darlo por muerto de verdad. */
+const ESPERA_MAXIMA_DESPERTAR = 90_000;
+
+/** Respiro entre intento e intento al despertar. */
+const PAUSA_ENTRE_INTENTOS = 2_000;
+
 interface ConexionState {
   estado: EstadoConexion;
   /** Momento del último sondeo con respuesta, para mostrar "visto por última vez". */
@@ -46,7 +61,14 @@ interface ConexionState {
    * backend viven ambos en localhost, así que apagar el wifi no corta nada.
    */
   forzadoSinConexion: boolean;
+  /** Hay un intento de despertar el servidor en curso (ver `despertar`). */
+  despertando: boolean;
   comprobar: () => Promise<boolean>;
+  /**
+   * Insiste hasta que el servidor dormido termine de arrancar, o hasta que se
+   * agote la paciencia. Devuelve si se logró contactar.
+   */
+  despertar: () => Promise<boolean>;
   /** Fuerza el estado sin sondear. Lo usa el cliente HTTP al detectar un fallo de red. */
   marcarSinConexion: () => void;
   /** Enciende/apaga el interruptor de prueba (ver `forzadoSinConexion`). */
@@ -65,9 +87,9 @@ interface ConexionState {
  * Un `fetch` que lanza (sin red real) o un 5xx (backend caído) cuentan como
  * sin conexión.
  */
-async function sondear(): Promise<boolean> {
+async function sondear(timeout: number = TIMEOUT_SONDEO): Promise<boolean> {
   const control = new AbortController();
-  const corte = setTimeout(() => control.abort(), TIMEOUT_SONDEO);
+  const corte = setTimeout(() => control.abort(), timeout);
   try {
     const r = await fetch(`${BASE_URL.replace(/\/$/, "")}/health`, {
       method: "GET",
@@ -109,6 +131,7 @@ export const useConexionStore = create<ConexionState>()((set, get) => ({
   estado: forzadoInicial() ? "sin-conexion" : "comprobando",
   ultimoContacto: null,
   forzadoSinConexion: forzadoInicial(),
+  despertando: false,
 
   comprobar: async () => {
     // El interruptor de prueba manda sobre el sondeo: si está encendido, se
@@ -130,6 +153,42 @@ export const useConexionStore = create<ConexionState>()((set, get) => ({
       ultimoContacto: hayServidor ? Date.now() : get().ultimoContacto,
     });
     return hayServidor;
+  },
+
+  /**
+   * Despierta el servidor dormido.
+   *
+   * La petición que llega al hosting es la que enciende la máquina, así que
+   * basta con seguir llamando hasta que conteste: cada intento espera mucho
+   * más que el sondeo normal, y se reintenta hasta agotar la espera máxima.
+   * Es lo que separa "el servidor está apagado" de "no hay internet", que para
+   * el sondeo corto se veían igual.
+   */
+  despertar: async () => {
+    if (get().despertando) return false;
+
+    // El interruptor de prueba manda igual que en `comprobar`.
+    if (get().forzadoSinConexion) return false;
+
+    set({ despertando: true });
+    try {
+      const limite = Date.now() + ESPERA_MAXIMA_DESPERTAR;
+      do {
+        if (await sondear(TIMEOUT_DESPERTAR)) {
+          set({ estado: "en-linea", ultimoContacto: Date.now() });
+          return true;
+        }
+        // Sin red, el fetch falla al instante y esto sería un bucle cerrado
+        // machacando durante minuto y medio. Cuando el servidor está dormido
+        // el intento ya consume sus segundos y esta pausa apenas se nota.
+        await new Promise((listo) => setTimeout(listo, PAUSA_ENTRE_INTENTOS));
+      } while (Date.now() < limite);
+
+      set({ estado: "sin-conexion" });
+      return false;
+    } finally {
+      set({ despertando: false });
+    }
   },
 
   marcarSinConexion: () => {

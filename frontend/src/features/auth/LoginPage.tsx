@@ -8,7 +8,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { WifiOff } from "lucide-react";
+import { RefreshCw, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,20 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const sinConexion = useConexionStore((s) => s.estado) === "sin-conexion";
+  const despertando = useConexionStore((s) => s.despertando);
+  const despertar = useConexionStore((s) => s.despertar);
   const correoGuardado = correoRecordado();
+
+  // El servidor puede estar dormido, no caído: el hosting lo apaga tras un rato
+  // sin visitas y tarda cerca de un minuto en volver. Se ofrece esperarlo en vez
+  // de dejar al médico frente a un "sin conexión" que no explica nada.
+  const [falloDespertar, setFalloDespertar] = useState(false);
+
+  const intentarDespertar = async () => {
+    setFalloDespertar(false);
+    const despierto = await despertar();
+    if (!despierto) setFalloDespertar(true);
+  };
 
   const {
     register,
@@ -179,6 +192,45 @@ export default function LoginPage() {
                         conectarse al menos una vez para poder entrar sin red.
                       </>
                     )}
+
+                    {/*
+                      El servidor se apaga solo cuando lleva un rato sin
+                      visitas, y la primera petición lo enciende: por eso hay
+                      algo que hacer aquí, y no es "espera a ver".
+                    */}
+                    <div className="mt-3 space-y-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void intentarDespertar()}
+                        disabled={despertando}
+                      >
+                        {despertando ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Despertando el servidor…
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Despertar el servidor
+                          </>
+                        )}
+                      </Button>
+                      {despertando && (
+                        <p className="text-xs text-muted-foreground">
+                          Puede tardar hasta un minuto: el servidor se apaga
+                          cuando nadie lo usa y hay que esperar a que arranque.
+                        </p>
+                      )}
+                      {falloDespertar && !despertando && (
+                        <p className="text-xs text-muted-foreground">
+                          Sigue sin responder. Revisa que este equipo tenga
+                          internet y vuelve a intentarlo.
+                        </p>
+                      )}
+                    </div>
                   </AlertDescription>
                 </Alert>
               )}
