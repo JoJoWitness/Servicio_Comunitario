@@ -97,7 +97,10 @@ jobs:
             - **Linux**: baja el `.AppImage`, dale permiso de ejecución y ábrelo.
 
             Requiere conexión a internet al menos en el primer inicio de sesión.
-          # En borrador: los archivos se suben, pero tú revisas y le das
-          # "Publish" cuando quieras que quede visible.
-          releaseDraft: true
+          # Se publica solo al terminar de compilar. El borrador servía para
+          # revisar antes de hacerlo visible, pero el repositorio es privado:
+          # el Release solo lo ve quien ya tiene acceso, así que el paso manual
+          # no protegía de nada y obligaba a entrar a GitHub tras cada tag.
+          # Una versión que no convenza se despublica desde la propia página.
+          releaseDraft: false
           prerelease: false
