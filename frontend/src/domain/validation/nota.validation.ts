@@ -125,6 +125,20 @@ export const NotaFormSchema = z
       path: ["fechaCulminacion"],
     }
   )
+  .refine((data) => data.anestesia !== "", {
+    // No es un dato de relleno: condiciona el riesgo del acto y quién lo
+    // acompaña. Una nota sin anestesia registrada no está completa.
+    message: "Debes indicar el tipo de anestesia",
+    path: ["anestesia"],
+  })
+  .refine((data) => data.esElectiva || data.esEmergencia, {
+    // El backend las guarda como dos booleanos, pero son una sola pregunta y
+    // no admite "ninguna de las dos": toda cirugía fue programada o no lo fue.
+    // El error se cuelga de esElectiva porque el formulario no tiene un campo
+    // "tipo" al que apuntar.
+    message: "Debes indicar si la intervención fue electiva o de emergencia",
+    path: ["esElectiva"],
+  })
   .refine(
     (data) => {
       // Las horas solo se comparan cuando la intervención empieza y termina

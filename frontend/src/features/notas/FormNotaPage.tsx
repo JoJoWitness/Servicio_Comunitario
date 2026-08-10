@@ -453,7 +453,27 @@ export default function FormNotaPage() {
           </Alert>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+        {/*
+          Enter no envía la nota. El navegador, por defecto, manda el
+          formulario cuando se pulsa Enter en cualquier campo de una línea, y
+          aquí eso significa registrar una nota operatoria a medio escribir
+          mientras alguien tabula entre casillas. Se bloquea solo en los campos
+          de texto: los botones siguen activándose con Enter —hace falta para
+          quien navega con el teclado— y el área del resumen conserva el salto
+          de línea. Para guardar hay que pulsar el botón.
+        */}
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            const destino = e.target as HTMLElement;
+            const etiqueta = destino.tagName;
+            if (etiqueta === "TEXTAREA" || etiqueta === "BUTTON") return;
+            e.preventDefault();
+          }}
+          noValidate
+          className="space-y-6"
+        >
           {/* ── Paciente ── */}
           <Card>
             <CardHeader><CardTitle className="text-base">Paciente *</CardTitle></CardHeader>
@@ -758,7 +778,7 @@ export default function FormNotaPage() {
             <CardHeader><CardTitle className="text-base">Datos clínicos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Anestesia</Label>
+                <Label>Anestesia *</Label>
                 <Controller name="anestesia" control={control}
                   render={({ field }) => (
                     <RadioGroup
@@ -774,6 +794,9 @@ export default function FormNotaPage() {
                     />
                   )}
                 />
+                {errors.anestesia && (
+                  <p className="text-sm text-destructive">{errors.anestesia.message}</p>
+                )}
               </div>
 
               {/*
@@ -781,7 +804,7 @@ export default function FormNotaPage() {
                 intervención), aunque el backend las guarde como dos booleanos.
               */}
               <div className="space-y-2">
-                <Label>Tipo de intervención</Label>
+                <Label>Tipo de intervención *</Label>
                 <RadioGroup
                   name="tipoIntervencion"
                   aria-label="Tipo de intervención"
@@ -800,6 +823,9 @@ export default function FormNotaPage() {
                     { value: "emergencia", label: "Emergencia" },
                   ]}
                 />
+                {errors.esElectiva && (
+                  <p className="text-sm text-destructive">{errors.esElectiva.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
