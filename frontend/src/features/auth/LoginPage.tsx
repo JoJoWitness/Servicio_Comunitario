@@ -161,7 +161,7 @@ export default function LoginPage() {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
             <CardDescription>
-              Sistema de Notas Operatorias — HCSC Oftalmología
+              Notas Operatorias - Servicio de Oftalmología HCSC
             </CardDescription>
           </CardHeader>
           <CardContent>
