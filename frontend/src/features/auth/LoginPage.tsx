@@ -195,40 +195,36 @@ export default function LoginPage() {
 
                     {/*
                       El servidor se apaga solo cuando lleva un rato sin
-                      visitas, y la primera petición lo enciende: por eso hay
-                      algo que hacer aquí, y no es "espera a ver".
+                      visitas, y la primera petición lo enciende. La aplicación
+                      ya lo está intentando por su cuenta; aquí solo se cuenta
+                      lo que está pasando, y el botón queda para quien no
+                      quiera esperar al siguiente intento.
                     */}
                     <div className="mt-3 space-y-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void intentarDespertar()}
-                        disabled={despertando}
-                      >
-                        {despertando ? (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                            Despertando el servidor…
-                          </>
-                        ) : (
-                          <>
+                      {despertando ? (
+                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
+                          Despertando el servidor… puede tardar hasta un
+                          minuto, se apaga cuando nadie lo usa.
+                        </p>
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void intentarDespertar()}
+                          >
                             <RefreshCw className="mr-2 h-4 w-4" />
-                            Despertar el servidor
-                          </>
-                        )}
-                      </Button>
-                      {despertando && (
-                        <p className="text-xs text-muted-foreground">
-                          Puede tardar hasta un minuto: el servidor se apaga
-                          cuando nadie lo usa y hay que esperar a que arranque.
-                        </p>
-                      )}
-                      {falloDespertar && !despertando && (
-                        <p className="text-xs text-muted-foreground">
-                          Sigue sin responder. Revisa que este equipo tenga
-                          internet y vuelve a intentarlo.
-                        </p>
+                            Reintentar ahora
+                          </Button>
+                          {falloDespertar && (
+                            <p className="text-xs text-muted-foreground">
+                              Sigue sin responder. Revisa que este equipo tenga
+                              internet.
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </AlertDescription>

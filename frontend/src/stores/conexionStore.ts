@@ -50,6 +50,41 @@ const ESPERA_MAXIMA_DESPERTAR = 90_000;
 /** Respiro entre intento e intento al despertar. */
 const PAUSA_ENTRE_INTENTOS = 2_000;
 
+/**
+ * Un intento que falla en menos que esto no es un servidor arrancando: el
+ * servidor dormido deja la petición esperando mientras enciende, mientras que
+ * sin red el navegador contesta que no puede al instante.
+ */
+const FALLO_INMEDIATO = 2_000;
+
+/** Fallos instantáneos seguidos tras los que se deja de insistir. */
+const FALLOS_PARA_RENDIRSE = 3;
+
+/**
+ * Cada cuánto, como mucho, se vuelve a intentar despertar por las buenas. Sin
+ * este freno, un servidor de verdad caído tendría a la aplicación insistiendo
+ * en bucle toda la tarde.
+ */
+const ESPERA_ENTRE_DESPERTARES = 5 * 60_000;
+
+/**
+ * Cuándo fue el último intento de despertar. Vive fuera del estado porque no
+ * se pinta en ninguna parte: solo sirve para no insistir sin descanso.
+ */
+let ultimoDespertar = 0;
+
+/**
+ * Si toca intentar despertar el servidor solo. Se descarta cuando ya hay un
+ * intento en curso, cuando el interruptor de prueba está puesto, cuando el
+ * sistema dice que no hay red —ahí no hay nada que despertar— y mientras no
+ * haya pasado el tiempo de espera desde el intento anterior.
+ */
+function convieneDespertar(estado: ConexionState): boolean {
+  if (estado.despertando || estado.forzadoSinConexion) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  return Date.now() - ultimoDespertar >= ESPERA_ENTRE_DESPERTARES;
+}
+
 interface ConexionState {
   estado: EstadoConexion;
   /** Momento del último sondeo con respuesta, para mostrar "visto por última vez". */
@@ -171,16 +206,28 @@ export const useConexionStore = create<ConexionState>()((set, get) => ({
     if (get().forzadoSinConexion) return false;
 
     set({ despertando: true });
+    ultimoDespertar = Date.now();
     try {
       const limite = Date.now() + ESPERA_MAXIMA_DESPERTAR;
+      let fallosInmediatos = 0;
+
       do {
+        const inicio = Date.now();
         if (await sondear(TIMEOUT_DESPERTAR)) {
           set({ estado: "en-linea", ultimoContacto: Date.now() });
           return true;
         }
-        // Sin red, el fetch falla al instante y esto sería un bucle cerrado
-        // machacando durante minuto y medio. Cuando el servidor está dormido
-        // el intento ya consume sus segundos y esta pausa apenas se nota.
+
+        // Fallar al instante, varias veces seguidas, significa que no hay a
+        // quién llamar: no es un servidor arrancando, es que este equipo no
+        // llega a internet. Insistir minuto y medio no lo va a arreglar.
+        if (Date.now() - inicio < FALLO_INMEDIATO) {
+          fallosInmediatos++;
+          if (fallosInmediatos >= FALLOS_PARA_RENDIRSE) break;
+        } else {
+          fallosInmediatos = 0;
+        }
+
         await new Promise((listo) => setTimeout(listo, PAUSA_ENTRE_INTENTOS));
       } while (Date.now() < limite);
 
@@ -217,7 +264,17 @@ export const useConexionStore = create<ConexionState>()((set, get) => ({
     let temporizador: ReturnType<typeof setTimeout>;
 
     const ciclo = async () => {
-      const enLinea = await get().comprobar();
+      let enLinea = await get().comprobar();
+
+      // El sondeo corto no distingue un servidor apagado de uno caído, y el
+      // hosting gratuito apaga el nuestro cada vez que pasa un rato sin
+      // visitas. Así que cuando falla se intenta despertarlo aquí mismo, sin
+      // que nadie tenga que pulsar nada: es el caso más común de "no hay
+      // servidor" y se arregla solo esperando a que arranque.
+      if (!enLinea && convieneDespertar(get())) {
+        enLinea = await get().despertar();
+      }
+
       temporizador = setTimeout(
         ciclo,
         enLinea ? INTERVALO_EN_LINEA : INTERVALO_SIN_CONEXION
