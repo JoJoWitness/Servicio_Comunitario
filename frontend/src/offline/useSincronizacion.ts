@@ -59,6 +59,7 @@ export function useSincronizarAhora() {
         queryClient.invalidateQueries({ queryKey: ["misNotas"] });
         queryClient.invalidateQueries({ queryKey: ["todasNotas"] });
         queryClient.invalidateQueries({ queryKey: ["pacientes"] });
+        queryClient.invalidateQueries({ queryKey: ["biopsias"] });
       }
     },
   });
@@ -202,6 +203,7 @@ export function useSincronizacionAutomatica() {
         queryClient.invalidateQueries({ queryKey: ["misNotas"] });
         queryClient.invalidateQueries({ queryKey: ["todasNotas"] });
         queryClient.invalidateQueries({ queryKey: ["pacientes"] });
+        queryClient.invalidateQueries({ queryKey: ["biopsias"] });
       }
     });
   }, [puedeSubir, queryClient]);

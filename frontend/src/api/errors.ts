@@ -20,12 +20,19 @@
 export class ApiError extends Error {
   readonly status: number;
   readonly body: string;
+  /**
+   * Motivo estable de un 403 sobre una nota, tal como llegó en la cabecera
+   * `X-Motivo` (`fuera_de_plazo`, `no_participante`, `legalizada`). Vacío en
+   * servidores anteriores a v0.4.0 y en el resto de errores.
+   */
+  readonly motivo?: string;
 
-  constructor(status: number, body: string) {
+  constructor(status: number, body: string, motivo?: string) {
     super(`ApiError ${status}: ${body}`);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.motivo = motivo || undefined;
     // Mantener el prototipo correcto en entornos que transpilan clases ES5
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -73,7 +80,11 @@ export function isRedError(error: unknown): error is RedError {
  * - `no_participante`  → el usuario no participó en la intervención
  * - `desconocido`      → cualquier otro texto de error
  */
-export type Nota403Motivo = "fuera_de_plazo" | "no_participante" | "desconocido";
+export type Nota403Motivo =
+  | "fuera_de_plazo"
+  | "no_participante"
+  | "legalizada"
+  | "desconocido";
 
 /**
  * Clasifica el cuerpo de texto plano de un error `403` de nota para mostrar
@@ -83,11 +94,23 @@ export type Nota403Motivo = "fuera_de_plazo" | "no_participante" | "desconocido"
  * - Palabras clave de plazo:  "plazo", "7 días", "7 dias", "tiempo", "expirado", "expired", "window"
  * - Palabras clave de no participante: "participante", "participant", "unauthorized", "not authorized"
  *
- * @param body - Cuerpo de error en texto plano (`ApiError.body`)
+ * Desde v0.4.0 el servidor manda el motivo en la cabecera `X-Motivo`; cuando
+ * viene, manda sobre el texto. La heurística queda para servidores viejos.
+ *
+ * @param body   - Cuerpo de error en texto plano (`ApiError.body`)
+ * @param motivo - Cabecera `X-Motivo`, si llegó (`ApiError.motivo`)
  * @returns El motivo clasificado
  */
-export function clasificar403Nota(body: string): Nota403Motivo {
+export function clasificar403Nota(body: string, motivo?: string): Nota403Motivo {
+  if (motivo === "fuera_de_plazo" || motivo === "no_participante" || motivo === "legalizada") {
+    return motivo;
+  }
+
   const texto = body.toLowerCase();
+
+  if (texto.includes("legalizada") || texto.includes("legalizacion")) {
+    return "legalizada";
+  }
 
   const esPlazo =
     texto.includes("plazo") ||

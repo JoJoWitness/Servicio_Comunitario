@@ -24,6 +24,8 @@ export interface PacienteDTO {
   telefono?: string;
   direccion?: string;
   eliminado: boolean;
+  /** Solo lectura: si hay imagen de la cédula en el servidor (v0.4.0). */
+  tiene_cedula?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ export interface PacienteDTO {
 // Sin campo `id` — Requisitos 11.5, 13.2
 // ---------------------------------------------------------------------------
 
-export type PacienteWriteDTO = Omit<PacienteDTO, "id">;
+export type PacienteWriteDTO = Omit<PacienteDTO, "id" | "tiene_cedula">;
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -50,6 +52,7 @@ export function pacienteToDomain(dto: PacienteDTO): Paciente {
     telefono: dto.telefono,
     direccion: dto.direccion,
     eliminado: dto.eliminado,
+    tieneCedula: dto.tiene_cedula ?? false,
   };
 }
 

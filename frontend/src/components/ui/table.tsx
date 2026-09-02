@@ -2,18 +2,32 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * Por debajo de `md` la tabla se pinta como una lista de tarjetas: cada fila
+   * es un bloque y cada celda muestra su rótulo (tomado de `data-label`) a la
+   * izquierda y el valor a la derecha. Ver `.tabla-tarjetas` en index.css.
+   * En `md` y más sigue siendo una tabla con scroll horizontal propio.
+   */
+  responsive?: boolean
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, responsive = false, ...props }, ref) => (
+    <div
+      className={cn(
+        "relative w-full overflow-x-auto",
+        responsive && "tabla-tarjetas"
+      )}
+    >
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+)
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<

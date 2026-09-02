@@ -11,6 +11,7 @@ import (
 	notas2 "server/models/notas"
 	"server/models/pagination"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -41,9 +42,14 @@ func GetNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lote := []notas2.Notas{nota}
+	if !completarPermisos(w, r, lote) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
-	json.NewEncoder(w).Encode(nota)
+	json.NewEncoder(w).Encode(lote[0])
 }
 
 // GetAllNotas devuelve las notas de todo el servicio paginadas. Es la vista de
@@ -71,9 +77,13 @@ func GetAllNotas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !completarPermisos(w, r, notas) {
+		return
+	}
+
 	meta := pagination.NewMeta(total, p)
 	resp := struct {
-		Data []notas2.Notas `json:"data"`
+		Data []notas2.Notas  `json:"data"`
 		Meta pagination.Meta `json:"meta"`
 	}{Data: notas, Meta: meta}
 
@@ -103,6 +113,15 @@ func filtroDesdeQuery(r *http.Request) (notas2.FiltroNotas, error) {
 		return filtro, errors.New("el parametro 'to' debe ser una fecha YYYY-MM-DD o RFC3339")
 	}
 	filtro.To = to
+
+	// ?legalizada=true|false deja solo las que coinciden; ausente, no filtra.
+	if crudo := strings.TrimSpace(query.Get("legalizada")); crudo != "" {
+		valor, err := strconv.ParseBool(crudo)
+		if err != nil {
+			return filtro, errors.New("el parametro 'legalizada' debe ser true o false")
+		}
+		filtro.Legalizada = &valor
+	}
 
 	return filtro, nil
 }
@@ -178,11 +197,134 @@ func puedeModificar(w http.ResponseWriter, r *http.Request, notaID int) bool {
 	}
 
 	if !participa {
+		w.Header().Set(CabeceraMotivo, MotivoNoParticipante)
 		http.Error(w, "forbidden, solo el equipo quirurgico puede modificar esta nota", http.StatusForbidden)
 		return false
 	}
 
 	return true
+}
+
+// Motivos con los que se explica un 403 al modificar una nota. Viajan en la
+// cabecera X-Motivo para que el cliente no tenga que adivinar leyendo el texto.
+const (
+	CabeceraMotivo       = "X-Motivo"
+	MotivoFueraDePlazo   = "fuera_de_plazo"
+	MotivoNoParticipante = "no_participante"
+	MotivoLegalizada     = "legalizada"
+)
+
+// enPlazo responde 403 si la nota ya está fuera de la ventana de edición.
+// `accion` es el verbo del mensaje ("editar", "eliminar"). Escribe la respuesta
+// de error cuando devuelve false.
+func enPlazo(w http.ResponseWriter, notaID int, accion string) bool {
+	if err := notas2.CheckNotasDate(notaID); err != nil {
+		w.Header().Set(CabeceraMotivo, MotivoFueraDePlazo)
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprintf(w, "la nota solo se puede %s dentro de los %d dias siguientes a su registro", accion, notas2.PlazoEdicionDias())
+		return false
+	}
+	return true
+}
+
+// noLegalizada responde 403 si la nota ya está legalizada: una nota firmada,
+// sellada y archivada no se corrige ni se elimina; primero hay que quitar la
+// marca. Escribe la respuesta de error cuando devuelve false.
+func noLegalizada(w http.ResponseWriter, notaID int) bool {
+	legalizada, err := notas2.EstaLegalizada(config.PsqlDB, notaID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to check nota"))
+		return false
+	}
+
+	if legalizada {
+		w.Header().Set(CabeceraMotivo, MotivoLegalizada)
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("la nota esta legalizada; desactiva la legalizacion para modificarla"))
+		return false
+	}
+
+	return true
+}
+
+// completarPermisos rellena `puede_editar` en cada nota para quien pregunta.
+// Escribe la respuesta de error cuando devuelve false.
+func completarPermisos(w http.ResponseWriter, r *http.Request, notas []notas2.Notas) bool {
+	session, err := auth.GetSessionCookie(w, r)
+	if err != nil {
+		log.Println("Unable to get cookie ", err)
+		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
+		return false
+	}
+
+	if err := notas2.CompletarPermisos(config.PsqlDB, notas, session.UserID, session.Role == auth.RolAdmin); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to resolve permissions"))
+		return false
+	}
+	return true
+}
+
+// PatchLegalizada pone o quita la marca de legalización de una nota.
+// PATCH /notas/{id}/legalizada  {"legalizada": true}
+//
+// No pasa por el plazo de edición: el trámite físico ocurre a menudo semanas
+// después de la cirugía. Permisos: admin y secretaria (que es quien suele
+// llevar el trámite) sobre cualquier nota; el médico solo sobre las suyas.
+func PatchLegalizada(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("param {:id} must be an integer"))
+		return
+	}
+
+	session, err := auth.GetSessionCookie(w, r)
+	if err != nil {
+		log.Println("Unable to get cookie ", err)
+		http.Error(w, "Unable to get user info", http.StatusUnauthorized)
+		return
+	}
+
+	if !notaVigente(w, id) {
+		return
+	}
+
+	if session.Role == auth.RolMedico && !puedeModificar(w, r, id) {
+		return
+	}
+
+	var cuerpo struct {
+		Legalizada *bool `json:"legalizada"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&cuerpo); err != nil || cuerpo.Legalizada == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`el body debe ser {"legalizada": true|false}`))
+		return
+	}
+
+	if err := notas2.SetLegalizada(config.PsqlDB, id, *cuerpo.Legalizada, session.UserID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to update nota"))
+		return
+	}
+
+	nota := notas2.Notas{ID: id}
+	if err := nota.Get(config.PsqlDB); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to read nota"))
+		return
+	}
+
+	lote := []notas2.Notas{nota}
+	if !completarPermisos(w, r, lote) {
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Add("Status-Code", "200")
+	json.NewEncoder(w).Encode(lote[0])
 }
 
 // validarEquipo rechaza los UUID que no correspondan a un médico activo. El
@@ -258,9 +400,14 @@ func CreateNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lote := []notas2.Notas{newnotas}
+	if !completarPermisos(w, r, lote) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "201")
-	json.NewEncoder(w).Encode(newnotas)
+	json.NewEncoder(w).Encode(lote[0])
 }
 
 func UpdateNota(w http.ResponseWriter, r *http.Request) {
@@ -278,14 +425,9 @@ func UpdateNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Solo se corrige dentro del plazo de edición
-	if err := notas2.CheckNotasDate(id); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprintf(w, "la nota solo se puede editar dentro de los %d dias siguientes a su registro", notas2.PlazoEdicionDias)
-		return
-	}
-
-	if !puedeModificar(w, r, id) {
+	// Una nota legalizada está cerrada; solo se corrige dentro del plazo de
+	// edición; y solo la corrige quien participó (o el admin).
+	if !noLegalizada(w, id) || !enPlazo(w, id, "editar") || !puedeModificar(w, r, id) {
 		return
 	}
 
@@ -323,9 +465,14 @@ func UpdateNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	lote := []notas2.Notas{notas}
+	if !completarPermisos(w, r, lote) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "201")
-	json.NewEncoder(w).Encode(notas)
+	json.NewEncoder(w).Encode(lote[0])
 }
 
 func DeleteNota(w http.ResponseWriter, r *http.Request) {
@@ -344,14 +491,7 @@ func DeleteNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Solo se elimina dentro del plazo de edición
-	if err := notas2.CheckNotasDate(notas.ID); err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprintf(w, "la nota solo se puede eliminar dentro de los %d dias siguientes a su registro", notas2.PlazoEdicionDias)
-		return
-	}
-
-	if !puedeModificar(w, r, notas.ID) {
+	if !noLegalizada(w, notas.ID) || !enPlazo(w, notas.ID, "eliminar") || !puedeModificar(w, r, notas.ID) {
 		return
 	}
 
@@ -386,6 +526,10 @@ func GetNotasFromMedic(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting notas: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get notas"))
+		return
+	}
+
+	if !completarPermisos(w, r, notas) {
 		return
 	}
 
@@ -428,6 +572,10 @@ func GetNotasFromMedicDates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !completarPermisos(w, r, notas) {
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
 	json.NewEncoder(w).Encode(notas)
@@ -451,6 +599,10 @@ func GetNotasFromPaciente(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting notas: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get notas"))
+		return
+	}
+
+	if !completarPermisos(w, r, notas) {
 		return
 	}
 
@@ -489,6 +641,10 @@ func GetNotasFromPacienteDates(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting notas: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to get notas"))
+		return
+	}
+
+	if !completarPermisos(w, r, notas) {
 		return
 	}
 

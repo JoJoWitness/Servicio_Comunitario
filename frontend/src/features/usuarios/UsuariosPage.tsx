@@ -130,7 +130,7 @@ function FormUsuario({ usuarioInicial, onClose }: FormUsuarioProps) {
         </Alert>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label htmlFor="u-nombres">Nombres *</Label>
           <Input
@@ -283,8 +283,8 @@ export default function UsuariosPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold">Usuarios</h1>
           <Button size="sm" onClick={() => setDialogCrear(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -357,8 +357,8 @@ export default function UsuariosPage() {
 
         {/* Req 28.1: listado con rol */}
         {usuarios.length > 0 && (
-          <div className="rounded-md border">
-            <Table>
+          <div className="rounded-md border max-md:border-0">
+            <Table responsive>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
@@ -370,7 +370,7 @@ export default function UsuariosPage() {
               <TableBody>
                 {usuarios.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Nombre" className="font-medium">
                       {u.nombres} {u.apellidos}
                       {u.id === perfil?.id && (
                         <span className="ml-2 text-xs text-muted-foreground">
@@ -378,10 +378,10 @@ export default function UsuariosPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell data-label="Correo" className="break-all text-sm text-muted-foreground">
                       {u.correo}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Rol">
                       <Badge variant={ROL_VARIANT[u.rol]}>
                         {ROL_LABEL[u.rol]}
                       </Badge>

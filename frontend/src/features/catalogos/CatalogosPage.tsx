@@ -188,8 +188,8 @@ function TabCatalogo({
       )}
 
       {items.length > 0 && (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border max-md:border-0">
+          <Table responsive>
             <TableHeader>
               <TableRow>
                 <TableHead>{campoNombre}</TableHead>
@@ -200,8 +200,8 @@ function TabCatalogo({
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.nombre}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                  <TableCell data-label={campoNombre} className="font-medium">{item.nombre}</TableCell>
+                  <TableCell data-label="Resumen" className="max-w-xs truncate text-sm text-muted-foreground">
                     {item.resumen ?? "—"}
                   </TableCell>
                   <TableCell className="text-right">
@@ -335,7 +335,7 @@ export default function CatalogosPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
+      <div className="space-y-4 p-4 sm:p-6">
         <h1 className="text-2xl font-semibold">Catálogos clínicos</h1>
         <p className="text-sm text-muted-foreground">
           Gestiona los diagnósticos, procedimientos y técnicas disponibles para el
@@ -343,7 +343,7 @@ export default function CatalogosPage() {
         </p>
 
         {/* Pestañas */}
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 overflow-x-auto border-b">
           {PESTANAS.map((p) => (
             <button
               key={p.id}

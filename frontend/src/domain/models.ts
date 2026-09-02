@@ -41,6 +41,12 @@ export interface Paciente {
   telefono?: string;
   direccion?: string;
   eliminado: boolean;
+  /**
+   * Si hay una imagen de la cédula guardada en el servidor. El binario nunca
+   * viaja con el paciente: se pide aparte (`obtenerCedula`) y se imprime en la
+   * hoja de la nota, abajo a la izquierda, donde antes se pegaba la fotocopia.
+   */
+  tieneCedula: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,11 +104,103 @@ export interface Nota {
    */
   medicos: Usuario[];
 
+  // --- Estado administrativo y plazo de edición (v0.4.0) ---
+  /**
+   * La nota impresa ya se firmó, selló y archivó. Es un interruptor aparte de
+   * la edición: no pasa por el formulario ni por el plazo, y mientras esté
+   * puesto la nota no se puede corregir ni eliminar.
+   */
+  legalizada: boolean;
+  legalizadaEn?: Date;
+  /** UUID de quien puso la marca. */
+  legalizadaPor?: string;
+  /** Momento del registro en el servidor; referencia del plazo de edición. */
+  createdAt?: Date;
+  /** Último día (a medianoche UTC) en que la nota admite cambios. */
+  editableHasta?: Date;
+  /**
+   * Veredicto del servidor para el usuario de la sesión: vigente, no
+   * legalizada, en plazo y admin o participante. Es lo que decide si "Editar"
+   * y "Eliminar" aparecen habilitados antes de hacer clic.
+   */
+  puedeEditar: boolean;
+
   // --- Campos pendientes de soporte en el backend (Requisito 24) ---
   /** @backendDependency Requisito 24.1 — no enviar hasta que BACKEND_SUPPORTS_OJO_ESTADO = true */
   ojo?: Ojo;
   /** @backendDependency Requisito 24.2 — no enviar hasta que BACKEND_SUPPORTS_OJO_ESTADO = true */
   estado?: EstadoNota;
+}
+
+// ---------------------------------------------------------------------------
+// Biopsias (v0.5.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ciclo de una muestra: se toma en quirófano, se envía a anatomía patológica,
+ * llega el informe y se le comunica al paciente. Vive aparte de la nota
+ * porque dura semanas y sigue cuando la nota ya está cerrada y legalizada.
+ */
+export type EstadoBiopsia = "tomada" | "enviada" | "con_resultado" | "entregada";
+
+export const ESTADOS_BIOPSIA: EstadoBiopsia[] = [
+  "tomada",
+  "enviada",
+  "con_resultado",
+  "entregada",
+];
+
+/** `origen` es la cirugía que sacó la muestra; `seguimiento`, una reintervención. */
+export type RolVinculoBiopsia = "origen" | "seguimiento";
+
+export interface NotaVinculada {
+  idNota: number;
+  rol: RolVinculoBiopsia;
+  fechaComienzo: Date;
+  intervencion: string;
+  vinculadaEn: Date;
+}
+
+export interface Biopsia {
+  id?: number;
+  /** UUID del dispositivo cuando se registró sin conexión. */
+  clientUuid?: string;
+  idPaciente: string;
+  pacienteNombre?: string;
+  idMedicoResponsable: string;
+  medicoResponsable?: Usuario;
+  ojo?: Ojo;
+  tejido: string;
+  descripcionMacroscopica: string;
+  diagnosticoPresuntivo: string;
+  fechaToma: Date;
+  laboratorio?: string;
+  fechaEnvio?: Date;
+  numeroPatologia?: string;
+  resultado?: string;
+  fechaResultado?: Date;
+  fechaEntrega?: Date;
+  estado: EstadoBiopsia;
+  observaciones: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  /** Notas a las que está ligada; siempre presente en las lecturas. */
+  notas: NotaVinculada[];
+  /** Puede cambiar los datos de la muestra (admin, responsable, participante). */
+  puedeEditar: boolean;
+  /** Puede marcarla enviada y cargar el resultado (incluye a secretaría). */
+  puedeTramitar: boolean;
+}
+
+/** Filtros del listado de seguimiento (`GET /biopsias`). */
+export interface FiltrosBiopsia {
+  estados?: EstadoBiopsia[];
+  medico?: string;
+  paciente?: string;
+  from?: string;
+  to?: string;
+  /** "yyyy-mm-dd": tomadas hasta esa fecha y todavía sin resultado. */
+  sinResultadoDesde?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,4 +256,6 @@ export interface FiltrosNota {
   paciente?: string;
   from?: string;
   to?: string;
+  /** Solo las legalizadas (`true`) o solo las pendientes (`false`). */
+  legalizada?: boolean;
 }

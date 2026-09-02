@@ -1,7 +1,10 @@
 BEGIN;
+    DROP TABLE IF EXISTS "Nota_Biopsia" CASCADE;
+    DROP TABLE IF EXISTS "Biopsia" CASCADE;
     DROP TABLE IF EXISTS "Procedimiento_Tecnica" CASCADE;
     DROP TABLE IF EXISTS "Equipo_Quirurgico" CASCADE;
     DROP TABLE IF EXISTS "Nota_Operatoria" CASCADE;
+    DROP TABLE IF EXISTS "Paciente_Cedula" CASCADE;
     DROP TABLE IF EXISTS "Paciente" CASCADE;
     DROP TABLE IF EXISTS "Usuarios" CASCADE;
     DROP TABLE IF EXISTS "Procedimientos" CASCADE;

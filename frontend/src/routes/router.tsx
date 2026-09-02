@@ -12,6 +12,8 @@
  *   /notas/:id/editar           → FormNotaPage          (medico, admin)
  *   /pacientes                  → PacientesPage         (todos)
  *   /pacientes/:id              → FichaPacientePage     (todos)
+ *   /biopsias                   → BiopsiasPage          (todos)
+ *   /biopsias/:id               → BiopsiaPanelPage      (todos)
  *   /catalogos                  → CatalogosPage         (admin)
  *   /usuarios                   → UsuariosPage          (admin)
  *   /perfil                     → PerfilPage            (todos — cambio contraseña)
@@ -50,6 +52,8 @@ const TodasNotasPage    = lazy(() => import("../features/notas/TodasNotasPage"))
 const DetalleNotaPage   = lazy(() => import("../features/notas/DetalleNotaPage"));
 const FormNotaPage      = lazy(() => import("../features/notas/FormNotaPage"));
 const CatalogosPage     = lazy(() => import("../features/catalogos/CatalogosPage"));
+const BiopsiasPage      = lazy(() => import("../features/biopsias/BiopsiasPage"));
+const BiopsiaPanelPage  = lazy(() => import("../features/biopsias/BiopsiaPanelPage"));
 const UsuariosPage      = lazy(() => import("../features/usuarios/UsuariosPage"));
 
 // Fallback de suspense
@@ -228,6 +232,24 @@ export function AppRouter() {
           element={
             <RequireAuth>
               <FichaPacientePage />
+            </RequireAuth>
+          }
+        />
+
+        {/* Biopsias — seguimiento y panel, todos los roles (PRD 0.5.0) */}
+        <Route
+          path="/biopsias"
+          element={
+            <RequireAuth>
+              <BiopsiasPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/biopsias/:id"
+          element={
+            <RequireAuth>
+              <BiopsiaPanelPage />
             </RequireAuth>
           }
         />

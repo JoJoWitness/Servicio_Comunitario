@@ -79,7 +79,7 @@ export function SelectorPacienteDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="flex max-h-[85dvh] max-w-2xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Buscar paciente</DialogTitle>
         </DialogHeader>
@@ -132,7 +132,7 @@ export function SelectorPacienteDialog({
           )}
 
           {!isLoading && !isError && resultado.length > 0 && (
-            <Table>
+            <Table responsive>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
@@ -154,7 +154,7 @@ export function SelectorPacienteDialog({
                     }}
                     aria-label={`Seleccionar ${p.nombre}`}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Nombre" className="font-medium">
                       <span className="inline-flex items-center gap-2">
                         {p.nombre}
                         {/* Distintivo para los que solo existen en este equipo:
@@ -167,9 +167,9 @@ export function SelectorPacienteDialog({
                         )}
                       </span>
                     </TableCell>
-                    <TableCell>{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
-                    <TableCell>{p.historiaMedica}</TableCell>
-                    <TableCell>{formatFechaUI(p.fechaNacimiento)}</TableCell>
+                    <TableCell data-label="Documento">{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
+                    <TableCell data-label="Historia médica">{p.historiaMedica}</TableCell>
+                    <TableCell data-label="Nacimiento">{formatFechaUI(p.fechaNacimiento)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

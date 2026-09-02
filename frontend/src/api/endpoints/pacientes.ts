@@ -7,6 +7,9 @@
  * - POST   /pacientes        → crearPaciente      (sin campo `id` — Req 11.5)
  * - PUT    /pacientes/{id}   → editarPaciente      (sin campo `id` — Req 13.2)
  * - DELETE /pacientes/{id}   → darDeBajaPaciente   (solo admin — Req 13.3)
+ * - GET    /pacientes/{id}/cedula → obtenerCedula  (imagen, o null si no hay)
+ * - PUT    /pacientes/{id}/cedula → subirCedula
+ * - DELETE /pacientes/{id}/cedula → quitarCedula
  *
  * Requisitos: 10.1, 11.5, 12.1, 13.2, 13.3
  */
@@ -17,11 +20,11 @@ import {
   pacienteToDomain,
   pacienteToWriteDto,
 } from "../dto/paciente.dto";
-import { isRedError } from "../errors";
-import { request } from "../httpClient";
+import { isApiError, isRedError } from "../errors";
+import { request, requestBlob } from "../httpClient";
 import type { FiltrosPacientesParams, PaginatedResponse, PaginationParams } from "../types";
 import { buildFilterQuery, coincide, paginarEnLocal, TAMANO_PAGINA_MAX } from "./queryUtils";
-import { listaReflejada, reflejar } from "@/offline/espejo";
+import { listaReflejada, reflejado, reflejar } from "@/offline/espejo";
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -170,4 +173,53 @@ export async function editarPaciente(
  */
 export async function darDeBajaPaciente(id: string): Promise<void> {
   await request(`/pacientes/${id}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Cédula del paciente (v0.4.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Baja la imagen de la cédula, o `null` si el paciente no tiene.
+ * GET /pacientes/{id}/cedula
+ *
+ * Lo bajado se refleja en IndexedDB: así el PDF de una nota que ya se generó
+ * en línea sale completo también sin red. Sin red y sin copia, se devuelve
+ * `null` y la hoja sale con el hueco en blanco, como antes de esta versión.
+ */
+export async function obtenerCedula(id: string): Promise<Blob | null> {
+  try {
+    const { blob } = await requestBlob(`/pacientes/${id}/cedula`);
+    void reflejar(`cedula:${id}`, blob);
+    return blob;
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) return null;
+    if (isRedError(error)) {
+      const copia = await reflejado<Blob>(`cedula:${id}`);
+      return copia instanceof Blob ? copia : null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Guarda (o reemplaza) la imagen de la cédula. El cuerpo es la imagen cruda,
+ * ya reducida por `normalizarImagen`; el servidor decide el tipo por sus bytes.
+ * PUT /pacientes/{id}/cedula
+ *
+ * Errores: 400 (no es JPEG/PNG/WebP), 413 (más de 1 MB), 404 (paciente).
+ */
+export async function subirCedula(id: string, imagen: Blob): Promise<void> {
+  await request(`/pacientes/${id}/cedula`, { method: "PUT", body: imagen });
+  void reflejar(`cedula:${id}`, imagen);
+}
+
+/**
+ * Quita la imagen de la cédula. Las notas del paciente vuelven a imprimirse
+ * con el espacio en blanco.
+ * DELETE /pacientes/{id}/cedula
+ */
+export async function quitarCedula(id: string): Promise<void> {
+  await request(`/pacientes/${id}/cedula`, { method: "DELETE" });
+  void reflejar(`cedula:${id}`, null);
 }

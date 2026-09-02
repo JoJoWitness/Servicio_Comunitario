@@ -12,6 +12,7 @@
  * - GET    /notas/pacientes/{id}            → notasDePaciente (sin filtro)
  * - GET    /notas/pacientes/dates?id=&from=&to= → notasDePaciente (con rango)
  * - GET    /notas/medics/export?from=&to=   → exportarRecordQuirurgico (.xlsx)
+ * - PATCH  /notas/{id}/legalizada           → cambiarLegalizacion
  *
  * Requisitos: 12.2, 12.5, 14.6, 18.1, 18.4, 19.1, 19.2, 20.1, 21.2, 23.2
  */
@@ -92,6 +93,25 @@ export async function editarNota(
 }
 
 /**
+ * Pone o quita la marca de legalización.
+ * PATCH /notas/{id}/legalizada
+ *
+ * Es un cambio administrativo, no una edición: no pasa por el plazo de 7 días
+ * ni por el formulario. Devuelve la nota completa tal como quedó.
+ * Posibles errores: 403 (`clasificar403Nota` → `no_participante`), 404.
+ */
+export async function cambiarLegalizacion(
+  id: number,
+  legalizada: boolean
+): Promise<Nota> {
+  const dto = await request<NotaDTO>(`/notas/${id}/legalizada`, {
+    method: "PATCH",
+    body: { legalizada },
+  });
+  return notaToDomain(dto);
+}
+
+/**
  * Elimina una nota.
  * DELETE /notas/{id}
  *
@@ -158,6 +178,9 @@ export async function todasLasNotas(
   if (filtros?.paciente) filterQs.set("paciente", filtros.paciente);
   if (filtros?.from)     filterQs.set("from",     filtros.from);
   if (filtros?.to)       filterQs.set("to",       filtros.to);
+  if (filtros?.legalizada !== undefined) {
+    filterQs.set("legalizada", String(filtros.legalizada));
+  }
   if (paginacion?.page)   filterQs.set("page",   String(paginacion.page));
   if (paginacion?.size)   filterQs.set("size",   String(paginacion.size));
   if (paginacion?.sortBy) filterQs.set("sortBy", paginacion.sortBy);

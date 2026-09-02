@@ -40,19 +40,22 @@ export default function TodasNotasPage() {
   const [pacienteFiltro, setPacienteFiltro] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // "" = todas, "true" = legalizadas, "false" = pendientes de legalizar.
+  const [legalizacion, setLegalizacion] = useState("");
 
   const filtros: FiltrosNota = {
     medico: medicoFiltro || undefined,
     paciente: pacienteFiltro || undefined,
     from: from ? new Date(from).toISOString() : undefined,
     to: to ? new Date(to).toISOString() : undefined,
+    legalizada: legalizacion === "" ? undefined : legalizacion === "true",
   };
 
   // Requisito 19.1: GET /notas — con paginación server-side
   const paginacion = useServerPaginacion("fecha_comienzo", "DESC", 10);
 
   // Al cambiar cualquier filtro, volver a página 1
-  useEffect(() => { paginacion.resetear(); }, [medicoFiltro, pacienteFiltro, from, to]);
+  useEffect(() => { paginacion.resetear(); }, [medicoFiltro, pacienteFiltro, from, to, legalizacion]);
 
   const { data: notasResp, isLoading, isError } = useTodasLasNotas(filtros, {
     page: paginacion.pagina,
@@ -99,9 +102,10 @@ export default function TodasNotasPage() {
     setPacienteFiltro("");
     setFrom("");
     setTo("");
+    setLegalizacion("");
   };
 
-  const hayFiltros = medicoFiltro || pacienteFiltro || from || to;
+  const hayFiltros = medicoFiltro || pacienteFiltro || from || to || legalizacion;
 
   /*
     Cuando lo único que se filtró es un médico, el vacío no es "no hay
@@ -109,7 +113,8 @@ export default function TodasNotasPage() {
     filtros encima ya no se puede afirmar eso —podría tener notas fuera del
     rango de fechas—, así que ahí se vuelve al mensaje genérico.
   */
-  const soloFiltroMedico = medicoFiltro && !pacienteFiltro && !from && !to;
+  const soloFiltroMedico =
+    medicoFiltro && !pacienteFiltro && !from && !to && !legalizacion;
   const mensajeSinNotas = soloFiltroMedico
     ? `${getNombreMedico(medicoFiltro) ?? "Este médico"} no tiene notas registradas.`
     : hayFiltros
@@ -118,8 +123,8 @@ export default function TodasNotasPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold">Todas las notas</h1>
           {puedeCrear && (
             <Button size="sm" onClick={() => navigate("/notas/nuevo")}>
@@ -130,7 +135,7 @@ export default function TodasNotasPage() {
         </div>
 
         {/* Panel de filtros */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1">
             <Label>Médico</Label>
             <Select value={medicoFiltro} onValueChange={setMedicoFiltro}>
@@ -180,6 +185,21 @@ export default function TodasNotasPage() {
               value={to}
               onChange={setTo}
             />
+          </div>
+          {/* Es la vista de secretaría: aquí es donde más sirve saber qué
+              notas siguen sin pasar por legalización. */}
+          <div className="space-y-1">
+            <Label>Legalización</Label>
+            <Select value={legalizacion} onValueChange={setLegalizacion}>
+              <SelectTrigger aria-label="Filtrar por legalización">
+                <SelectValue placeholder="Todas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todas</SelectItem>
+                <SelectItem value="false">Pendientes</SelectItem>
+                <SelectItem value="true">Legalizadas</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

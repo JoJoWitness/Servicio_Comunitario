@@ -372,7 +372,7 @@ func escribirResumen(f *excelize.File, e estilos, medico, documento string, rang
 	indice := map[string]*conteo{}
 	orden := []*conteo{}
 
-	var electivas, emergencias, biopsias int
+	var electivas, emergencias, biopsias, conResultado int
 	for _, fila := range filas {
 		// Se cuenta por familia clínica (PTERIGIONES, CHALAZION…), que es la
 		// unidad en la que el servicio reporta su actividad, y la misma con la
@@ -392,8 +392,11 @@ func escribirResumen(f *excelize.File, e estilos, medico, documento string, rang
 		} else if fila.EsElectiva {
 			electivas++
 		}
-		if fila.TuvoBiopsia {
+		if fila.TuvoBiopsia || fila.BiopsiaDetalle != "" {
 			biopsias++
+		}
+		if fila.BiopsiaConResultado {
+			conResultado++
 		}
 	}
 
@@ -445,6 +448,7 @@ func escribirResumen(f *excelize.File, e estilos, medico, documento string, rang
 		{"Electivas", electivas},
 		{"Emergencias", emergencias},
 		{"Con biopsia", biopsias},
+		{"Con resultado recibido", conResultado},
 		{"Sin biopsia", len(filas) - biopsias},
 	}
 	for _, d := range desglose {

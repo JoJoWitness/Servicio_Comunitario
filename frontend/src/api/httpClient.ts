@@ -22,7 +22,11 @@ import { notifyUnauthorized } from "./interceptor";
 // ---------------------------------------------------------------------------
 
 export interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /**
+   * Cuerpo de la petición. Un objeto se serializa a JSON; un `Blob` viaja tal
+   * cual con su propio `Content-Type` (la imagen de la cédula).
+   */
   body?: unknown;
   signal?: AbortSignal;
 }
@@ -109,15 +113,20 @@ export async function request<T = void>(
   const { method = "GET", body, signal } = options;
 
   const headers: Record<string, string> = {};
-  if (body !== undefined) {
+  let cuerpo: BodyInit | undefined;
+  if (body instanceof Blob) {
+    if (body.type) headers["Content-Type"] = body.type;
+    cuerpo = body;
+  } else if (body !== undefined) {
     headers["Content-Type"] = "application/json";
+    cuerpo = JSON.stringify(body);
   }
 
   const response = await fetchOFallarPorRed(buildUrl(path), {
     method,
     credentials: "include", // Requisito 1.1
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: cuerpo,
     signal,
   });
 
@@ -136,7 +145,11 @@ export async function request<T = void>(
       notifyUnauthorized();
     }
 
-    throw new ApiError(response.status, errorBody);
+    throw new ApiError(
+      response.status,
+      errorBody,
+      response.headers.get("X-Motivo") ?? undefined
+    );
   }
 
   // Respuestas sin cuerpo o con texto plano (204, DELETE, respuestas no-JSON)
@@ -187,7 +200,11 @@ export async function requestBlob(
     if (response.status === 401) {
       notifyUnauthorized();
     }
-    throw new ApiError(response.status, errorBody);
+    throw new ApiError(
+      response.status,
+      errorBody,
+      response.headers.get("X-Motivo") ?? undefined
+    );
   }
 
   return {

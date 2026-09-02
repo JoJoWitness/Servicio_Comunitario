@@ -11,6 +11,10 @@
  * paciente y diagnósticos a la izquierda, tipo de intervención y equipo
  * quirúrgico a la derecha—, el resumen a ancho completo debajo y las firmas al
  * pie. Así la nota impresa se archiva junto a las antiguas sin desentonar.
+ *
+ * Desde v0.4.0, si el paciente tiene la cédula digitalizada, se imprime abajo
+ * a la izquierda, a tamaño real de carnet, con su base alineada a la línea de
+ * firma del médico tratante: exactamente donde se pegaba la fotocopia.
  */
 
 import {
@@ -152,13 +156,26 @@ const styles = StyleSheet.create({
   },
 
   // ── Firmas ────────────────────────────────────────────────────────────
-  // Van apiladas en la mitad derecha: el lado izquierdo queda libre porque es
-  // donde se pega la copia de la cédula del paciente.
+  // Van apiladas en la mitad derecha. El lado izquierdo es el de la cédula del
+  // paciente: si está digitalizada se imprime ahí; si no, queda libre para
+  // pegar la fotocopia, como siempre.
   firmas: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginTop: 14,
   },
+  columnaCedula: { width: "50%" },
+  // Tamaño real de la cédula venezolana (ISO ID-1, 85,6 × 54 mm) en puntos.
+  // El borde fino delimita el espacio como lo haría el filo de la fotocopia.
+  cajaCedula: {
+    width: 243,
+    height: 153,
+    borderWidth: 0.5,
+    borderColor: NEGRO,
+    padding: 1,
+  },
+  imagenCedula: { width: "100%", height: "100%", objectFit: "contain" },
   columnaFirmas: { width: "45%" },
   lineaFirma: {
     borderTopWidth: 1,
@@ -166,6 +183,9 @@ const styles = StyleSheet.create({
     paddingTop: 3,
     marginTop: 48,
   },
+  // Con cédula, la línea del médico tratante baja hasta la base de la imagen
+  // (153 pt), que es la alineación del formulario en papel.
+  lineaFirmaConCedula: { marginTop: 153 },
   segundaFirma: { marginTop: 52 },
   pieFirma: { fontSize: 12, textAlign: "center" },
 });
@@ -271,10 +291,15 @@ function nombreCompleto(m: { nombres: string; apellidos: string }): string {
 interface NotaDocumentProps {
   nota: Nota;
   paciente: Paciente;
+  /**
+   * Imagen de la cédula del paciente como data URI, si está digitalizada.
+   * Ausente, la hoja sale con el hueco en blanco para la fotocopia.
+   */
+  cedula?: string;
 }
 
 /** Una hoja de nota operatoria, reutilizable en documentos de varias notas. */
-function PaginaNota({ nota, paciente }: NotaDocumentProps) {
+function PaginaNota({ nota, paciente, cedula }: NotaDocumentProps) {
   const cirujano = nota.medicos.find((m) => m.id === nota.medicoEncargado);
   const ayudantes = nota.medicos.filter((m) => m.id !== nota.medicoEncargado);
   // El papel reserva tres renglones de ayudantes; se mantienen aunque estén
@@ -476,10 +501,17 @@ function PaginaNota({ nota, paciente }: NotaDocumentProps) {
           {resumenConObservaciones(nota.resumenIntervencion, nota.comentarios)}
         </Text>
 
-        {/* ── Firmas ── */}
+        {/* ── Firmas y cédula ── */}
         <View style={styles.firmas} wrap={false}>
+          <View style={styles.columnaCedula}>
+            {cedula && (
+              <View style={styles.cajaCedula}>
+                <Image src={cedula} style={styles.imagenCedula} />
+              </View>
+            )}
+          </View>
           <View style={styles.columnaFirmas}>
-            <View style={styles.lineaFirma}>
+            <View style={[styles.lineaFirma, cedula ? styles.lineaFirmaConCedula : {}]}>
               <Text style={styles.pieFirma}>MÉDICO TRATANTE</Text>
             </View>
             <View style={[styles.lineaFirma, styles.segundaFirma]}>
@@ -492,13 +524,13 @@ function PaginaNota({ nota, paciente }: NotaDocumentProps) {
 }
 
 /** Documento de una sola nota. */
-function NotaDocument({ nota, paciente }: NotaDocumentProps) {
+function NotaDocument({ nota, paciente, cedula }: NotaDocumentProps) {
   return (
     <Document
       title={`Nota operatoria — ${paciente.nombre}`}
       author="HCSC Oftalmología"
     >
-      <PaginaNota nota={nota} paciente={paciente} />
+      <PaginaNota nota={nota} paciente={paciente} cedula={cedula} />
     </Document>
   );
 }
@@ -510,15 +542,17 @@ function NotaDocument({ nota, paciente }: NotaDocumentProps) {
 /**
  * Genera y descarga el PDF de la nota operatoria.
  *
- * @param nota    - Objeto Nota completo con medicos[]
+ * @param nota     - Objeto Nota completo con medicos[]
  * @param paciente - Objeto Paciente correspondiente
+ * @param cedula   - Imagen de la cédula como data URI, si la hay
  */
 export async function descargarNotaPDF(
   nota: Nota,
-  paciente: Paciente
+  paciente: Paciente,
+  cedula?: string
 ): Promise<void> {
   const blob = await pdf(
-    <NotaDocument nota={nota} paciente={paciente} />
+    <NotaDocument nota={nota} paciente={paciente} cedula={cedula} />
   ).toBlob();
   descargarBlob(blob, `nota-${nota.id ?? "nueva"}-${paciente.historiaMedica}.pdf`);
 }
@@ -530,6 +564,8 @@ export async function descargarNotaPDF(
 export interface NotaConPaciente {
   nota: Nota;
   paciente: Paciente;
+  /** Cédula del paciente como data URI, si está digitalizada. */
+  cedula?: string;
 }
 
 /**
@@ -540,11 +576,12 @@ export interface NotaConPaciente {
 function NotasDocument({ items }: { items: NotaConPaciente[] }) {
   return (
     <Document title="Notas operatorias" author="HCSC Oftalmología">
-      {items.map(({ nota, paciente }) => (
+      {items.map(({ nota, paciente, cedula }) => (
         <PaginaNota
           key={nota.id ?? `${paciente.id}-${nota.fechaComienzo.getTime()}`}
           nota={nota}
           paciente={paciente}
+          cedula={cedula}
         />
       ))}
     </Document>

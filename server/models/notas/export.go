@@ -32,8 +32,14 @@ type FilaExport struct {
 	EsElectiva         bool
 	EsEmergencia       bool
 	TuvoBiopsia        bool
-	Cirujano           string
-	Ayudantes          string
+	// BiopsiaDetalle resume las biopsias registradas de origen en esta nota:
+	// "Pterigión (AP-2026-0412); Lesión palpebral". Vacío si solo está la
+	// casilla o no hubo biopsia.
+	BiopsiaDetalle string
+	// BiopsiaConResultado: alguna biopsia de la nota ya tiene informe.
+	BiopsiaConResultado bool
+	Cirujano            string
+	Ayudantes           string
 	// Familia clínica del diagnóstico ("Pterigión", "Catarata"…), tomada del
 	// catálogo. Es la que agrupa las filas del record, igual que en la planilla
 	// que lleva el servicio a mano. Vacía cuando el diagnóstico se escribió
@@ -80,12 +86,17 @@ func (f FilaExport) Tipo() string {
 	}
 }
 
-// Biopsia como texto, que es como se lee en una planilla.
+// Biopsia como texto, que es como se lee en una planilla. Con registro
+// (v0.5.0) dice qué se mandó y con qué número de patología.
 func (f FilaExport) Biopsia() string {
-	if f.TuvoBiopsia {
+	switch {
+	case f.BiopsiaDetalle != "":
+		return "Si - " + f.BiopsiaDetalle
+	case f.TuvoBiopsia:
 		return "Si"
+	default:
+		return "No"
 	}
-	return "No"
 }
 
 // GetNotasExportMedico trae, ya aplanadas, las notas en las que participó el
@@ -125,6 +136,20 @@ func GetNotasExportMedico(db *pgxpool.Pool, medicoID string, from, to *time.Time
 			n.es_electiva,
 			n.es_emergencia,
 			n.tuvo_biopsia,
+			COALESCE((
+				SELECT string_agg(
+					b.tejido || CASE WHEN COALESCE(b.numero_patologia, '') <> '' THEN ' (' || b.numero_patologia || ')' ELSE '' END,
+					'; ' ORDER BY b.id)
+				FROM "Nota_Biopsia" nb
+				JOIN "Biopsia" b ON b.id = nb.id_biopsia
+				WHERE nb.id_nota_operatoria = n.id AND nb.rol = 'origen' AND b.eliminado = FALSE
+			), '') AS biopsia_detalle,
+			EXISTS (
+				SELECT 1 FROM "Nota_Biopsia" nb
+				JOIN "Biopsia" b ON b.id = nb.id_biopsia
+				WHERE nb.id_nota_operatoria = n.id AND b.eliminado = FALSE
+				AND b.estado IN ('con_resultado', 'entregada')
+			) AS biopsia_con_resultado,
 			TRIM(enc.nombres || ' ' || COALESCE(enc.apellidos, '')) AS cirujano,
 			COALESCE((
 				SELECT string_agg(TRIM(u.nombres || ' ' || COALESCE(u.apellidos, '')), ', ' ORDER BY u.apellidos, u.nombres)
@@ -172,6 +197,7 @@ func GetNotasExportMedico(db *pgxpool.Pool, medicoID string, from, to *time.Time
 			&f.PacienteNombre, &f.PacienteDocumento, &f.PacienteGenero, &f.PacienteNacimiento,
 			&f.DXPreOperatorio, &f.DXPostOperatorio, &f.Intervencion, &f.Resumen,
 			&f.Pabellon, &f.Anestesia, &f.EsElectiva, &f.EsEmergencia, &f.TuvoBiopsia,
+			&f.BiopsiaDetalle, &f.BiopsiaConResultado,
 			&f.Cirujano, &f.Ayudantes, &f.Familia,
 		)
 		if err != nil {

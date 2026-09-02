@@ -1,13 +1,16 @@
 package controllers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"server/config"
 	"server/controllers/auth"
+	biopsias2 "server/models/biopsias"
 	notas2 "server/models/notas"
 	pacientes2 "server/models/pacientes"
 )
@@ -45,10 +48,13 @@ const (
 	SyncError = "error"
 )
 
-// SyncRequest es el lote que manda el dispositivo.
+// SyncRequest es el lote que manda el dispositivo. Las biopsias van después
+// de las notas: cada una apunta a su nota de origen por `nota_client_uuid`
+// (si la nota también se redactó sin conexión) o por `nota_id`.
 type SyncRequest struct {
 	Pacientes []pacientes2.Pacientes `json:"pacientes"`
 	Notas     []notas2.Notas         `json:"notas"`
+	Biopsias  []biopsias2.Biopsia    `json:"biopsias"`
 }
 
 // SyncResultado es el veredicto de un ítem. `ClienteID` es el identificador con
@@ -69,6 +75,7 @@ type SyncResultado struct {
 type SyncResponse struct {
 	Pacientes []SyncResultado `json:"pacientes"`
 	Notas     []SyncResultado `json:"notas"`
+	Biopsias  []SyncResultado `json:"biopsias"`
 }
 
 // SyncPendientes sube el trabajo acumulado sin conexión.
@@ -92,18 +99,24 @@ func SyncPendientes(w http.ResponseWriter, r *http.Request) {
 	resp := SyncResponse{
 		Pacientes: make([]SyncResultado, 0, len(lote.Pacientes)),
 		Notas:     make([]SyncResultado, 0, len(lote.Notas)),
+		Biopsias:  make([]SyncResultado, 0, len(lote.Biopsias)),
 	}
 
 	// Regla 2: los pacientes primero.
 	for i := range lote.Pacientes {
-		resp.Pacientes = append(resp.Pacientes, subirPaciente(&lote.Pacientes[i]))
+		resp.Pacientes = append(resp.Pacientes, subirPaciente(&lote.Pacientes[i], session.UserID))
 	}
 
 	for i := range lote.Notas {
 		resp.Notas = append(resp.Notas, subirNota(&lote.Notas[i], session.UserID, session.Role))
 	}
 
-	log.Printf("Sync de %s: %d pacientes, %d notas", session.UserID, len(resp.Pacientes), len(resp.Notas))
+	// Y las biopsias al final: dependen de que su nota ya esté.
+	for i := range lote.Biopsias {
+		resp.Biopsias = append(resp.Biopsias, subirBiopsia(&lote.Biopsias[i], session.UserID, session.Role))
+	}
+
+	log.Printf("Sync de %s: %d pacientes, %d notas, %d biopsias", session.UserID, len(resp.Pacientes), len(resp.Notas), len(resp.Biopsias))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Add("Status-Code", "200")
@@ -113,7 +126,7 @@ func SyncPendientes(w http.ResponseWriter, r *http.Request) {
 // subirPaciente registra un paciente creado sin conexión. El UUID lo puso el
 // dispositivo y se respeta tal cual: así la nota que ya lo referencia sigue
 // apuntando al lugar correcto sin necesidad de reescribir nada.
-func subirPaciente(p *pacientes2.Pacientes) SyncResultado {
+func subirPaciente(p *pacientes2.Pacientes, usuarioID string) SyncResultado {
 	res := SyncResultado{ClienteID: p.ID}
 
 	if p.ID == "" {
@@ -122,10 +135,12 @@ func subirPaciente(p *pacientes2.Pacientes) SyncResultado {
 		return res
 	}
 
-	// ¿Ya subido en un intento anterior?
+	// ¿Ya subido en un intento anterior? La cédula se guarda igual: pudo haber
+	// subido el paciente en una pasada que se cortó antes de llegar a ella.
 	yaRegistrado := pacientes2.Pacientes{ID: p.ID}
 	if err := yaRegistrado.Get(config.PsqlDB); err == nil {
 		res.Estado = SyncDuplicado
+		res.Motivo = guardarCedulaDelLote(p, usuarioID)
 		return res
 	}
 
@@ -147,8 +162,35 @@ func subirPaciente(p *pacientes2.Pacientes) SyncResultado {
 		return res
 	}
 
+	// El paciente ya entró: aunque la cédula falle, el veredicto sigue siendo
+	// "creado", o la cola volvería a mandar el paciente entero en cada pasada.
 	res.Estado = SyncCreado
+	res.Motivo = guardarCedulaDelLote(p, usuarioID)
 	return res
+}
+
+// guardarCedulaDelLote guarda la imagen que viene en el lote, si viene.
+// Devuelve el motivo del fallo en texto llano, o "" si no había imagen o entró
+// bien. Acepta el base64 desnudo o con prefijo data URI.
+func guardarCedulaDelLote(p *pacientes2.Pacientes, usuarioID string) string {
+	if p.Cedula_Base64 == "" {
+		return ""
+	}
+
+	crudo := p.Cedula_Base64
+	if i := strings.Index(crudo, ","); i >= 0 && strings.HasPrefix(crudo, "data:") {
+		crudo = crudo[i+1:]
+	}
+
+	imagen, err := base64.StdEncoding.DecodeString(crudo)
+	if err != nil {
+		return "la cédula no se pudo decodificar; vuelve a adjuntarla desde la ficha del paciente"
+	}
+
+	if _, err := pacientes2.GuardarCedula(config.PsqlDB, p.ID, imagen, usuarioID); err != nil {
+		return "la cédula no se guardó (" + err.Error() + "); vuelve a adjuntarla desde la ficha del paciente"
+	}
+	return ""
 }
 
 // subirNota registra una nota redactada sin conexión. `rol` es el de quien
@@ -209,5 +251,96 @@ func subirNota(n *notas2.Notas, usuarioID, rol string) SyncResultado {
 
 	res.Estado = SyncCreado
 	res.NotaID = n.ID
+	return res
+}
+
+// subirBiopsia registra una muestra tomada sin conexión y la vincula a su nota
+// de origen. Si la nota todavía no está en el servidor (falló más arriba en
+// este mismo lote), la biopsia se queda en la cola: en la pasada siguiente la
+// nota entrará como `duplicado` y la biopsia podrá vincularse.
+func subirBiopsia(b *biopsias2.Biopsia, usuarioID, rol string) SyncResultado {
+	res := SyncResultado{ClienteID: b.ClientUUID}
+
+	if b.ClientUUID == "" {
+		res.Estado = SyncError
+		res.Motivo = "la biopsia no trae client_uuid; sin él no se puede garantizar que no se duplique"
+		return res
+	}
+
+	existente, err := biopsias2.BuscarPorClientUUID(config.PsqlDB, b.ClientUUID)
+	if err != nil {
+		res.Estado = SyncError
+		res.Motivo = "no se pudo verificar si la biopsia ya estaba subida"
+		return res
+	}
+	if existente != nil {
+		res.Estado = SyncDuplicado
+		res.NotaID = existente.ID
+		return res
+	}
+
+	// Nota de origen: por client_uuid si nació sin conexión, por id si no.
+	var nota *notas2.Notas
+	switch {
+	case b.NotaClientUUID != "":
+		nota, err = notas2.BuscarPorClientUUID(config.PsqlDB, b.NotaClientUUID)
+		if err != nil {
+			res.Estado = SyncError
+			res.Motivo = "no se pudo buscar la nota de origen"
+			return res
+		}
+		if nota == nil || nota.Eliminado {
+			res.Estado = SyncError
+			res.Motivo = "la nota de origen todavía no está en el servidor"
+			return res
+		}
+	case b.NotaID != 0:
+		nota = &notas2.Notas{ID: b.NotaID}
+		if err := nota.Get(config.PsqlDB); err != nil {
+			res.Estado = SyncError
+			res.Motivo = "la nota de origen no existe"
+			return res
+		}
+	}
+
+	if nota != nil {
+		if b.IDPaciente == "" {
+			b.IDPaciente = nota.ID_Paciente
+		}
+		if b.IDMedicoResponsable == "" {
+			b.IDMedicoResponsable = nota.Medico_Encargado
+		}
+		if b.FechaToma.IsZero() {
+			b.FechaToma = nota.Fecha_Comienzo
+		}
+	}
+	if b.IDMedicoResponsable == "" && rol != auth.RolAdmin {
+		b.IDMedicoResponsable = usuarioID
+	}
+	if b.IDPaciente == "" || b.IDMedicoResponsable == "" || b.Tejido == "" {
+		res.Estado = SyncError
+		res.Motivo = "la biopsia necesita nota de origen (o paciente y médico responsable) y tejido"
+		return res
+	}
+
+	if err := b.Create(config.PsqlDB); err != nil {
+		res.Estado = SyncError
+		res.Motivo = "no se pudo guardar la biopsia: " + err.Error()
+		return res
+	}
+
+	if nota != nil {
+		if err := biopsias2.Vincular(config.PsqlDB, nota.ID, b.ID, biopsias2.RolOrigen, usuarioID); err != nil {
+			// La biopsia ya entró; el vínculo se puede rehacer a mano desde
+			// la nota. No se deja en la cola porque volvería a duplicarse.
+			res.Estado = SyncCreado
+			res.NotaID = b.ID
+			res.Motivo = "la biopsia se guardó pero no se pudo vincular a la nota: " + err.Error()
+			return res
+		}
+	}
+
+	res.Estado = SyncCreado
+	res.NotaID = b.ID
 	return res
 }

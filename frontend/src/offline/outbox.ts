@@ -17,7 +17,7 @@
  *   `id` en los pacientes). Eso es lo que hace que reintentar sea inofensivo.
  */
 
-import type { Nota, Paciente } from "@/domain/models";
+import type { Biopsia, Nota, Paciente } from "@/domain/models";
 import { ALMACEN_PENDIENTES, borrar, guardar, leer, listar } from "./db";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,13 @@ interface Base {
 export interface PacientePendiente extends Base {
   tipo: "paciente";
   datos: Paciente;
+  /**
+   * Foto de la cédula adjuntada mientras el paciente seguía en la cola. Sube
+   * con él en el mismo lote de sincronización (`cedula_base64`): no puede ir
+   * antes porque el paciente todavía no existe en el servidor, y no conviene
+   * que vaya después porque habría que recordar hacerlo.
+   */
+  cedula?: { blob: Blob; contentType: string };
 }
 
 export interface NotaPendiente extends Base {
@@ -62,7 +69,19 @@ export interface NotaPendiente extends Base {
   dependeDePaciente?: string;
 }
 
-export type Pendiente = PacientePendiente | NotaPendiente;
+export interface BiopsiaPendiente extends Base {
+  tipo: "biopsia";
+  datos: Biopsia;
+  /** Nota de origen ya en el servidor. */
+  notaId?: number;
+  /**
+   * Nota de origen que también está en la cola. La biopsia no puede subir
+   * antes que ella: el servidor no tendría a qué vincularla.
+   */
+  notaClientUuid?: string;
+}
+
+export type Pendiente = PacientePendiente | NotaPendiente | BiopsiaPendiente;
 
 // ---------------------------------------------------------------------------
 // Identificadores
@@ -130,6 +149,27 @@ export async function encolarPaciente(
     usuarioId,
     tipo: "paciente",
     datos: { ...paciente, id },
+    creadoEn: Date.now(),
+    estado: "en-espera",
+    intentos: 0,
+  };
+  await guardar(ALMACEN_PENDIENTES, pendiente);
+  return pendiente;
+}
+
+/** Mete una biopsia en la cola, ligada a su nota por id o por client_uuid. */
+export async function encolarBiopsia(
+  biopsia: Biopsia,
+  usuarioId: string,
+  vinculo: { notaId?: number; notaClientUuid?: string; id?: string }
+): Promise<BiopsiaPendiente> {
+  const pendiente: BiopsiaPendiente = {
+    id: vinculo.id ?? nuevoId(),
+    usuarioId,
+    tipo: "biopsia",
+    datos: biopsia,
+    notaId: vinculo.notaId,
+    notaClientUuid: vinculo.notaClientUuid,
     creadoEn: Date.now(),
     estado: "en-espera",
     intentos: 0,

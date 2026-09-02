@@ -9,9 +9,30 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { descargarNotasPDF } from "@/features/pdf/NotaPDF";
+import { cedulaParaPDF } from "@/features/pdf/cedulaParaPDF";
 import { obtenerNota } from "@/api/endpoints/notas";
 import { obtenerPaciente } from "@/api/endpoints/pacientes";
 import type { Nota } from "@/domain/models";
+
+/** Aplica `fn` a cada elemento con como mucho `limite` en vuelo a la vez. */
+async function enLotes<T, R>(
+  items: T[],
+  limite: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const resultados: R[] = new Array(items.length);
+  let siguiente = 0;
+  const trabajador = async () => {
+    while (siguiente < items.length) {
+      const i = siguiente++;
+      resultados[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limite, items.length) }, trabajador)
+  );
+  return resultados;
+}
 
 export function useDescargaMultiple(notas: Nota[]) {
   const [seleccion, setSeleccion] = useState<number[]>([]);
@@ -46,13 +67,14 @@ export function useDescargaMultiple(notas: Nota[]) {
     setGenerando(true);
     setError(null);
     try {
-      const items = await Promise.all(
-        seleccionadas.map(async (id) => {
-          const nota = await obtenerNota(id);
-          const paciente = await obtenerPaciente(nota.idPaciente);
-          return { nota, paciente };
-        })
-      );
+      // De a pocas a la vez: cada nota trae hasta tres peticiones (nota,
+      // paciente, cédula) y veinte notas de golpe saturan la red del hospital.
+      const items = await enLotes(seleccionadas, 4, async (id) => {
+        const nota = await obtenerNota(id);
+        const paciente = await obtenerPaciente(nota.idPaciente);
+        const cedula = await cedulaParaPDF(paciente);
+        return { nota, paciente, cedula };
+      });
       await descargarNotasPDF(items);
       setSeleccion([]);
     } catch {

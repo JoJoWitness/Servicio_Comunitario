@@ -45,6 +45,9 @@ function describir(pendiente: Pendiente): string {
   if (pendiente.tipo === "paciente") {
     return `Paciente: ${pendiente.datos.nombre || "sin nombre"}`;
   }
+  if (pendiente.tipo === "biopsia") {
+    return `Biopsia: ${pendiente.datos.tejido || "sin tejido"}`;
+  }
   const nota = pendiente.datos;
   return `Nota: ${nota.intervencionRealizada || nota.dxPreOperatorio || "sin título"}`;
 }

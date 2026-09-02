@@ -39,6 +39,7 @@ export default function NuevoPacientePage() {
       telefono: data.telefono,
       direccion: data.direccion,
       eliminado: false,
+      tieneCedula: false,
     };
 
     crearPaciente(nuevoPaciente, {
@@ -77,7 +78,7 @@ export default function NuevoPacientePage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-lg p-6 space-y-4">
+      <div className="mx-auto max-w-lg space-y-4 p-4 sm:p-6">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="-ml-2">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver

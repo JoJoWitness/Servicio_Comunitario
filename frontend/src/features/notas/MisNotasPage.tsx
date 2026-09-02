@@ -54,8 +54,8 @@ export default function MisNotasPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold">Mis notas</h1>
           <Button size="sm" onClick={() => navigate("/notas/nuevo")}>
             <FilePlus className="mr-2 h-4 w-4" />

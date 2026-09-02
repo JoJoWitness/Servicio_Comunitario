@@ -17,7 +17,11 @@ privilegios: `403`.
 |-------------------------------------------------|------------------------|--------------------------------------|
 | `/notas` (vista global)                         | secretaria, admin      | —                                    |
 | `/notas` (resto)                                | cualquiera autenticado | medico, admin                        |
+| `/notas/{id}/legalizada`                        | —                      | admin, secretaria; medico si participó |
 | `/pacientes`                                    | cualquiera autenticado | medico, admin (`DELETE`: solo admin) |
+| `/pacientes/{id}/cedula`                        | cualquiera autenticado | medico, admin                        |
+| `/biopsias`                                     | cualquiera autenticado | crear/baja: medico, admin; `PUT`: por rol (ver Biopsias) |
+| `/notas/{id}/biopsias/{idBiopsia}`              | —                      | medico participante de la nota, admin |
 | `/usuarios/me`, `/usuarios/me/password`         | el propio usuario      | el propio usuario                    |
 | `/usuarios` (lista)                             | cualquiera autenticado | admin                                |
 | `/usuarios/{id}`                                | admin                  | admin                                |
@@ -27,6 +31,10 @@ Además de estos middlewares, `PUT`/`DELETE` de una nota exigen que el médico h
 participado en ella: que sea el `id_medico_encargado` o que esté en `"Equipo_Quirurgico"`.
 El admin queda exento. Un médico que no participó recibe `403`; una nota inexistente o dada
 de baja, `404`.
+
+Todo `403` sobre una nota lleva la cabecera **`X-Motivo`** con uno de `fuera_de_plazo`,
+`no_participante` o `legalizada`, para que el cliente no tenga que interpretar el texto.
+Va expuesta por CORS.
 
 ---
 
@@ -66,6 +74,10 @@ de baja, `404`.
 | GET    | `/pacientes/{id}` | `controllers.GetPaciente`     |
 | PUT    | `/pacientes/{id}` | `controllers.UpdatePaciente`  |
 | DELETE | `/pacientes/{id}` | `controllers.DeletePaciente`  |
+| GET    | `/pacientes/{id}/cedula` | `controllers.GetCedula` (imagen) |
+| PUT    | `/pacientes/{id}/cedula` | `controllers.PutCedula` (medico, admin) |
+| DELETE | `/pacientes/{id}/cedula` | `controllers.DeleteCedula` (medico, admin) |
+| GET    | `/pacientes/{id}/biopsias` | `controllers.GetBiopsiasDePaciente` |
 
 ## Notas (`/notas`)
 
@@ -81,6 +93,79 @@ de baja, `404`.
 | GET    | `/notas/{id}`            | `controllers.GetNota`                        |
 | PUT    | `/notas/{id}`            | `controllers.UpdateNota`                     |
 | DELETE | `/notas/{id}`            | `controllers.DeleteNota`                     |
+| PATCH  | `/notas/{id}/legalizada` | `controllers.PatchLegalizada`                |
+| GET    | `/notas/{id}/biopsias`   | `controllers.GetBiopsiasDeNota`              |
+| POST   | `/notas/{id}/biopsias/{idBiopsia}` | `controllers.VincularBiopsia` (medico participante, admin) |
+| DELETE | `/notas/{id}/biopsias/{idBiopsia}` | `controllers.DesvincularBiopsia` (ídem) |
+
+## Biopsias (`/biopsias`) — v0.5.0
+
+| Method | URL              | Handler                      | Permiso |
+|--------|------------------|------------------------------|---------|
+| GET    | `/biopsias`      | `controllers.GetAllBiopsias` | autenticado |
+| POST   | `/biopsias`      | `controllers.CreateBiopsia`  | medico, admin |
+| GET    | `/biopsias/{id}` | `controllers.GetBiopsia`     | autenticado |
+| PUT    | `/biopsias/{id}` | `controllers.UpdateBiopsia`  | admin y responsable: todo; participante de una nota vinculada: todo menos retroceder; secretaria: solo envío y resultado, hacia adelante |
+| DELETE | `/biopsias/{id}` | `controllers.DeleteBiopsia`  | admin, medico responsable |
+
+Una biopsia es una muestra enviada a anatomía patológica. Vive en su propia tabla
+(`"Biopsia"`) y se liga a las notas por `"Nota_Biopsia"` (`id_nota_operatoria`,
+`id_biopsia`, `rol` ∈ `origen` | `seguimiento`). **No le aplican el plazo de edición ni la
+legalización de la nota**: el informe llega semanas después de cerrarla.
+
+Ciclo: `tomada → enviada → con_resultado → entregada`. El servidor exige los datos de cada
+estado (`enviada`: `fecha_envio`; `con_resultado`: `resultado` y `fecha_resultado`;
+`entregada`: `fecha_entrega`) y responde `400` si faltan. Retroceder limpia lo del estado
+abandonado y solo lo hacen admin o responsable (`403`, `X-Motivo: no_participante`).
+
+`GET /biopsias` admite `?estado=tomada,enviada` (varios, separados por coma), `?medico=`
+(responsable **o** participante de una nota vinculada), `?paciente=`, `?from=&to=` (sobre
+`fecha_toma`), `?sin_resultado_desde=YYYY-MM-DD` (tomadas hasta esa fecha y sin resultado) y
+la paginación estándar (`sortBy` ∈ `fecha_toma`, `estado`, `fecha_resultado`). La respuesta
+trae además `sin_resultado`, `atrasadas` y `dias_atraso` (30) para el encabezado de seguimiento.
+
+`POST /biopsias` acepta `nota_id` **o** `nota_client_uuid`: crea la muestra y la vincula como
+`origen` en la misma llamada, tomando paciente, médico responsable y fecha de toma de la nota
+si no vienen. Con `nota_client_uuid` de una nota que aún no subió responde `409` (el cliente
+encola). Vincular con `origen` pone `tuvo_biopsia = TRUE` en la nota, aunque esté fuera de
+plazo o legalizada; desvincular no la vuelve a `FALSE`. Una biopsia tiene a lo sumo una nota
+`origen` (`409` si ya la tiene); vincular a una nota de otro paciente responde `400`; la
+misma pareja dos veces, `409`.
+
+Toda lectura trae `notas` (vínculos con `rol`, fecha e intervención), `puede_editar` y
+`puede_tramitar` calculados para el usuario de la sesión.
+
+```json
+{
+  "id_paciente": "a0000000-…", "id_medico_responsable": "6c6f6076-…",
+  "ojo": "OD", "tejido": "Pterigión", "descripcion_macroscopica": "…",
+  "diagnostico_presuntivo": "Pterigión recidivante", "fecha_toma": "2026-09-01T00:00:00Z",
+  "laboratorio": "Anatomía Patológica HCSC", "fecha_envio": "2026-09-01T00:00:00Z",
+  "numero_patologia": "AP-2026-1187", "resultado": null, "fecha_resultado": null,
+  "fecha_entrega": null, "estado": "enviada", "observaciones": "",
+  "nota_id": 340
+}
+```
+
+En `POST /sync` el lote acepta una tercera lista `biopsias` (después de `notas`), cada una
+con `client_uuid` y `nota_client_uuid` o `nota_id`. Si la nota de origen no está todavía en
+el servidor, la biopsia responde `error` y se queda en la cola para la pasada siguiente.
+
+### Campos que el servidor agrega a toda nota (v0.4.0)
+
+Todas las lecturas (`GET /notas/{id}`, listados, la respuesta de `POST`/`PUT`/`PATCH`)
+traen, además de las columnas de la tabla:
+
+| Campo            | Tipo              | Significado |
+|------------------|-------------------|-------------|
+| `legalizada`     | bool              | La nota impresa ya se firmó, selló y archivó. Solo cambia por `PATCH /notas/{id}/legalizada`; `PUT` lo ignora. |
+| `legalizada_en`  | RFC3339 \| ausente | Cuándo se puso la marca. |
+| `legalizada_por` | UUID \| ausente    | Quién la puso. |
+| `created_at`     | RFC3339           | Registro en el servidor; referencia del plazo de edición. |
+| `editable_hasta` | `YYYY-MM-DD`      | Último día calendario en que la nota admite cambios (`created_at::date + plazo - 1`, zona del servidor). |
+| `puede_editar`   | bool              | Para **el usuario de la sesión**: vigente, no legalizada, en plazo, y admin o participante. Es lo que la interfaz usa para habilitar "Editar" y "Eliminar" antes del clic. |
+
+El plazo sale de la variable de entorno `PLAZO_EDICION_DIAS` (entero ≥ 1; sin ella, 7).
 
 ### `GET /notas/medics/export` — record quirúrgico en Excel
 
@@ -266,6 +351,26 @@ El `id` (UUID) va en el **URL**. Mismo shape que el POST, sin `id`.
 
 > `DELETE /pacientes/{id}` **no lleva body** — usa el `id` del URL. Solo admin.
 
+### `GET /pacientes/{id}/cedula` — GetCedula
+**Sin body.** Devuelve la imagen tal cual (`Content-Type: image/jpeg|png|webp`), con `ETag`
+y `Cache-Control: private, max-age=86400`; con `If-None-Match` coincidente responde `304`.
+`404` si el paciente no tiene cédula o está dado de baja.
+
+### `PUT /pacientes/{id}/cedula` — PutCedula
+El body es la **imagen cruda**, no JSON ni multipart. El tipo se decide por los primeros
+bytes del archivo (JPEG, PNG o WebP), no por la cabecera. Tope: **1 MB**.
+Responde `201` con `{"tiene_cedula": true}`; `400` si el formato no es imagen; `413` si
+pesa más de 1 MB; `404` si el paciente no existe. Reemplaza la anterior si la había.
+
+### `DELETE /pacientes/{id}/cedula` — DeleteCedula
+**Sin body.** Quita la imagen. Responde `204`.
+
+> Toda lectura de paciente trae `"tiene_cedula": true|false`; el binario nunca viaja en
+> el JSON. En `POST /sync`, cada paciente del lote puede traer `cedula_base64` (sin prefijo
+> o como data URI) y `cedula_content_type`: se guarda tras registrarlo, y también cuando el
+> paciente resulta `duplicado`, por si la pasada anterior se cortó antes de la imagen. Si la
+> imagen falla, el paciente igual queda `creado` y el motivo va en `motivo`.
+
 ## Notas
 
 ### `GET /notas` — GetAllNotas
@@ -279,6 +384,7 @@ Filtros opcionales por query string, combinables:
 | `medico`      | `?medico=6c6f6076-...`           | notas donde ese médico es encargado **o** parte del equipo |
 | `paciente`    | `?paciente=a0000000-...`         | notas de ese paciente (UUID)                               |
 | `from` / `to` | `?from=2025-08-01&to=2025-08-31` | rango sobre `fecha_comienzo` (`YYYY-MM-DD` o RFC3339)      |
+| `legalizada`  | `?legalizada=false`              | solo legalizadas (`true`) o solo pendientes (`false`)      |
 
 ```
 GET /notas?medico=6c6f6076-16d3-4bcd-a1c5-73cf6191c6d7&from=2025-08-01&to=2026-07-31
@@ -330,7 +436,11 @@ médico activo, responde `400`.
 > relato: al mostrar o exportar la nota va al final del resumen, tras `Observaciones:`.
 
 ### `PUT /notas/{id}` — UpdateNota
-El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota dentro de los **7 días calendario** siguientes a su registro (columna `created_at`; ver `notas.PlazoEdicionDias`). Fuera de plazo: `403`.
+El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota dentro
+del plazo de edición (por defecto **7 días calendario** desde `created_at`, incluido el día
+del registro; ver `PLAZO_EDICION_DIAS`) y mientras **no esté legalizada**. En ambos casos
+responde `403` con `X-Motivo: fuera_de_plazo` o `X-Motivo: legalizada`. Los campos
+`legalizada`, `legalizada_en` y `legalizada_por` se ignoran si vienen en el body.
 ```json
 {
   "dx_pre_operatorio": "Apendicitis aguda",
@@ -361,6 +471,16 @@ El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una
 > `eliminado` no se manda: la baja es exclusiva del `DELETE`.
 > `comentarios` es opcional y se guarda en su propia columna, pero se lee como parte del
 > relato: al mostrar o exportar la nota va al final del resumen, tras `Observaciones:`.
+
+### `PATCH /notas/{id}/legalizada` — PatchLegalizada
+Pone o quita la marca de legalización. No pasa por el plazo de edición: el trámite físico
+suele ocurrir semanas después de la cirugía. Admin y secretaria sobre cualquier nota; el
+médico solo sobre las suyas (`403` con `X-Motivo: no_participante` si no participó).
+Mientras la marca esté puesta, `PUT` y `DELETE` responden `403`.
+```json
+{ "legalizada": true }
+```
+Responde `200` con la nota completa (mismo JSON que `GET /notas/{id}`).
 
 ### `DELETE /notas/{id}` — DeleteNota
 **Sin body.** El `id` va en el URL. Igual que el PUT, solo aplica dentro de los **7 días**
@@ -516,10 +636,12 @@ Request:
   (usuarios, pacientes, notas, diagnosticos, procedimientos, tecnicas). El `GET` de lista y
   el `POST` usan `/{recurso}` sin id. En notas, las rutas específicas (`/notas/medics`,
   `/notas/pacientes/{id}`, `.../dates`) se registran **antes** del comodín `/notas/{id}`.
-- **Regla de edición de notas**: `PUT`/`DELETE` de notas solo funcionan dentro de los
-  **7 días calendario** siguientes al registro (columna `created_at DEFAULT NOW()`). El
-  plazo vive en una sola constante, `notas.PlazoEdicionDias`, y el mensaje de error se
-  arma con ella. Como los datos de prueba se cargan en cada arranque, quedan editables.
+- **Regla de edición de notas**: `PUT`/`DELETE` de notas solo funcionan dentro del plazo
+  de edición contado desde `created_at DEFAULT NOW()` (incluido el día del registro) y
+  mientras la nota no esté legalizada. El plazo se lee una vez de `PLAZO_EDICION_DIAS`
+  (`config.PlazoEdicionDias()`, por defecto 7) y el mensaje de error se arma con él. El
+  mismo cálculo viaja en cada nota como `editable_hasta` y `puede_editar`. Como los datos
+  de prueba se cargan en cada arranque, quedan editables.
 
 - **Autorización**: cada handler de escritura se envuelve individualmente
   (`r.Handle(path, auth.Medicos(http.HandlerFunc(h)))`) en vez de usar un subrouter con

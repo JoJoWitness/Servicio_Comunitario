@@ -10,7 +10,10 @@ import {
   darDeBajaPaciente,
   editarPaciente,
   listarPacientes,
+  obtenerCedula,
   obtenerPaciente,
+  quitarCedula,
+  subirCedula,
   todosLosPacientes,
 } from "../api/endpoints/pacientes";
 import type { FiltrosPacientesParams, PaginationParams } from "../api/types";
@@ -26,6 +29,9 @@ export const pacienteKeys = {
     ["pacientes", filtros ?? {}, params ?? {}] as const,
   detail: (id: string) => ["pacientes", id] as const,
   todos: ["pacientes", "todos"] as const,
+  // Fuera de la raíz "pacientes" a propósito: invalidar los listados no debe
+  // volver a bajar la imagen, que pesa cientos de KB y casi nunca cambia.
+  cedula: (id: string) => ["cedula", id] as const,
 };
 
 /** Padrón entero para los selectores de paciente, que filtran en el cliente. */
@@ -119,6 +125,48 @@ export function useEditarPaciente(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pacientes"] });
       queryClient.invalidateQueries({ queryKey: pacienteKeys.detail(id) });
+    },
+  });
+}
+
+/**
+ * Imagen de la cédula del paciente (Blob), o `null` si no tiene. Solo se pide
+ * cuando `habilitado`, que la pantalla deriva de `paciente.tieneCedula`: sin
+ * imagen no hay nada que bajar.
+ */
+export function useCedulaPaciente(id: string, habilitado = true) {
+  return useQuery<Blob | null>({
+    queryKey: pacienteKeys.cedula(id),
+    queryFn: () => obtenerCedula(id),
+    enabled: !!id && habilitado,
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+  });
+}
+
+/**
+ * Sube o reemplaza la cédula. Refresca la ficha del paciente (para que
+ * `tieneCedula` cambie) y deja la imagen nueva en caché sin volver a bajarla.
+ */
+export function useSubirCedula(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation<void, unknown, Blob>({
+    mutationFn: (imagen) => subirCedula(id, imagen),
+    onSuccess: (_data, imagen) => {
+      queryClient.setQueryData(pacienteKeys.cedula(id), imagen);
+      queryClient.invalidateQueries({ queryKey: ["pacientes"] });
+    },
+  });
+}
+
+/** Quita la cédula del paciente. */
+export function useQuitarCedula(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => quitarCedula(id),
+    onSuccess: () => {
+      queryClient.setQueryData(pacienteKeys.cedula(id), null);
+      queryClient.invalidateQueries({ queryKey: ["pacientes"] });
     },
   });
 }

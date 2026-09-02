@@ -10,6 +10,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  cambiarLegalizacion,
   crearNota,
   editarNota,
   eliminarNota,
@@ -181,6 +182,48 @@ export function useEditarNota(id: number) {
       // Actualizar el detalle en caché directamente
       queryClient.setQueryData(notaKeys.detail(id), notaActualizada);
       // Requisito 21.5: invalidar listados afectados
+      queryClient.invalidateQueries({ queryKey: ["misNotas"] });
+      queryClient.invalidateQueries({ queryKey: ["todasNotas"] });
+      queryClient.invalidateQueries({ queryKey: ["notasPaciente"] });
+    },
+  });
+}
+
+/**
+ * Pone o quita la marca de legalización de una nota.
+ * PATCH /notas/{id}/legalizada
+ *
+ * Optimista: el interruptor cambia al instante y se revierte si el servidor
+ * dice que no. Al confirmar, el detalle se reemplaza con lo que devolvió el
+ * servidor (trae `legalizadaEn`, `legalizadaPor` y el nuevo `puedeEditar`) y
+ * los listados se invalidan para que la insignia aparezca sin recargar.
+ */
+export function useCambiarLegalizacion(id: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation<Nota, unknown, boolean, { anterior?: Nota }>({
+    mutationFn: (legalizada) => cambiarLegalizacion(id, legalizada),
+    onMutate: async (legalizada) => {
+      await queryClient.cancelQueries({ queryKey: notaKeys.detail(id) });
+      const anterior = queryClient.getQueryData<Nota>(notaKeys.detail(id));
+      if (anterior) {
+        queryClient.setQueryData<Nota>(notaKeys.detail(id), {
+          ...anterior,
+          legalizada,
+          // Mientras responde el servidor, la regla se aplica igual aquí:
+          // legalizada bloquea; al quitarla, el servidor dirá si el plazo da.
+          puedeEditar: legalizada ? false : anterior.puedeEditar,
+        });
+      }
+      return { anterior };
+    },
+    onError: (_error, _legalizada, contexto) => {
+      if (contexto?.anterior) {
+        queryClient.setQueryData(notaKeys.detail(id), contexto.anterior);
+      }
+    },
+    onSuccess: (notaActualizada) => {
+      queryClient.setQueryData(notaKeys.detail(id), notaActualizada);
       queryClient.invalidateQueries({ queryKey: ["misNotas"] });
       queryClient.invalidateQueries({ queryKey: ["todasNotas"] });
       queryClient.invalidateQueries({ queryKey: ["notasPaciente"] });

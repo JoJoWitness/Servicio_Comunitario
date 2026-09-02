@@ -33,6 +33,7 @@ func Init(router *mux.Router) {
 	api.PathPrefix("/diagnosticos").Handler(DiagnosticosRoutes())
 	api.PathPrefix("/procedimientos").Handler(ProcedimientosRoutes())
 	api.PathPrefix("/tecnicas").Handler(TecnicasRoutes())
+	api.PathPrefix("/biopsias").Handler(BiopsiasRoutes())
 	api.PathPrefix("/sync").Handler(SyncRoutes())
 
 	// Health check
@@ -119,11 +120,13 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, hx-request, hx-current-url")
-		// El nombre del archivo de las descargas (.xlsx) viaja aquí; sin
-		// exponerlo, el navegador se lo oculta al frontend.
-		w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, If-None-Match, hx-request, hx-current-url")
+		// El nombre del archivo de las descargas (.xlsx) viaja en
+		// Content-Disposition, el motivo de un 403 sobre una nota en X-Motivo y
+		// la versión de la cédula en ETag; sin exponerlos, el navegador se los
+		// oculta al frontend.
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition, X-Motivo, ETag")
 		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == http.MethodOptions {

@@ -378,6 +378,98 @@ procedimientos y técnicas que usa el servicio.
 
 ---
 
+## E7 — Legalización, plazo y hoja completa (v0.4.0)
+
+### HU-23 · Marcar una nota como legalizada
+**Como** médico del equipo, secretaria o admin
+**quiero** marcar con un interruptor que la nota impresa ya se firmó, selló y archivó
+**para** saber desde el sistema qué notas siguen pendientes de ese trámite.
+
+- Toda nota nace sin legalizar. El interruptor está en el detalle de la nota; se guarda
+  quién y cuándo. Los listados muestran la insignia "Legalizada"; "Todas las notas" filtra
+  por pendientes o legalizadas.
+- Legalizar no es editar: no pasa por el plazo de edición (`PATCH /notas/{id}/legalizada`).
+  Una nota legalizada no se puede corregir ni eliminar hasta quitar la marca.
+- Requiere conexión; el interruptor se deshabilita sin red.
+
+### HU-24 · Saber si una nota todavía se puede editar
+**Como** médico
+**quiero** ver en el detalle hasta qué día puedo corregir la nota y por qué no puedo cuando no puedo
+**para** no descubrirlo después de haber corregido todo.
+
+- El servidor manda en cada nota `editable_hasta` y `puede_editar` (plazo, legalización y
+  participación ya resueltos). El detalle dice "Editable hasta el …", "Último día para
+  editar", "Plazo de edición vencido el …" o "Bloqueada por legalización", y los botones
+  Editar/Eliminar nacen deshabilitados cuando corresponde.
+- Abrir `/notas/{id}/editar` de una nota bloqueada muestra el formulario en solo lectura.
+- El plazo se configura con `PLAZO_EDICION_DIAS` (por defecto 7 días calendario, incluido
+  el del registro). El `403` sigue como red de seguridad, con el motivo en `X-Motivo`.
+
+### HU-25 · Imprimir la cédula del paciente en la hoja
+**Como** médico
+**quiero** adjuntar una foto de la cédula del paciente y que salga impresa abajo a la
+izquierda de la nota, a la altura de la firma del médico tratante
+**para** que la hoja salga completa de la impresora en vez de pegar una fotocopia.
+
+- La imagen es del paciente (una sola, reemplazable) y la usan todas sus notas. Se adjunta
+  desde la ficha del paciente o desde el formulario de nota; se reduce en el cliente a
+  ≤ 1600 px / JPEG y el servidor acepta hasta 1 MB (JPEG, PNG o WebP, decidido por bytes).
+- En el PDF se imprime a tamaño real de carnet con la base alineada a la línea "MÉDICO
+  TRATANTE". Sin imagen, la hoja sale exactamente como antes.
+- Un paciente registrado sin conexión sube con su cédula en la misma sincronización.
+- Solo se sirve con sesión; no aparece en listados ni en el Excel.
+
+### HU-26 · Usar la aplicación desde una tablet o un teléfono
+**Como** cualquier usuario
+**quiero** que la interfaz funcione en pantallas angostas
+**para** consultar y registrar desde el dispositivo que tenga a mano.
+
+- Por debajo de 1024 px la barra lateral se convierte en un cajón que abre un botón de menú
+  en la barra superior; las tablas se leen como tarjetas por debajo de 768 px; los
+  formularios pasan a una columna por debajo de 640 px. La ventana de escritorio no baja de
+  360×600. El PDF no cambia.
+
+## E8 — Biopsias (v0.5.0)
+
+### HU-27 · Registrar la biopsia que salió de quirófano
+**Como** médico
+**quiero** registrar, desde la nota, qué tejido se extrajo y de qué ojo
+**para** que la muestra tenga un rastro desde el primer día y no dependa de una libreta.
+
+- Al crear la nota con "Se tomó biopsia" se puede describir la muestra ahí mismo; también
+  desde el detalle de cualquier nota, esté o no cerrada o legalizada. La biopsia es una
+  tabla propia ligada a la nota por `Nota_Biopsia` (rol `origen`).
+- Si la nota declara biopsia y no hay ninguna registrada, el detalle lo avisa.
+- Sin conexión, la biopsia se encola detrás de su nota y sube en la misma sincronización.
+
+### HU-28 · Seguir el trámite hasta el resultado
+**Como** secretaria o médico
+**quiero** marcar cuándo se envió la muestra, con qué número de patología, transcribir el
+informe cuando llegue y dejar constancia de que se le entregó al paciente
+**para** que nadie pierda de vista un resultado.
+
+- Ciclo `tomada → enviada → con_resultado → entregada`, con los datos que exige cada paso.
+- La secretaria puede marcar el envío y cargar el resultado (es quien recibe el sobre);
+  retroceder o dar de baja solo lo hacen admin y médico responsable.
+
+### HU-29 · Ver qué biopsias siguen sin resultado
+**Como** médico, secretaria o admin
+**quiero** una lista de biopsias pendientes con los días transcurridos y un filtro de
+"más de 30 días sin resultado"
+**para** reclamar al laboratorio y citar al paciente a tiempo.
+
+- Pantalla "Biopsias" con filtros por estado, médico, paciente y fecha; el médico ve por
+  defecto las suyas. La ficha del paciente lista sus biopsias. El Excel del record dice qué
+  se mandó y con qué número, y cuenta las que ya tienen resultado.
+
+### HU-30 · Ligar una biopsia a la reintervención
+**Como** médico
+**quiero** vincular una biopsia existente a una nota posterior
+**para** que la reintervención motivada por un resultado quede conectada con la muestra.
+
+- Solo entre notas del mismo paciente; el vínculo queda con rol `seguimiento` y no toca la
+  casilla de biopsia de esa nota.
+
 ## 4. Flujo principal (el que hay que hacer impecable)
 
 ```

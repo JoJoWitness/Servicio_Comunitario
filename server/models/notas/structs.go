@@ -37,6 +37,34 @@ type Notas struct {
 	// conexión. Al subirla, es lo que permite reconocer que una nota ya entró y
 	// no volver a insertarla. Vacío en las notas creadas en línea.
 	ClientUUID string `json:"client_uuid,omitempty"`
+
+	// Legalizada registra que la nota impresa ya pasó por el trámite físico:
+	// firmada, sellada y archivada en la historia. Es un estado administrativo,
+	// no un dato clínico, y por eso tiene su propio endpoint (PATCH
+	// /notas/{id}/legalizada): ni Create ni Update lo escriben, y una edición
+	// sincronizada tarde no puede pisar una legalización hecha entre medio.
+	Legalizada bool `json:"legalizada"`
+	// LegalizadaEn y LegalizadaPor dejan constancia de quién y cuándo. Van a
+	// NULL al desactivar el interruptor.
+	LegalizadaEn  *time.Time `json:"legalizada_en,omitempty"`
+	LegalizadaPor string     `json:"legalizada_por,omitempty"`
+
+	// CreatedAt es el momento del registro en el servidor: la referencia del
+	// plazo de edición. Para una nota redactada sin conexión es cuando subió,
+	// no cuando se escribió.
+	CreatedAt time.Time `json:"created_at"`
+	// EditableHasta es el último día calendario (YYYY-MM-DD, zona del servidor)
+	// en que la nota admite cambios según el plazo vigente. Se calcula en SQL
+	// para que coincida exactamente con lo que CheckNotasDate va a decidir.
+	EditableHasta string `json:"editable_hasta"`
+	// PuedeEditar resume, para el usuario de la sesión, si PUT/DELETE van a
+	// pasar: vigente, no legalizada, en plazo, y admin o participante. Lo
+	// calcula CompletarPermisos por petición; así el cliente no tiene que
+	// replicar la regla de participación.
+	PuedeEditar bool `json:"puede_editar"`
+	// enPlazo es el veredicto del plazo tal como lo dio la base. No viaja: al
+	// cliente le basta con `puede_editar` y `editable_hasta`.
+	enPlazo bool
 }
 
 // FiltroNotas acota la vista global del servicio (HU-16, HU-17). Los campos en
@@ -46,4 +74,7 @@ type FiltroNotas struct {
 	PacienteID string
 	From       time.Time
 	To         time.Time
+	// Legalizada en nil no filtra; con valor deja solo las que coinciden. Es
+	// el filtro "Pendientes / Legalizadas" de la vista de secretaría.
+	Legalizada *bool
 }

@@ -44,6 +44,18 @@ export function parseRFC3339(value: string): Date {
   return d;
 }
 
+/**
+ * Parsea una fecha sin hora "yyyy-mm-dd" como medianoche UTC, que es como
+ * `formatFechaUI` la vuelve a leer. Un `new Date("2026-09-03")` ya hace eso,
+ * pero aquí se valida el formato para no aceptar cualquier cadena.
+ */
+export function parseFechaISO(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new RangeError(`Fecha ISO inválida: "${value}"`);
+  }
+  return parseRFC3339(`${value}T00:00:00Z`);
+}
+
 // ---------------------------------------------------------------------------
 // Manejo de horas "HH:mm" ↔ RFC3339 con fecha fija
 // ---------------------------------------------------------------------------
@@ -134,6 +146,30 @@ export function formatFechaUI(date: Date): string {
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
   const yyyy = date.getUTCFullYear();
   return `${dd}/${mm}/${yyyy}`;
+}
+
+/**
+ * Días que quedan hasta `editableHasta`, ambos contados como fechas de
+ * calendario en la zona local: 0 significa "vence hoy", negativo que ya venció.
+ *
+ * `editableHasta` viene del servidor como medianoche UTC del último día
+ * editable; se compara con el día civil local de este equipo. Si el reloj del
+ * cliente discrepa del servidor el texto puede fallar por un día, pero el
+ * veredicto que manda es `puedeEditar`, que lo calcula el servidor.
+ */
+export function diasRestantes(editableHasta: Date, hoy: Date = new Date()): number {
+  const limite = Date.UTC(
+    editableHasta.getUTCFullYear(),
+    editableHasta.getUTCMonth(),
+    editableHasta.getUTCDate()
+  );
+  const hoyLocal = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((limite - hoyLocal) / 86_400_000);
+}
+
+/** Días completos transcurridos desde `fecha` (medianoche UTC) hasta hoy. */
+export function diasTranscurridos(fecha: Date, hoy: Date = new Date()): number {
+  return -diasRestantes(fecha, hoy);
 }
 
 // ---------------------------------------------------------------------------

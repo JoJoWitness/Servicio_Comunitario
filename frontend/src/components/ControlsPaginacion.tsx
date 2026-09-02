@@ -26,7 +26,7 @@ export function ControlsPaginacion({
   if (totalPaginas <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between px-1 pt-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-2">
       <p className="text-xs text-muted-foreground">
         {total} resultado{total !== 1 ? "s" : ""} · Página {pagina} de {totalPaginas}
       </p>
@@ -34,7 +34,7 @@ export function ControlsPaginacion({
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 max-lg:h-10 max-lg:w-10"
           onClick={anterior}
           disabled={!hayAnterior}
           aria-label="Página anterior"
@@ -44,7 +44,7 @@ export function ControlsPaginacion({
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 max-lg:h-10 max-lg:w-10"
           onClick={siguiente}
           disabled={!haySiguiente}
           aria-label="Página siguiente"

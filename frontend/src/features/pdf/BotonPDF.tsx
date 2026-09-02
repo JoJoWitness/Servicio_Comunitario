@@ -1,8 +1,9 @@
 /**
  * Botón de descarga de PDF para la vista de detalle de una nota.
  *
- * Orquesta la obtención de datos (GET /notas/{id} + GET /pacientes/{id})
- * y delega la generación al módulo NotaPDF.
+ * Orquesta la obtención de datos (GET /notas/{id} + GET /pacientes/{id} y,
+ * si el paciente la tiene, GET /pacientes/{id}/cedula) y delega la generación
+ * al módulo NotaPDF.
  *
  * Requisitos: 25.1, 25.2, 25.4
  */
@@ -12,6 +13,7 @@ import { FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { descargarNotaPDF } from "./NotaPDF";
+import { cedulaParaPDF } from "./cedulaParaPDF";
 import { obtenerNota } from "@/api/endpoints/notas";
 import { obtenerPaciente } from "@/api/endpoints/pacientes";
 
@@ -33,8 +35,11 @@ export function BotonPDF({ notaId, pacienteId }: BotonPDFProps) {
         obtenerNota(notaId),
         obtenerPaciente(pacienteId),
       ]);
+      // La cédula no bloquea la descarga: si no se puede bajar, la hoja sale
+      // con el hueco en blanco, como antes.
+      const cedula = await cedulaParaPDF(paciente);
       // Req 25.2: generar localmente con @react-pdf/renderer
-      await descargarNotaPDF(nota, paciente);
+      await descargarNotaPDF(nota, paciente, cedula);
     } catch {
       // Req 25.4: mostrar error y NO generar el documento
       setError(

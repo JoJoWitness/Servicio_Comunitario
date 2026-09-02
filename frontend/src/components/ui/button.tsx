@@ -20,8 +20,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
+        // Fuera del escritorio los controles crecen al mínimo táctil (44 px
+        // con el padding); en `lg` conservan su tamaño de siempre.
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
+        sm: "h-9 rounded-md px-3 max-lg:h-10",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
       },

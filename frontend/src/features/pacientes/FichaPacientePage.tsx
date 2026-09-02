@@ -30,6 +30,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PacienteForm, pacienteAFormInput } from "./PacienteForm";
+import { CedulaPaciente } from "./CedulaPaciente";
+import { ListaBiopsias } from "@/features/biopsias/ListaBiopsias";
+import { useBiopsiasDePaciente } from "@/hooks/useBiopsias";
 import { useObtenerPaciente, useEditarPaciente, useDarDeBajaPaciente } from "@/hooks/usePacientes";
 import { useNotasDePaciente } from "@/hooks/useNotas";
 import { useSessionStore } from "@/stores/sessionStore";
@@ -63,6 +66,13 @@ export default function FichaPacientePage() {
   // Requisito 12.3: historial ordenado de más reciente a más antigua
   const notas = notasRaw ? ordenarNotasDesc(notasRaw) : [];
 
+  // La nota trae el UUID del encargado; el nombre sale de su propio equipo.
+  const nombreEncargado = (nota: (typeof notas)[number]) => {
+    const m = nota.medicos.find((x) => x.id === nota.medicoEncargado);
+    return m ? `${m.nombres} ${m.apellidos}`.trim() : nota.medicoEncargado ?? "—";
+  };
+
+  const { data: biopsias = [] } = useBiopsiasDePaciente(id ?? "");
   const { mutate: editarPaciente, isPending: guardando } = useEditarPaciente(id ?? "");
   const { mutate: darDeBaja, isPending: dandoBaja } = useDarDeBajaPaciente();
 
@@ -139,14 +149,14 @@ export default function FichaPacientePage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-3xl p-6 space-y-6">
+      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="-ml-2">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Volver
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {puedeEditar && !modoEdicion && (
               <Button size="sm" variant="outline" onClick={() => setModoEdicion(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -184,7 +194,7 @@ export default function FichaPacientePage() {
               />
             ) : (
               /* Modo lectura */
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-muted-foreground">Historia médica</dt>
                   <dd className="font-medium">{paciente.historiaMedica}</dd>
@@ -212,7 +222,7 @@ export default function FichaPacientePage() {
                   </div>
                 )}
                 {paciente.direccion && (
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <dt className="text-muted-foreground">Dirección</dt>
                     <dd>{paciente.direccion}</dd>
                   </div>
@@ -221,6 +231,25 @@ export default function FichaPacientePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Cédula: se imprime en la hoja de cada nota del paciente (v0.4.0) */}
+        {!modoEdicion && (
+          <Card>
+            <CardContent className="pt-4">
+              <CedulaPaciente paciente={paciente} />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Biopsias del paciente (PRD 0.5.0); solo si tiene. */}
+        {biopsias.length > 0 && (
+          <section aria-labelledby="biopsias-heading" className="space-y-3">
+            <h2 id="biopsias-heading" className="text-lg font-semibold">
+              Biopsias
+            </h2>
+            <ListaBiopsias biopsias={biopsias} mostrarPaciente={false} />
+          </section>
+        )}
 
         <Separator />
 
@@ -242,8 +271,8 @@ export default function FichaPacientePage() {
           )}
 
           {notas.length > 0 && (
-            <div className="rounded-md border">
-              <Table>
+            <div className="rounded-md border max-md:border-0">
+              <Table responsive>
                 <TableHeader>
                   <TableRow>
                     {/* Requisito 12.4 */}
@@ -265,12 +294,12 @@ export default function FichaPacientePage() {
                           navigate(`/notas/${nota.id}`);
                       }}
                     >
-                      <TableCell>{formatFechaUI(nota.fechaComienzo)}</TableCell>
-                      <TableCell className="max-w-xs truncate">
+                      <TableCell data-label="Fecha">{formatFechaUI(nota.fechaComienzo)}</TableCell>
+                      <TableCell data-label="Intervención" className="max-w-xs truncate">
                         {nota.intervencionRealizada}
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {nota.medicoEncargado ?? "—"}
+                      <TableCell data-label="Médico encargado" className="text-sm text-muted-foreground">
+                        {nombreEncargado(nota)}
                       </TableCell>
                     </TableRow>
                   ))}

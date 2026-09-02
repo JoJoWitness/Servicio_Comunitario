@@ -38,7 +38,7 @@ export function ThemeToggle({ expanded = false }: ThemeToggleProps) {
             key={op.mode}
             variant={mode === op.mode ? "secondary" : "ghost"}
             size="icon"
-            className="h-8 w-8"
+            className="h-8 w-8 max-lg:h-10 max-lg:w-10"
             onClick={() => setMode(op.mode)}
             aria-label={op.label}
             aria-pressed={mode === op.mode}

@@ -132,3 +132,59 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+
+/* ── Tablas como tarjetas en pantallas angostas ─────────────────────────── */
+/*
+  Una tabla de cinco columnas no cabe en un teléfono. Por debajo de `md` las
+  filas de una tabla marcada con `.tabla-tarjetas` (prop `responsive` de
+  <Table>) se apilan como tarjetas: la cabecera desaparece y cada celda pinta
+  su rótulo desde `data-label`. Las celdas sin rótulo (acciones) van solas.
+*/
+@media (max-width: 767px) {
+  .tabla-tarjetas table,
+  .tabla-tarjetas tbody,
+  .tabla-tarjetas tr,
+  .tabla-tarjetas td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabla-tarjetas thead {
+    display: none;
+  }
+
+  .tabla-tarjetas tr {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tabla-tarjetas tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .tabla-tarjetas td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.25rem 0;
+    text-align: right;
+    max-width: none;
+  }
+
+  .tabla-tarjetas td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    text-align: left;
+  }
+
+  .tabla-tarjetas td:not([data-label]) {
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+  }
+}

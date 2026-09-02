@@ -25,7 +25,8 @@ const columnas = `
 	fecha_nacimiento,
 	numero_telefono,
 	direccion,
-	eliminado
+	eliminado,
+	EXISTS (SELECT 1 FROM "Paciente_Cedula" c WHERE c.id_paciente = "Paciente".id)
 `
 
 func (u *Pacientes) Get(db *pgxpool.Pool) error {
@@ -51,7 +52,7 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 	}
 
 	row := db.QueryRow(context.Background(), query, args)
-	err := row.Scan(&u.ID, &u.Historia_Medica, &u.Numero_Indentificacion, &u.Tipo_Documento, &u.Nombre, &u.Genero, &u.Fecha_Nacimiento, &u.Telefono, &u.Direccion, &u.Eliminado)
+	err := row.Scan(&u.ID, &u.Historia_Medica, &u.Numero_Indentificacion, &u.Tipo_Documento, &u.Nombre, &u.Genero, &u.Fecha_Nacimiento, &u.Telefono, &u.Direccion, &u.Eliminado, &u.Tiene_Cedula)
 	if err != nil {
 		log.Printf("Error scanning pacientes: %v", err)
 		return err
@@ -172,7 +173,7 @@ func GetAllPacientes() ([]Pacientes, error) {
 	for rows.Next() {
 		var paciente Pacientes
 
-		err := rows.Scan(&paciente.ID, &paciente.Historia_Medica, &paciente.Numero_Indentificacion, &paciente.Tipo_Documento, &paciente.Nombre, &paciente.Genero, &paciente.Fecha_Nacimiento, &paciente.Telefono, &paciente.Direccion, &paciente.Eliminado)
+		err := rows.Scan(&paciente.ID, &paciente.Historia_Medica, &paciente.Numero_Indentificacion, &paciente.Tipo_Documento, &paciente.Nombre, &paciente.Genero, &paciente.Fecha_Nacimiento, &paciente.Telefono, &paciente.Direccion, &paciente.Eliminado, &paciente.Tiene_Cedula)
 		if err != nil {
 			log.Printf("Error scanning paciente: %v", paciente)
 			log.Printf("Error fetching pacientes: %v", err)
@@ -242,7 +243,7 @@ func GetAllPacientesPaged(f FiltrosPacientes, p pagination.Params) ([]Pacientes,
 		var pac Pacientes
 		if err := rows.Scan(&pac.ID, &pac.Historia_Medica, &pac.Numero_Indentificacion,
 			&pac.Tipo_Documento, &pac.Nombre, &pac.Genero,
-			&pac.Fecha_Nacimiento, &pac.Telefono, &pac.Direccion, &pac.Eliminado); err != nil {
+			&pac.Fecha_Nacimiento, &pac.Telefono, &pac.Direccion, &pac.Eliminado, &pac.Tiene_Cedula); err != nil {
 			log.Printf("Error scanning paciente: %v", err)
 			return pacientes, total, err
 		}

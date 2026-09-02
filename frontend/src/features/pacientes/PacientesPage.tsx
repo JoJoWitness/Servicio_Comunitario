@@ -90,8 +90,8 @@ export default function PacientesPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold">Pacientes</h1>
           {puedeCrear && (
             <Button size="sm" onClick={() => navigate("/pacientes/nuevo")}>
@@ -191,8 +191,8 @@ export default function PacientesPage() {
 
         {/* Tabla de resultados */}
         {!isLoading && !isError && pacientes.length > 0 && (
-          <div className="rounded-md border">
-            <Table>
+          <div className="rounded-md border max-md:border-0">
+            <Table responsive>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
@@ -215,11 +215,11 @@ export default function PacientesPage() {
                     }}
                     aria-label={`Ver ficha de ${p.nombre}`}
                   >
-                    <TableCell className="font-medium">{p.nombre}</TableCell>
-                    <TableCell>{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
-                    <TableCell>{p.historiaMedica}</TableCell>
-                    <TableCell>{formatFechaUI(p.fechaNacimiento)}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Nombre" className="font-medium">{p.nombre}</TableCell>
+                    <TableCell data-label="Documento">{p.tipoDocumento}-{p.numeroIdentificacion}</TableCell>
+                    <TableCell data-label="Historia médica">{p.historiaMedica}</TableCell>
+                    <TableCell data-label="Nacimiento">{formatFechaUI(p.fechaNacimiento)}</TableCell>
+                    <TableCell data-label="Género">
                       <Badge variant="secondary">
                         {p.genero === "M" ? "Masculino" : "Femenino"}
                       </Badge>
@@ -228,7 +228,7 @@ export default function PacientesPage() {
                 ))}
               </TableBody>
             </Table>
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-3 max-md:px-0">
               <ControlsPaginacion {...paginacion} />
             </div>
           </div>

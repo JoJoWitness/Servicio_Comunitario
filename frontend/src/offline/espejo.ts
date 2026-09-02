@@ -36,7 +36,14 @@ export type ClaveEspejo =
   | "catalogo:tecnicas"
   | "pacientes"
   | "medicos"
-  | "mis-notas";
+  | "mis-notas"
+  | "mis-biopsias"
+  /**
+   * Imagen de la cédula de un paciente (un Blob; IndexedDB los guarda tal
+   * cual). Se refleja al bajarla, para que el PDF salga completo también sin
+   * red si la nota ya se generó en línea alguna vez.
+   */
+  | `cedula:${string}`;
 
 interface EntradaEspejo<T> {
   clave: ClaveEspejo;

@@ -11,7 +11,8 @@
  * @see server/controllers/sync.go
  */
 
-import type { Nota, Paciente } from "../../domain/models";
+import type { Biopsia, Nota, Paciente } from "../../domain/models";
+import { biopsiaToDto, type BiopsiaDTO } from "../dto/biopsia.dto";
 import { notaToDto, type NotaDTO } from "../dto/nota.dto";
 import { pacienteToWriteDto, type PacienteDTO } from "../dto/paciente.dto";
 import { request } from "../httpClient";
@@ -31,17 +32,40 @@ export interface ResultadoSync {
 export interface RespuestaSync {
   pacientes: ResultadoSync[];
   notas: ResultadoSync[];
+  /** Ausente en servidores anteriores a v0.5.0. */
+  biopsias?: ResultadoSync[];
 }
 
 /** Lo que se manda: el paciente lleva su id, la nota su client_uuid. */
 interface CuerpoSync {
-  pacientes: (PacienteDTO | (Omit<PacienteDTO, "id"> & { id: string }))[];
+  pacientes: (Omit<PacienteDTO, "id"> & {
+    id: string;
+    /** Cédula adjuntada sin conexión, en base64 sin prefijo. */
+    cedula_base64?: string;
+    cedula_content_type?: string;
+  })[];
   notas: (NotaDTO & { client_uuid: string })[];
+  biopsias: (BiopsiaDTO & {
+    client_uuid: string;
+    nota_id?: number;
+    nota_client_uuid?: string;
+  })[];
 }
 
 export interface LotePendiente {
-  pacientes: Paciente[];
+  pacientes: {
+    paciente: Paciente;
+    /** Cédula ya codificada, si el paciente la traía en la cola. */
+    cedulaBase64?: string;
+    cedulaContentType?: string;
+  }[];
   notas: { clientUuid: string; nota: Nota; medicoEncargadoId: string }[];
+  biopsias: {
+    clientUuid: string;
+    biopsia: Biopsia;
+    notaId?: number;
+    notaClientUuid?: string;
+  }[];
 }
 
 /**
@@ -58,13 +82,22 @@ export async function sincronizarPendientes(
     // El id va explícito: es el UUID que generó el dispositivo y con el que la
     // nota ya referencia a este paciente. El DTO de escritura normal lo omite
     // porque en línea lo asigna el servidor.
-    pacientes: lote.pacientes.map((p) => ({
-      ...pacienteToWriteDto(p),
-      id: p.id,
+    pacientes: lote.pacientes.map(({ paciente, cedulaBase64, cedulaContentType }) => ({
+      ...pacienteToWriteDto(paciente),
+      id: paciente.id,
+      cedula_base64: cedulaBase64,
+      cedula_content_type: cedulaContentType,
     })),
     notas: lote.notas.map(({ clientUuid, nota, medicoEncargadoId }) => ({
       ...notaToDto(nota, { medicoEncargadoId }),
       client_uuid: clientUuid,
+    })),
+    // Al final: cada una apunta a su nota de origen, que va antes en el lote.
+    biopsias: lote.biopsias.map(({ clientUuid, biopsia, notaId, notaClientUuid }) => ({
+      ...biopsiaToDto(biopsia),
+      client_uuid: clientUuid,
+      nota_id: notaId,
+      nota_client_uuid: notaClientUuid,
     })),
   };
 

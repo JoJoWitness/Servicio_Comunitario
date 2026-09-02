@@ -26,6 +26,7 @@ import {
   formatRFC3339,
   horaFromRFC3339,
   horaToRFC3339,
+  parseFechaISO,
   parseRFC3339,
 } from "../../lib/datetime";
 import { construirEquipo, derivarEquipoDesdeMedicos } from "../../lib/equipo";
@@ -74,6 +75,15 @@ export interface NotaDTO {
   equipo?: string[] | null;
   /** Solo en lectura (GET): objetos completos del equipo */
   medicos?: UsuarioDTO[] | null;
+
+  // --- Solo lectura; los escribe el servidor (v0.4.0) ---
+  /** Interruptor de legalización. Se cambia con PATCH /notas/{id}/legalizada. */
+  legalizada?: boolean;
+  legalizada_en?: string | null; // RFC3339
+  legalizada_por?: string;
+  created_at?: string;    // RFC3339
+  editable_hasta?: string; // YYYY-MM-DD
+  puede_editar?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +122,16 @@ export function notaToDomain(dto: NotaDTO): Nota {
     // Al leer, el equipo se deriva de los objetos medicos[].id
     equipo: derivarEquipoDesdeMedicos(medicos),
     medicos,
+
+    // Un servidor anterior a v0.4.0 no manda estos campos. Se asume lo que
+    // hacía la interfaz hasta entonces: nada legalizado y edición permitida,
+    // con el 403 del servidor como red de seguridad.
+    legalizada: dto.legalizada ?? false,
+    legalizadaEn: dto.legalizada_en ? parseRFC3339(dto.legalizada_en) : undefined,
+    legalizadaPor: dto.legalizada_por || undefined,
+    createdAt: dto.created_at ? parseRFC3339(dto.created_at) : undefined,
+    editableHasta: dto.editable_hasta ? parseFechaISO(dto.editable_hasta) : undefined,
+    puedeEditar: dto.puede_editar ?? true,
   };
 }
 

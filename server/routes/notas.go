@@ -36,6 +36,17 @@ func NotasRoutes() http.Handler {
 	// médico haya participado en la nota (HU-22).
 	r.Handle("/notas", auth.Medicos(http.HandlerFunc(controllers.CreateNota))).Methods("POST")
 
+	// Legalización: estado administrativo, con su propia puerta. Admin y
+	// secretaria sobre cualquier nota, el médico sobre las suyas; el handler
+	// hace esa distinción, así que basta con estar autenticado.
+	r.HandleFunc("/notas/{id}/legalizada", controllers.PatchLegalizada).Methods("PATCH")
+
+	// Biopsias de la nota (PRD 0.5.0). Vincular y desvincular exigen
+	// participar en la nota, igual que editarla, pero no dependen del plazo.
+	r.HandleFunc("/notas/{id}/biopsias", controllers.GetBiopsiasDeNota).Methods("GET")
+	r.Handle("/notas/{id}/biopsias/{idBiopsia}", auth.Medicos(http.HandlerFunc(controllers.VincularBiopsia))).Methods("POST")
+	r.Handle("/notas/{id}/biopsias/{idBiopsia}", auth.Medicos(http.HandlerFunc(controllers.DesvincularBiopsia))).Methods("DELETE")
+
 	r.HandleFunc("/notas/{id}", controllers.GetNota).Methods("GET")
 	r.Handle("/notas/{id}", auth.Medicos(http.HandlerFunc(controllers.UpdateNota))).Methods("PUT")
 	r.Handle("/notas/{id}", auth.Medicos(http.HandlerFunc(controllers.DeleteNota))).Methods("DELETE")

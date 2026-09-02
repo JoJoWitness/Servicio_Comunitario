@@ -18,6 +18,7 @@
 
 import { ApiError, isRedError } from "@/api/errors";
 import { sincronizarPendientes, type LotePendiente } from "@/api/endpoints/sync";
+import { blobABase64 } from "@/lib/imagen";
 import { useSessionStore } from "@/stores/sessionStore";
 import {
   listarPendientes,
@@ -77,7 +78,7 @@ async function ejecutar(): Promise<ResumenSync> {
 
   let respuesta;
   try {
-    respuesta = await sincronizarPendientes(armarLote(enviados));
+    respuesta = await sincronizarPendientes(await armarLote(enviados));
   } catch (error) {
     // Sin red: no es un fallo de los datos, es que no era el momento. La cola
     // queda igual y el siguiente intento la encontrará intacta.
@@ -105,7 +106,9 @@ async function ejecutar(): Promise<ResumenSync> {
   // Un solo índice con el veredicto de todo el lote, sin importar el tipo: el
   // identificador ya es único entre pacientes y notas.
   const veredictos = new Map(
-    [...respuesta.pacientes, ...respuesta.notas].map((r) => [r.cliente_id, r])
+    [...respuesta.pacientes, ...respuesta.notas, ...(respuesta.biopsias ?? [])].map(
+      (r) => [r.cliente_id, r]
+    )
   );
 
   let subidos = 0;
@@ -135,18 +138,37 @@ async function ejecutar(): Promise<ResumenSync> {
   return { subidos, fallidos, pospuestos };
 }
 
-/** Separa la cola en las dos listas que espera el endpoint. */
-function armarLote(enviados: Pendiente[]): LotePendiente {
-  return {
-    pacientes: enviados
+/**
+ * Separa la cola en las dos listas que espera el endpoint. Es asíncrono porque
+ * la cédula de un paciente en cola va como base64, y leer un Blob lo es.
+ */
+async function armarLote(enviados: Pendiente[]): Promise<LotePendiente> {
+  const pacientes = await Promise.all(
+    enviados
       .filter((p): p is Extract<Pendiente, { tipo: "paciente" }> => p.tipo === "paciente")
-      .map((p) => p.datos),
+      .map(async (p) => ({
+        paciente: p.datos,
+        cedulaBase64: p.cedula ? await blobABase64(p.cedula.blob) : undefined,
+        cedulaContentType: p.cedula?.contentType,
+      }))
+  );
+
+  return {
+    pacientes,
     notas: enviados
       .filter((p): p is Extract<Pendiente, { tipo: "nota" }> => p.tipo === "nota")
       .map((p) => ({
         clientUuid: p.id,
         nota: p.datos,
         medicoEncargadoId: p.medicoEncargadoId,
+      })),
+    biopsias: enviados
+      .filter((p): p is Extract<Pendiente, { tipo: "biopsia" }> => p.tipo === "biopsia")
+      .map((p) => ({
+        clientUuid: p.id,
+        biopsia: p.datos,
+        notaId: p.notaId,
+        notaClientUuid: p.notaClientUuid,
       })),
   };
 }

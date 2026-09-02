@@ -13,6 +13,91 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// columnas es el SELECT compartido por todas las lecturas de la nota, siempre
+// con la tabla aliada como `n`. Además de las columnas físicas trae dos
+// cálculos del plazo de edición, hechos en SQL para que coincidan al día con lo
+// que decide CheckNotasDate (misma zona horaria, mismo CURRENT_DATE):
+//
+//   - el último día editable, `created_at::date + (plazo - 1)`, como texto
+//     YYYY-MM-DD, y
+//   - si hoy todavía está dentro del plazo.
+//
+// Toda consulta que lo use tiene que pasar `@plazo_dias` (ver argsConPlazo) y
+// escanear con leerNota, en este mismo orden.
+const columnas = `
+	n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada,
+	n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion,
+	n.resumen_intevencion, COALESCE(n.comentarios, ''), n.pabellon,
+	n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia,
+	n.id_paciente, n.id_medico_encargado, n.eliminado,
+	COALESCE(n.client_uuid::text, ''),
+	n.legalizada, n.legalizada_en, COALESCE(n.legalizada_por::text, ''),
+	n.created_at,
+	(n.created_at::date + (@plazo_dias::integer - 1))::text,
+	n.created_at::date > CURRENT_DATE - @plazo_dias::integer
+`
+
+// argsConPlazo arranca los argumentos de una consulta con el plazo vigente, que
+// `columnas` necesita siempre.
+func argsConPlazo() pgx.NamedArgs {
+	return pgx.NamedArgs{"plazo_dias": config.PlazoEdicionDias()}
+}
+
+// fila es lo que tienen en común pgx.Row y pgx.Rows para escanear.
+type fila interface {
+	Scan(dest ...any) error
+}
+
+// leerNota escanea una fila de `columnas` en n. PuedeEditar queda en false: lo
+// rellena CompletarPermisos, que sabe quién pregunta.
+func leerNota(f fila, n *Notas) error {
+	return f.Scan(
+		&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado,
+		&n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion,
+		&n.Resumen_Intervencion, &n.Comentarios, &n.Pabellon,
+		&n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia,
+		&n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado,
+		&n.ClientUUID,
+		&n.Legalizada, &n.LegalizadaEn, &n.LegalizadaPor,
+		&n.CreatedAt,
+		&n.EditableHasta,
+		&n.enPlazo,
+	)
+}
+
+// consultarNotas corre un SELECT de `columnas`, escanea todas las filas y les
+// carga el equipo quirúrgico. Devuelve una lista vacía, no nil, cuando no hay
+// resultados: el cliente espera un `[]`, no un `null`.
+func consultarNotas(db *pgxpool.Pool, query string, args pgx.NamedArgs) ([]Notas, error) {
+	rows, err := db.Query(context.Background(), query, args)
+	if err != nil {
+		log.Printf("\n\nError getting notas: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	records := []Notas{}
+	for rows.Next() {
+		var r Notas
+		if err := leerNota(rows, &r); err != nil {
+			log.Printf("Error scanning nota: %v", err)
+			return records, err
+		}
+		records = append(records, r)
+	}
+	if err := rows.Err(); err != nil {
+		return records, err
+	}
+
+	for i := range records {
+		records[i].Medicos, err = getMedicos(db, records[i].ID)
+		if err != nil {
+			return records, err
+		}
+	}
+	return records, nil
+}
+
 // getMedicos trae el equipo quirúrgico (médicos) de una nota.
 func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
 	query := `
@@ -40,21 +125,21 @@ func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
 }
 
 func (n *Notas) Get(db *pgxpool.Pool) error {
+	args := argsConPlazo()
+	args["id"] = n.ID
 	query := `
-		SELECT
-			id, dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, COALESCE(comentarios, ''), pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, eliminado, COALESCE(client_uuid::text, '')
-		FROM "Nota_Operatoria"
-		WHERE id = @id
-		AND eliminado = FALSE;
+		SELECT ` + columnas + `
+		FROM "Nota_Operatoria" n
+		WHERE n.id = @id
+		AND n.eliminado = FALSE;
 	`
 
-	row := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": n.ID})
-	err := row.Scan(&n.ID, &n.DX_Pre_Operatorio, &n.DX_Post_Operatorio, &n.Intervencion_Realizado, &n.Fecha_Comienzo, &n.Fecha_Culminacion, &n.Hora_Comienzo, &n.Hora_Culminacion, &n.Resumen_Intervencion, &n.Comentarios, &n.Pabellon, &n.Es_Electiva, &n.Es_Emergencia, &n.Tuvo_Biopsia, &n.Anestia, &n.ID_Paciente, &n.Medico_Encargado, &n.Eliminado, &n.ClientUUID)
-	if err != nil {
+	if err := leerNota(db.QueryRow(context.Background(), query, args), n); err != nil {
 		log.Printf("\n\nError getting nota: %v", err)
 		return err
 	}
 
+	var err error
 	n.Medicos, err = getMedicos(db, n.ID)
 	if err != nil {
 		log.Printf("\n\nError getting medicos for nota: %v", err)
@@ -64,85 +149,13 @@ func (n *Notas) Get(db *pgxpool.Pool) error {
 	return nil
 }
 
-// GetAllNotas devuelve las notas vigentes de todo el servicio, que es lo que ve
-// la secretaria (HU-16). El filtro es opcional y sirve para la búsqueda (HU-17).
-func GetAllNotas(db *pgxpool.Pool, f FiltroNotas) ([]Notas, error) {
-	query := `
-		SELECT
-			n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada, n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion, n.resumen_intevencion, COALESCE(n.comentarios, ''), n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia, n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
-		FROM "Nota_Operatoria" n
-		WHERE n.eliminado = FALSE
-	`
-
-	args := pgx.NamedArgs{}
+// whereFiltro arma la cláusula WHERE de la vista global a partir del filtro,
+// dejando los valores en args.
+func whereFiltro(f FiltroNotas, args pgx.NamedArgs) string {
+	where := `WHERE n.eliminado = FALSE`
 
 	// Un médico cuenta como participante si es el encargado o si está en el
 	// equipo quirúrgico.
-	if f.MedicoID != "" {
-		query += `
-			AND (
-				n.id_medico_encargado::text = @medico
-				OR EXISTS (SELECT 1 FROM "Equipo_Quirurgico" eq WHERE eq.id_nota_operatoria = n.id AND eq.id_medico::text = @medico)
-			)`
-		args["medico"] = f.MedicoID
-	}
-
-	if f.PacienteID != "" {
-		// Como texto para que un UUID mal formado no aborte la consulta.
-		query += " AND n.id_paciente::text = @paciente"
-		args["paciente"] = f.PacienteID
-	}
-
-	if !f.From.IsZero() {
-		query += " AND n.fecha_comienzo >= @from"
-		args["from"] = f.From
-	}
-
-	if !f.To.IsZero() {
-		query += " AND n.fecha_comienzo <= @to"
-		args["to"] = f.To
-	}
-
-	// La más reciente primero: es el orden en que se consultan.
-	query += " ORDER BY n.fecha_comienzo DESC, n.id DESC;"
-
-	rows, err := db.Query(context.Background(), query, args)
-	if err != nil {
-		log.Printf("\n\nError getting records: %v", err)
-		return nil, err
-	}
-	defer rows.Close()
-
-	records := []Notas{}
-	for rows.Next() {
-		var r Notas
-		err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado, &r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion, &r.Resumen_Intervencion, &r.Comentarios, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia, &r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado)
-		if err != nil {
-			log.Printf("Error fetching records: %v", err)
-			return records, err
-		}
-		records = append(records, r)
-	}
-	if err := rows.Err(); err != nil {
-		return records, err
-	}
-
-	for i := range records {
-		records[i].Medicos, err = getMedicos(db, records[i].ID)
-		if err != nil {
-			return records, err
-		}
-	}
-	return records, nil
-}
-
-// GetAllNotasPaged devuelve una página de notas vigentes y el total de registros
-// para paginación server-side. Respeta los mismos filtros que GetAllNotas.
-func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]Notas, int, error) {
-	// Construir la cláusula WHERE compartida por COUNT y SELECT.
-	where := `WHERE n.eliminado = FALSE`
-	args := pgx.NamedArgs{}
-
 	if f.MedicoID != "" {
 		where += `
 			AND (
@@ -152,6 +165,7 @@ func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]N
 		args["medico"] = f.MedicoID
 	}
 	if f.PacienteID != "" {
+		// Como texto para que un UUID mal formado no aborte la consulta.
 		where += " AND n.id_paciente::text = @paciente"
 		args["paciente"] = f.PacienteID
 	}
@@ -163,6 +177,18 @@ func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]N
 		where += " AND n.fecha_comienzo <= @to"
 		args["to"] = f.To
 	}
+	if f.Legalizada != nil {
+		where += " AND n.legalizada = @legalizada"
+		args["legalizada"] = *f.Legalizada
+	}
+	return where
+}
+
+// GetAllNotasPaged devuelve una página de notas vigentes y el total de registros
+// para paginación server-side. Es la vista de la secretaria (HU-16, HU-17).
+func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]Notas, int, error) {
+	args := argsConPlazo()
+	where := whereFiltro(f, args)
 
 	// 1. Total
 	var total int
@@ -175,43 +201,13 @@ func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]N
 	// 2. Página
 	args["limit"] = p.Size
 	args["offset"] = p.Offset()
-	dataQuery := `
-		SELECT n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada,
-			n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion,
-			n.resumen_intevencion, COALESCE(n.comentarios, ''), n.pabellon, n.es_electiva, n.es_emergencia, n.tuvo_biopsia,
-			n.anestesia, n.id_paciente, n.id_medico_encargado, n.eliminado
-		FROM "Nota_Operatoria" n ` + where + `
-		ORDER BY ` + p.SortBy + ` ` + p.Order + `
-		LIMIT @limit OFFSET @offset;`
-
-	rows, err := db.Query(context.Background(), dataQuery, args)
+	records, err := consultarNotas(db, `
+		SELECT `+columnas+`
+		FROM "Nota_Operatoria" n `+where+`
+		ORDER BY `+p.SortBy+` `+p.Order+`
+		LIMIT @limit OFFSET @offset;`, args)
 	if err != nil {
-		log.Printf("Error getting notas page: %v", err)
-		return nil, total, err
-	}
-	defer rows.Close()
-
-	records := []Notas{}
-	for rows.Next() {
-		var r Notas
-		if err := rows.Scan(&r.ID, &r.DX_Pre_Operatorio, &r.DX_Post_Operatorio, &r.Intervencion_Realizado,
-			&r.Fecha_Comienzo, &r.Fecha_Culminacion, &r.Hora_Comienzo, &r.Hora_Culminacion,
-			&r.Resumen_Intervencion, &r.Comentarios, &r.Pabellon, &r.Es_Electiva, &r.Es_Emergencia, &r.Tuvo_Biopsia,
-			&r.Anestia, &r.ID_Paciente, &r.Medico_Encargado, &r.Eliminado); err != nil {
-			log.Printf("Error fetching nota page: %v", err)
-			return records, total, err
-		}
-		records = append(records, r)
-	}
-	if err := rows.Err(); err != nil {
 		return records, total, err
-	}
-
-	for i := range records {
-		records[i].Medicos, err = getMedicos(db, records[i].ID)
-		if err != nil {
-			return records, total, err
-		}
 	}
 	return records, total, nil
 }
@@ -240,6 +236,69 @@ func EsParticipante(db *pgxpool.Pool, notaID int, userID string) (bool, error) {
 	}
 
 	return participa, nil
+}
+
+// participaEnLote responde en una sola consulta en cuáles de esas notas figura
+// el usuario. Es lo que evita una consulta por nota al completar los permisos
+// de un listado.
+func participaEnLote(db *pgxpool.Pool, ids []int, userID string) (map[int]bool, error) {
+	participa := map[int]bool{}
+	if len(ids) == 0 {
+		return participa, nil
+	}
+
+	query := `
+		SELECT n.id
+		FROM "Nota_Operatoria" n
+		WHERE n.id = ANY(@ids)
+		AND (
+			n.id_medico_encargado::text = @usuario
+			OR EXISTS (SELECT 1 FROM "Equipo_Quirurgico" eq WHERE eq.id_nota_operatoria = n.id AND eq.id_medico::text = @usuario)
+		);
+	`
+
+	rows, err := db.Query(context.Background(), query, pgx.NamedArgs{"ids": ids, "usuario": userID})
+	if err != nil {
+		log.Printf("\n\nError checking nota participation in batch: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		participa[id] = true
+	}
+	return participa, rows.Err()
+}
+
+// CompletarPermisos rellena PuedeEditar en cada nota para el usuario que
+// pregunta. La regla es la misma que aplican UpdateNota y DeleteNota, en el
+// mismo orden: vigente, no legalizada, dentro del plazo, y admin o participante.
+// El admin queda exento solo de la participación; el plazo lo alcanza igual.
+//
+// Devolverlo calculado desde aquí es lo que permite a la interfaz deshabilitar
+// "Editar" antes del clic en vez de descubrir el 403 después de corregir.
+func CompletarPermisos(db *pgxpool.Pool, notas []Notas, userID string, esAdmin bool) error {
+	participa := map[int]bool{}
+	if !esAdmin {
+		ids := make([]int, 0, len(notas))
+		for _, n := range notas {
+			ids = append(ids, n.ID)
+		}
+		var err error
+		if participa, err = participaEnLote(db, ids, userID); err != nil {
+			return err
+		}
+	}
+
+	for i := range notas {
+		n := &notas[i]
+		n.PuedeEditar = !n.Eliminado && !n.Legalizada && n.enPlazo && (esAdmin || participa[n.ID])
+	}
+	return nil
 }
 
 // ValidarEquipo comprueba que cada id del equipo corresponda a un médico activo.
@@ -336,8 +395,10 @@ func sincronizarEquipo(ctx context.Context, tx pgx.Tx, notaID int, encargado str
 // PlazoEdicionDias es la ventana, en días calendario contados desde que se
 // registró la nota, dentro de la cual todavía se puede corregir o eliminar
 // (HU-13, HU-14). Incluye el día del registro: con 7, una nota del lunes se
-// puede editar hasta el domingo.
-const PlazoEdicionDias = 7
+// puede editar hasta el domingo. Sale de PLAZO_EDICION_DIAS (ver config).
+func PlazoEdicionDias() int {
+	return config.PlazoEdicionDias()
+}
 
 // CheckNotasDate verifica que la nota siga dentro del plazo de edición.
 func CheckNotasDate(id int) error {
@@ -350,12 +411,84 @@ func CheckNotasDate(id int) error {
 
 	var one int
 	err := config.PsqlDB.QueryRow(context.Background(), query,
-		pgx.NamedArgs{"id": id, "dias": PlazoEdicionDias}).Scan(&one)
+		pgx.NamedArgs{"id": id, "dias": PlazoEdicionDias()}).Scan(&one)
 	if err != nil {
-		log.Printf("\n\nNota is outside the %d-day edit window or not found: %v", PlazoEdicionDias, err)
+		log.Printf("\n\nNota is outside the %d-day edit window or not found: %v", PlazoEdicionDias(), err)
 		return err
 	}
 	return nil
+}
+
+// EstaLegalizada dice si la nota tiene el interruptor de legalización puesto.
+// Una nota inexistente cuenta como no legalizada: el 404 lo decide Existe.
+func EstaLegalizada(db *pgxpool.Pool, id int) (bool, error) {
+	query := `SELECT legalizada FROM "Nota_Operatoria" WHERE id = @id;`
+
+	var legalizada bool
+	err := db.QueryRow(context.Background(), query, pgx.NamedArgs{"id": id}).Scan(&legalizada)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		log.Printf("\n\nError checking nota legalization: %v", err)
+		return false, err
+	}
+	return legalizada, nil
+}
+
+// SetLegalizada pone o quita la marca de legalización. Al ponerla deja
+// constancia de quién y cuándo; al quitarla limpia ambos. No toca ningún otro
+// campo ni pasa por el plazo de edición: el trámite físico puede ocurrir
+// semanas después de la cirugía.
+func SetLegalizada(db *pgxpool.Pool, id int, legalizada bool, usuarioID string) error {
+	query := `
+		UPDATE "Nota_Operatoria"
+		SET
+			legalizada = @legalizada,
+			legalizada_en = CASE WHEN @legalizada THEN NOW() ELSE NULL END,
+			legalizada_por = CASE WHEN @legalizada THEN @usuario::uuid ELSE NULL END
+		WHERE id = @id
+		AND eliminado = FALSE;
+	`
+
+	_, err := db.Exec(context.Background(), query, pgx.NamedArgs{
+		"id":         id,
+		"legalizada": legalizada,
+		"usuario":    nullSiVacio(usuarioID),
+	})
+	if err != nil {
+		log.Printf("\n\nError setting nota legalization: %v", err)
+		return err
+	}
+	return nil
+}
+
+// MarcarTuvoBiopsia pone la casilla "se tomó biopsia" en TRUE. Se llama al
+// vincular una biopsia de origen: es una corrección derivada de un hecho ya
+// registrado, así que no pasa por el plazo de edición ni por la legalización,
+// igual que la propia legalización. Nunca la pone en FALSE: la declaración del
+// cirujano se respeta (PRD 0.5.0, D3).
+func MarcarTuvoBiopsia(db *pgxpool.Pool, id int) error {
+	_, err := db.Exec(context.Background(),
+		`UPDATE "Nota_Operatoria" SET tuvo_biopsia = TRUE WHERE id = @id AND eliminado = FALSE;`,
+		pgx.NamedArgs{"id": id})
+	if err != nil {
+		log.Printf("\n\nError marking tuvo_biopsia: %v", err)
+	}
+	return err
+}
+
+// PacienteDeNota devuelve el id del paciente de una nota vigente, o "" si no
+// existe. Sirve para validar que una biopsia y sus notas sean del mismo paciente.
+func PacienteDeNota(db *pgxpool.Pool, id int) (string, error) {
+	var paciente string
+	err := db.QueryRow(context.Background(),
+		`SELECT id_paciente::text FROM "Nota_Operatoria" WHERE id = @id AND eliminado = FALSE;`,
+		pgx.NamedArgs{"id": id}).Scan(&paciente)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return paciente, err
 }
 
 // Create guarda la nota y su equipo quirúrgico en una sola transacción: una nota
@@ -370,7 +503,8 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// `eliminado` no se escribe: la baja es exclusiva de Delete.
+	// `eliminado` no se escribe: la baja es exclusiva de Delete. Tampoco la
+	// legalización: es exclusiva de SetLegalizada.
 	query := `
 		INSERT INTO "Nota_Operatoria"
 			(dx_pre_operatorio, dx_post_operatorio, intervencion_realizada, fecha_comienzo, fecha_culminacion, hora_comienzo, hora_culminacion, resumen_intevencion, comentarios, pabellon, es_electiva, es_emergencia, tuvo_biopsia, anestesia, id_paciente, id_medico_encargado, client_uuid)
@@ -416,16 +550,13 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 		return err
 	}
 
-	n.Medicos, err = getMedicos(db, n.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Se relee entera: así el JSON de respuesta trae `created_at`,
+	// `editable_hasta` y el resto de lo calculado, igual que un GET.
+	return n.Get(db)
 }
 
 // Update reescribe la nota y reemplaza su equipo quirúrgico, todo en una
-// transacción. Requiere n.ID.
+// transacción. Requiere n.ID. No toca la legalización aunque venga en el body.
 func (n *Notas) Update(db *pgxpool.Pool) error {
 	ctx := context.Background()
 
@@ -493,12 +624,9 @@ func (n *Notas) Update(db *pgxpool.Pool) error {
 		return err
 	}
 
-	n.Medicos, err = getMedicos(db, n.ID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	// Releer devuelve la nota tal como quedó, con lo que el body no trae
+	// (created_at, legalización, plazo).
+	return n.Get(db)
 }
 
 // Delete da de baja la nota de forma lógica (HU-14): la fila se conserva junto a

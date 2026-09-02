@@ -206,4 +206,64 @@ END $$;
 -- Los catálogos clínicos (diagnósticos, procedimientos y técnicas) ya no se
 -- siembran aquí: son datos reales del servicio y viven en seed.sql.
 
+-- Biopsias de muestra (v0.5.0): una por estado del ciclo, ligadas a notas
+-- existentes. Se eligen por intervención para no depender de ids concretos.
+DO $$
+DECLARE
+  n_pterigion RECORD;
+  n_glaucoma  RECORD;
+  n_catarata  RECORD;
+  b_id INTEGER;
+BEGIN
+  SELECT id, id_paciente, id_medico_encargado, fecha_comienzo INTO n_pterigion
+    FROM "Nota_Operatoria" WHERE intervencion_realizada ILIKE '%pterigi%' AND eliminado = FALSE ORDER BY id LIMIT 1;
+  SELECT id, id_paciente, id_medico_encargado, fecha_comienzo INTO n_glaucoma
+    FROM "Nota_Operatoria" WHERE intervencion_realizada ILIKE '%trabeculectom%' AND eliminado = FALSE ORDER BY id LIMIT 1;
+  SELECT id, id_paciente, id_medico_encargado, fecha_comienzo INTO n_catarata
+    FROM "Nota_Operatoria" WHERE intervencion_realizada ILIKE '%catarata%' AND eliminado = FALSE ORDER BY id LIMIT 1;
+
+  -- Enviada, sin resultado desde hace semanas: el caso de la pantalla de seguimiento.
+  IF n_pterigion.id IS NOT NULL THEN
+    INSERT INTO "Biopsia" (id_paciente, id_medico_responsable, ojo, tejido, descripcion_macroscopica,
+        diagnostico_presuntivo, fecha_toma, laboratorio, fecha_envio, numero_patologia, estado)
+    VALUES (n_pterigion.id_paciente, n_pterigion.id_medico_encargado, 'OD', 'Pterigión',
+        'Tejido fibrovascular de 5 × 3 mm, un fragmento', 'Pterigión recidivante',
+        n_pterigion.fecha_comienzo, 'Anatomía Patológica HCSC', n_pterigion.fecha_comienzo + 1,
+        'AP-' || to_char(n_pterigion.fecha_comienzo, 'YYYY') || '-0412', 'enviada')
+    RETURNING id INTO b_id;
+    INSERT INTO "Nota_Biopsia" (id_nota_operatoria, id_biopsia, rol, vinculada_por)
+      VALUES (n_pterigion.id, b_id, 'origen', n_pterigion.id_medico_encargado);
+    UPDATE "Nota_Operatoria" SET tuvo_biopsia = TRUE WHERE id = n_pterigion.id;
+  END IF;
+
+  -- Con resultado recibido, pendiente de entregar al paciente.
+  IF n_glaucoma.id IS NOT NULL THEN
+    INSERT INTO "Biopsia" (id_paciente, id_medico_responsable, ojo, tejido, descripcion_macroscopica,
+        diagnostico_presuntivo, fecha_toma, laboratorio, fecha_envio, numero_patologia,
+        resultado, fecha_resultado, estado)
+    VALUES (n_glaucoma.id_paciente, n_glaucoma.id_medico_encargado, 'OI', 'Lesión conjuntival',
+        'Lesión pigmentada de 3 mm', 'Nevus conjuntival',
+        n_glaucoma.fecha_comienzo, 'Anatomía Patológica HCSC', n_glaucoma.fecha_comienzo + 2,
+        'AP-' || to_char(n_glaucoma.fecha_comienzo, 'YYYY') || '-0488',
+        'Nevus conjuntival compuesto, sin atipia. Bordes libres.', n_glaucoma.fecha_comienzo + 21, 'con_resultado')
+    RETURNING id INTO b_id;
+    INSERT INTO "Nota_Biopsia" (id_nota_operatoria, id_biopsia, rol, vinculada_por)
+      VALUES (n_glaucoma.id, b_id, 'origen', n_glaucoma.id_medico_encargado);
+    UPDATE "Nota_Operatoria" SET tuvo_biopsia = TRUE WHERE id = n_glaucoma.id;
+  END IF;
+
+  -- Tomada en quirófano y todavía sin enviar.
+  IF n_catarata.id IS NOT NULL THEN
+    INSERT INTO "Biopsia" (id_paciente, id_medico_responsable, ojo, tejido, descripcion_macroscopica,
+        fecha_toma, estado)
+    VALUES (n_catarata.id_paciente, n_catarata.id_medico_encargado, 'OD', 'Lesión palpebral',
+        'Lesión nodular de párpado inferior, 4 mm', n_catarata.fecha_comienzo, 'tomada')
+    RETURNING id INTO b_id;
+    INSERT INTO "Nota_Biopsia" (id_nota_operatoria, id_biopsia, rol, vinculada_por)
+      VALUES (n_catarata.id, b_id, 'origen', n_catarata.id_medico_encargado);
+    UPDATE "Nota_Operatoria" SET tuvo_biopsia = TRUE WHERE id = n_catarata.id;
+  END IF;
+END
+$$;
+
 END;

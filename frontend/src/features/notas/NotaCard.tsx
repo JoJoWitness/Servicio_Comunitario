@@ -1,11 +1,16 @@
 /**
- * Ítem de nota para listados — muestra fecha, paciente/intervención, encargado y pabellón.
- * Reutilizado por MisNotasPage y TodasNotasPage.
+ * Ítem de nota para listados — muestra fecha, paciente/intervención, encargado
+ * y la insignia de legalización. Reutilizado por MisNotasPage y TodasNotasPage.
+ *
+ * En pantallas angostas apila todo en una columna; desde `sm` recupera las dos
+ * columnas (datos a la izquierda, equipo a la derecha).
  *
  * Requisitos: 18.3, 12.4
  */
 
 import { useNavigate } from "react-router-dom";
+import { Stamp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatFechaUI } from "@/lib/datetime";
 import type { Nota } from "@/domain/models";
@@ -54,17 +59,16 @@ export function NotaCard({
     <div
       role="button"
       tabIndex={0}
-      className="flex items-start justify-between rounded-lg border p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+      className="flex items-start gap-3 rounded-lg border p-4 hover:bg-muted/50 cursor-pointer transition-colors"
       onClick={() => navigate(`/notas/${nota.id}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") navigate(`/notas/${nota.id}`);
       }}
       aria-label={`Ver nota del ${formatFechaUI(nota.fechaComienzo)}`}
     >
-  
       {seleccionable && (
         <div
-          className="mr-3 flex items-center pt-0.5"
+          className="flex items-center pt-0.5"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
@@ -78,36 +82,54 @@ export function NotaCard({
         </div>
       )}
 
-      <div className="space-y-1 flex-1 min-w-0">
-        {/* Fecha — siempre visible */}
-        <p className="text-xs text-muted-foreground">{formatFechaUI(nota.fechaComienzo)}</p>
+      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          {/* Fecha e insignia — siempre visibles */}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-muted-foreground">
+              {formatFechaUI(nota.fechaComienzo)}
+            </p>
+            {nota.legalizada && (
+              <Badge
+                variant="secondary"
+                className="gap-1 px-2 py-0 text-[10px] font-medium"
+                title="Nota legalizada"
+              >
+                <Stamp className="h-3 w-3" aria-hidden />
+                Legalizada
+              </Badge>
+            )}
+          </div>
 
-        {/* Título principal */}
-        <p className="font-medium text-sm truncate">
-          {mostrarPaciente && nombrePaciente
-            ? nombrePaciente
-            : nota.intervencionRealizada}
-        </p>
-
-        {/* Subtítulo */}
-        {mostrarPaciente && (
-          <p className="text-sm text-muted-foreground truncate">
-            {nota.intervencionRealizada}
+          {/* Título principal */}
+          <p className="truncate text-sm font-medium">
+            {mostrarPaciente && nombrePaciente
+              ? nombrePaciente
+              : nota.intervencionRealizada}
           </p>
-        )}
-      </div>
 
-      <div className="ml-4 flex flex-col items-end gap-1 shrink-0 text-right">
-        {medico && (
-          <span className="max-w-44 truncate text-xs">
-            <span className="text-muted-foreground">Cirujano: </span>
-            {medico}
-          </span>
-        )}
-        {ayudantes.length > 0 && (
-          <span className="max-w-44 text-xs text-muted-foreground">
-            Ayudantes: {ayudantes.join("\n ")}
-          </span>
+          {/* Subtítulo */}
+          {mostrarPaciente && (
+            <p className="truncate text-sm text-muted-foreground">
+              {nota.intervencionRealizada}
+            </p>
+          )}
+        </div>
+
+        {(medico || ayudantes.length > 0) && (
+          <div className="flex min-w-0 flex-col gap-0.5 text-xs sm:ml-4 sm:max-w-44 sm:shrink-0 sm:items-end sm:text-right">
+            {medico && (
+              <span className="truncate">
+                <span className="text-muted-foreground">Cirujano: </span>
+                {medico}
+              </span>
+            )}
+            {ayudantes.length > 0 && (
+              <span className="truncate text-muted-foreground">
+                Ayudantes: {ayudantes.join(", ")}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>

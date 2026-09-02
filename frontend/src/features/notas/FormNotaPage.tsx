@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, CloudOff, Plus, RotateCcw, UserPlus } from "lucide-react";
+import { ArrowLeft, CloudOff, Lock, Plus, RotateCcw, UserPlus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,11 @@ import {
 import { AutocompleteInput } from "./AutocompleteInput";
 import { CampoDiagnostico } from "./CampoDiagnostico";
 import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
+import { CedulaPaciente } from "@/features/pacientes/CedulaPaciente";
+import { motivoBloqueo } from "@/components/EstadoNota";
+import { useCrearBiopsia } from "@/hooks/useBiopsias";
+import { TEJIDOS_BIOPSIA } from "@/features/biopsias/tejidos";
+import type { Biopsia } from "@/domain/models";
 import {
   NotaFormSchema,
   normalizarAnestesia,
@@ -119,9 +124,30 @@ export default function FormNotaPage() {
   const pacientesData = pacientes ?? [];
 
   const { data: notaExistente } = useObtenerNota(notaId ?? 0);
+  /*
+    Una nota que el servidor ya no deja tocar (plazo vencido, legalizada, o el
+    médico no participó) se muestra igual, pero en solo lectura: los campos
+    quedan deshabilitados y no hay botón de guardar. Así quien llega por el
+    enlace directo entiende por qué, en vez de corregir todo y recibir un 403.
+  */
+  const bloqueo =
+    esEdicion && notaExistente ? motivoBloqueo(notaExistente) : null;
+  const soloLectura = bloqueo !== null;
   const { mutate: crearNota, isPending: creando } = useCrearNota();
   const { mutate: editarNota, isPending: editando } = useEditarNota(notaId ?? 0);
+  const { mutateAsync: crearBiopsia } = useCrearBiopsia();
   const isPending = creando || editando || guardandoPendiente;
+
+  /*
+    Datos mínimos de la biopsia, solo al crear (PRD 0.5.0). Se capturan aquí
+    porque es el momento: el médico acaba de sacar la muestra. En edición las
+    biopsias se gestionan desde el detalle de la nota. Si el bloque queda sin
+    tejido no se crea nada y el detalle avisa que falta registrarla.
+  */
+  const [biopsiaTejido, setBiopsiaTejido] = useState("");
+  const [biopsiaOjo, setBiopsiaOjo] = useState("");
+  const [biopsiaDescripcion, setBiopsiaDescripcion] = useState("");
+  const capturaBiopsia = !esEdicion && !esPendiente;
 
   const {
     register,
@@ -356,6 +382,9 @@ export default function FormNotaPage() {
         medicoEncargado: medicoEncargadoId,
         equipo,
         medicos: [],
+        // El servidor ignora estos dos al escribir; van por tipar la nota.
+        legalizada: notaExistente?.legalizada ?? false,
+        puedeEditar: notaExistente?.puedeEditar ?? true,
       };
       const onError = (err: unknown) => {
         setErrorMsg(
@@ -364,6 +393,25 @@ export default function FormNotaPage() {
             : "Error al guardar la nota. Intenta de nuevo."
         );
       };
+      // La biopsia que acompaña a la nota nueva, si el médico la describió.
+      const biopsia: Biopsia | null =
+        capturaBiopsia && data.tuvoBiopsia && biopsiaTejido.trim()
+          ? {
+              idPaciente: data.idPaciente,
+              idMedicoResponsable: medicoEncargadoId,
+              ojo: biopsiaOjo === "OD" || biopsiaOjo === "OI" || biopsiaOjo === "AO" ? biopsiaOjo : undefined,
+              tejido: biopsiaTejido.trim(),
+              descripcionMacroscopica: biopsiaDescripcion.trim(),
+              diagnosticoPresuntivo: data.dxPostOperatorio || data.dxPreOperatorio || "",
+              fechaToma: new Date(data.fechaComienzo),
+              estado: "tomada",
+              observaciones: "",
+              notas: [],
+              puedeEditar: true,
+              puedeTramitar: true,
+            }
+          : null;
+
       if (esPendiente && clientUuid) {
         // Sigue en la cola: se corrige donde está y vuelve a quedar en espera.
         guardarPendiente({ clientUuid, nota, medicoEncargadoId })
@@ -376,8 +424,22 @@ export default function FormNotaPage() {
         });
       } else {
         crearNota({ nota, medicoEncargadoId }, {
-          onSuccess: (resultado) => {
+          onSuccess: async (resultado) => {
             setExito(true);
+            // La biopsia va detrás de la nota: en cola si la nota quedó en
+            // cola, o contra el servidor si la nota ya tiene id. Si falla, la
+            // nota ya está guardada y el detalle avisa que falta registrarla.
+            if (biopsia) {
+              try {
+                await crearBiopsia(
+                  resultado.estado === "en-cola"
+                    ? { biopsia, notaClientUuid: resultado.clientUuid }
+                    : { biopsia, notaId: resultado.nota.id }
+                );
+              } catch (err) {
+                console.error("No se pudo registrar la biopsia junto a la nota", err);
+              }
+            }
             // Encolada: todavía no tiene ficha en el servidor a la que
             // navegar. Se vuelve al listado, donde aparece marcada como
             // pendiente, y se avisa de que está guardada aquí y no allá.
@@ -402,14 +464,19 @@ export default function FormNotaPage() {
       notaExistente?.pabellon,
       crearNota,
       editarNota,
+      crearBiopsia,
       guardarPendiente,
       navigate,
+      capturaBiopsia,
+      biopsiaTejido,
+      biopsiaOjo,
+      biopsiaDescripcion,
     ]
   );
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-3xl p-6 space-y-4">
+      <div className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="-ml-2">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver
@@ -418,9 +485,28 @@ export default function FormNotaPage() {
           {esPendiente
             ? "Corregir nota pendiente"
             : esEdicion
-              ? "Editar nota operatoria"
+              ? soloLectura
+                ? "Nota operatoria (solo lectura)"
+                : "Editar nota operatoria"
               : "Nueva nota operatoria"}
         </h1>
+
+        {soloLectura && (
+          <Alert role="status">
+            <Lock className="h-4 w-4" />
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+              <span>{bloqueo}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => navigate(`/notas/${notaId}`)}
+              >
+                Volver al detalle
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* En modo pendiente hay que dejar claro dónde está esta nota: no en el
             servidor, sino en este equipo, y con qué queda al guardar. */}
@@ -474,23 +560,37 @@ export default function FormNotaPage() {
           noValidate
           className="space-y-6"
         >
+          {/*
+            `fieldset disabled` apaga de una vez todos los controles del
+            formulario, incluidos los botones de Radix: es la forma nativa de
+            poner el formulario en solo lectura sin tocar campo por campo.
+          */}
+          <fieldset disabled={soloLectura} className="min-w-0 space-y-6">
           {/* ── Paciente ── */}
           <Card>
             <CardHeader><CardTitle className="text-base">Paciente *</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {pacienteSeleccionado ? (
-                <div className="flex items-center justify-between rounded-md border p-3">
-                  <div>
-                    <p className="font-medium">{pacienteSeleccionado.nombre}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {pacienteSeleccionado.tipoDocumento}-{pacienteSeleccionado.numeroIdentificacion}
-                      {" · "}HM: {pacienteSeleccionado.historiaMedica}
-                    </p>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{pacienteSeleccionado.nombre}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {pacienteSeleccionado.tipoDocumento}-{pacienteSeleccionado.numeroIdentificacion}
+                        {" · "}HM: {pacienteSeleccionado.historiaMedica}
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline"
+                      onClick={() => setPacienteSeleccionado(null)}>
+                      Cambiar
+                    </Button>
                   </div>
-                  <Button type="button" size="sm" variant="outline"
-                    onClick={() => setPacienteSeleccionado(null)}>
-                    Cambiar
-                  </Button>
+                  {/*
+                    La cédula es del paciente y se imprime en todas sus notas;
+                    se ofrece aquí porque es el momento en que el médico nota
+                    que falta.
+                  */}
+                  <CedulaPaciente paciente={pacienteSeleccionado} />
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -723,7 +823,7 @@ export default function FormNotaPage() {
           {/* ── Fechas y horas ── */}
           <Card>
             <CardHeader><CardTitle className="text-base">Fechas y horas</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="fechaComienzo">Fecha de inicio *</Label>
                 <Controller name="fechaComienzo" control={control}
@@ -786,7 +886,7 @@ export default function FormNotaPage() {
                       aria-label="Tipo de anestesia"
                       value={field.value ?? ""}
                       onValueChange={field.onChange}
-                      className="grid grid-cols-2"
+                      className="grid grid-cols-1 sm:grid-cols-2"
                       options={[
                         { value: "Local", label: "Local" },
                         { value: "General", label: "General" },
@@ -817,7 +917,7 @@ export default function FormNotaPage() {
                     setValue("esElectiva", v === "electiva", { shouldValidate: true });
                     setValue("esEmergencia", v === "emergencia", { shouldValidate: true });
                   }}
-                  className="grid grid-cols-2"
+                  className="grid grid-cols-1 sm:grid-cols-2"
                   options={[
                     { value: "electiva", label: "Electiva" },
                     { value: "emergencia", label: "Emergencia" },
@@ -831,15 +931,64 @@ export default function FormNotaPage() {
               <div className="space-y-2">
                 <Label>Biopsia</Label>
                 {/* La rejilla lo deja del mismo ancho que una opción de arriba. */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Checkbox
                     label="Se tomó biopsia"
                     {...register("tuvoBiopsia")}
                   />
                 </div>
+
+                {/*
+                  Datos mínimos de la muestra (PRD 0.5.0). Opcionales: si se
+                  dejan vacíos, la nota igual se guarda y el detalle recuerda
+                  que la biopsia está por registrar.
+                */}
+                {capturaBiopsia && watch("tuvoBiopsia") && (
+                  <div className="mt-2 space-y-3 rounded-md border border-border bg-muted/40 p-3">
+                    <p className="text-sm font-medium">Datos de la biopsia (opcional)</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="biopsia-tejido">Tejido</Label>
+                        <AutocompleteInput
+                          id="biopsia-tejido"
+                          value={biopsiaTejido}
+                          onChange={setBiopsiaTejido}
+                          opciones={TEJIDOS_BIOPSIA}
+                          permitirExplorar
+                          placeholder="Pterigión, lesión palpebral…"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="biopsia-ojo">Ojo</Label>
+                        <Select value={biopsiaOjo} onValueChange={setBiopsiaOjo}>
+                          <SelectTrigger id="biopsia-ojo"><SelectValue placeholder="Sin indicar" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Sin indicar</SelectItem>
+                            <SelectItem value="OD">OD</SelectItem>
+                            <SelectItem value="OI">OI</SelectItem>
+                            <SelectItem value="AO">AO</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="biopsia-desc">Descripción macroscópica</Label>
+                      <Textarea
+                        id="biopsia-desc"
+                        rows={2}
+                        value={biopsiaDescripcion}
+                        onChange={(e) => setBiopsiaDescripcion(e.target.value)}
+                        placeholder="Tamaño, aspecto, número de fragmentos"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      El envío al laboratorio y el resultado se cargan después desde la nota.
+                    </p>
+                  </div>
+                )}
               </div>
               {BACKEND_SUPPORTS_OJO_ESTADO && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label htmlFor="ojo">Ojo</Label>
                     <Controller name={"ojo" as keyof NotaFormValues} control={control}
@@ -949,19 +1098,22 @@ export default function FormNotaPage() {
 
           <Separator />
           <div className="flex gap-3">
-            <Button type="submit" disabled={isPending}>
-              {isPending
-                ? "Guardando…"
-                : esPendiente
-                  ? "Guardar y volver a encolar"
-                  : esEdicion
-                    ? "Guardar cambios"
-                    : "Crear nota"}
-            </Button>
+            {!soloLectura && (
+              <Button type="submit" disabled={isPending}>
+                {isPending
+                  ? "Guardando…"
+                  : esPendiente
+                    ? "Guardar y volver a encolar"
+                    : esEdicion
+                      ? "Guardar cambios"
+                      : "Crear nota"}
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => navigate(-1)}>
               Cancelar
             </Button>
           </div>
+          </fieldset>
         </form>
       </div>
 
