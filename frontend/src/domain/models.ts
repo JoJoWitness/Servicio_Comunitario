@@ -104,24 +104,22 @@ export interface Nota {
    */
   medicos: Usuario[];
 
-  // --- Estado administrativo y plazo de edición (v0.4.0) ---
+  // --- Estado administrativo (v0.4.0) ---
   /**
    * La nota impresa ya se firmó, selló y archivó. Es un interruptor aparte de
-   * la edición: no pasa por el formulario ni por el plazo, y mientras esté
-   * puesto la nota no se puede corregir ni eliminar.
+   * la edición: no pasa por el formulario, y mientras esté puesto la nota no
+   * se puede corregir ni eliminar.
    */
   legalizada: boolean;
   legalizadaEn?: Date;
   /** UUID de quien puso la marca. */
   legalizadaPor?: string;
-  /** Momento del registro en el servidor; referencia del plazo de edición. */
+  /** Momento del registro en el servidor. */
   createdAt?: Date;
-  /** Último día (a medianoche UTC) en que la nota admite cambios. */
-  editableHasta?: Date;
   /**
    * Veredicto del servidor para el usuario de la sesión: vigente, no
-   * legalizada, en plazo y admin o participante. Es lo que decide si "Editar"
-   * y "Eliminar" aparecen habilitados antes de hacer clic.
+   * legalizada y admin o participante. Es lo que decide si "Editar" y
+   * "Eliminar" aparecen habilitados antes de hacer clic.
    */
   puedeEditar: boolean;
 

@@ -26,7 +26,6 @@ import {
   formatRFC3339,
   horaFromRFC3339,
   horaToRFC3339,
-  parseFechaISO,
   parseRFC3339,
 } from "../../lib/datetime";
 import { construirEquipo, derivarEquipoDesdeMedicos } from "../../lib/equipo";
@@ -82,7 +81,6 @@ export interface NotaDTO {
   legalizada_en?: string | null; // RFC3339
   legalizada_por?: string;
   created_at?: string;    // RFC3339
-  editable_hasta?: string; // YYYY-MM-DD
   puede_editar?: boolean;
 }
 
@@ -130,7 +128,6 @@ export function notaToDomain(dto: NotaDTO): Nota {
     legalizadaEn: dto.legalizada_en ? parseRFC3339(dto.legalizada_en) : undefined,
     legalizadaPor: dto.legalizada_por || undefined,
     createdAt: dto.created_at ? parseRFC3339(dto.created_at) : undefined,
-    editableHasta: dto.editable_hasta ? parseFechaISO(dto.editable_hasta) : undefined,
     puedeEditar: dto.puede_editar ?? true,
   };
 }

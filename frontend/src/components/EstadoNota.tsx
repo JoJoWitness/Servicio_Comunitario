@@ -1,6 +1,6 @@
 /**
- * Estado administrativo de una nota: el interruptor de legalización y el
- * plazo de edición, en un solo bloque bajo el encabezado del detalle.
+ * Estado administrativo de una nota: el interruptor de legalización, en un
+ * solo bloque bajo el encabezado del detalle.
  *
  * Responde, antes de que nadie haga clic, las dos preguntas que hasta ahora
  * solo contestaba un 403: ¿esta nota ya pasó por legalización? y ¿todavía se
@@ -20,7 +20,6 @@ import { useTodosLosUsuarios } from "@/hooks/useUsuarios";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useConexionStore } from "@/stores/conexionStore";
 import { clasificar403Nota, isApiError } from "@/api/errors";
-import { diasRestantes, formatFechaUI } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import type { Nota, Usuario } from "@/domain/models";
 
@@ -37,9 +36,6 @@ export function motivoBloqueo(nota: Nota): string | null {
     return "La nota está legalizada. Desactiva la legalización para modificarla.";
   }
   if (nota.puedeEditar) return null;
-  if (nota.editableHasta && diasRestantes(nota.editableHasta) < 0) {
-    return `El plazo para modificar esta nota venció el ${formatFechaUI(nota.editableHasta)}.`;
-  }
   return "Solo el equipo quirúrgico de esta nota (o un administrador) puede modificarla.";
 }
 
@@ -97,45 +93,19 @@ export function EstadoNota({ nota }: { nota: Nota }) {
     });
   };
 
-  // ── Texto del plazo ──
-  const plazo = (() => {
-    if (nota.legalizada) {
-      return {
+  // ── Texto de estado ── (ya no hay plazo de edición: solo la legalización
+  // bloquea los cambios)
+  const plazo = nota.legalizada
+    ? {
         texto: "Bloqueada por legalización: no se puede editar ni eliminar.",
         clase: "text-muted-foreground",
         icono: <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />,
-      };
-    }
-    if (!nota.editableHasta) {
-      return null;
-    }
-    const dias = diasRestantes(nota.editableHasta);
-    if (dias < 0) {
-      return {
-        texto: `Plazo de edición vencido el ${formatFechaUI(nota.editableHasta)}.`,
-        clase: "text-muted-foreground",
-        icono: <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />,
-      };
-    }
-    if (dias === 0) {
-      return {
-        texto: "Último día para editar esta nota.",
-        clase: "text-amber-600 dark:text-amber-400",
-        icono: null,
-      };
-    }
-    return {
-      texto: `Editable hasta el ${formatFechaUI(nota.editableHasta)}.`,
-      clase: "text-muted-foreground",
-      icono: null,
-    };
-  })();
+      }
+    : null;
 
   const soloEquipo =
     !nota.legalizada &&
     !nota.puedeEditar &&
-    nota.editableHasta !== undefined &&
-    diasRestantes(nota.editableHasta) >= 0 &&
     (perfil?.rol === "medico" || perfil?.rol === "admin");
 
   return (

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 
-	"server/config"
 	"server/models/pagination"
 	"server/models/usuarios"
 
@@ -14,16 +13,8 @@ import (
 )
 
 // columnas es el SELECT compartido por todas las lecturas de la nota, siempre
-// con la tabla aliada como `n`. Además de las columnas físicas trae dos
-// cálculos del plazo de edición, hechos en SQL para que coincidan al día con lo
-// que decide CheckNotasDate (misma zona horaria, mismo CURRENT_DATE):
-//
-//   - el último día editable, `created_at::date + (plazo - 1)`, como texto
-//     YYYY-MM-DD, y
-//   - si hoy todavía está dentro del plazo.
-//
-// Toda consulta que lo use tiene que pasar `@plazo_dias` (ver argsConPlazo) y
-// escanear con leerNota, en este mismo orden.
+// con la tabla aliada como `n`. Toda consulta que lo use tiene que escanear con
+// leerNota, en este mismo orden.
 const columnas = `
 	n.id, n.dx_pre_operatorio, n.dx_post_operatorio, n.intervencion_realizada,
 	n.fecha_comienzo, n.fecha_culminacion, n.hora_comienzo, n.hora_culminacion,
@@ -32,16 +23,8 @@ const columnas = `
 	n.id_paciente, n.id_medico_encargado, n.eliminado,
 	COALESCE(n.client_uuid::text, ''),
 	n.legalizada, n.legalizada_en, COALESCE(n.legalizada_por::text, ''),
-	n.created_at,
-	(n.created_at::date + (@plazo_dias::integer - 1))::text,
-	n.created_at::date > CURRENT_DATE - @plazo_dias::integer
+	n.created_at
 `
-
-// argsConPlazo arranca los argumentos de una consulta con el plazo vigente, que
-// `columnas` necesita siempre.
-func argsConPlazo() pgx.NamedArgs {
-	return pgx.NamedArgs{"plazo_dias": config.PlazoEdicionDias()}
-}
 
 // fila es lo que tienen en común pgx.Row y pgx.Rows para escanear.
 type fila interface {
@@ -60,8 +43,6 @@ func leerNota(f fila, n *Notas) error {
 		&n.ClientUUID,
 		&n.Legalizada, &n.LegalizadaEn, &n.LegalizadaPor,
 		&n.CreatedAt,
-		&n.EditableHasta,
-		&n.enPlazo,
 	)
 }
 
@@ -125,7 +106,7 @@ func getMedicos(db *pgxpool.Pool, notaID int) ([]usuarios.Usuarios, error) {
 }
 
 func (n *Notas) Get(db *pgxpool.Pool) error {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	args["id"] = n.ID
 	query := `
 		SELECT ` + columnas + `
@@ -187,7 +168,7 @@ func whereFiltro(f FiltroNotas, args pgx.NamedArgs) string {
 // GetAllNotasPaged devuelve una página de notas vigentes y el total de registros
 // para paginación server-side. Es la vista de la secretaria (HU-16, HU-17).
 func GetAllNotasPaged(db *pgxpool.Pool, f FiltroNotas, p pagination.Params) ([]Notas, int, error) {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	where := whereFiltro(f, args)
 
 	// 1. Total
@@ -276,8 +257,8 @@ func participaEnLote(db *pgxpool.Pool, ids []int, userID string) (map[int]bool, 
 
 // CompletarPermisos rellena PuedeEditar en cada nota para el usuario que
 // pregunta. La regla es la misma que aplican UpdateNota y DeleteNota, en el
-// mismo orden: vigente, no legalizada, dentro del plazo, y admin o participante.
-// El admin queda exento solo de la participación; el plazo lo alcanza igual.
+// mismo orden: vigente, no legalizada, y admin o participante. No hay plazo:
+// una nota se puede corregir mientras no esté legalizada.
 //
 // Devolverlo calculado desde aquí es lo que permite a la interfaz deshabilitar
 // "Editar" antes del clic en vez de descubrir el 403 después de corregir.
@@ -296,7 +277,7 @@ func CompletarPermisos(db *pgxpool.Pool, notas []Notas, userID string, esAdmin b
 
 	for i := range notas {
 		n := &notas[i]
-		n.PuedeEditar = !n.Eliminado && !n.Legalizada && n.enPlazo && (esAdmin || participa[n.ID])
+		n.PuedeEditar = !n.Eliminado && !n.Legalizada && (esAdmin || participa[n.ID])
 	}
 	return nil
 }
@@ -392,33 +373,6 @@ func sincronizarEquipo(ctx context.Context, tx pgx.Tx, notaID int, encargado str
 	return nil
 }
 
-// PlazoEdicionDias es la ventana, en días calendario contados desde que se
-// registró la nota, dentro de la cual todavía se puede corregir o eliminar
-// (HU-13, HU-14). Incluye el día del registro: con 7, una nota del lunes se
-// puede editar hasta el domingo. Sale de PLAZO_EDICION_DIAS (ver config).
-func PlazoEdicionDias() int {
-	return config.PlazoEdicionDias()
-}
-
-// CheckNotasDate verifica que la nota siga dentro del plazo de edición.
-func CheckNotasDate(id int) error {
-	query := `
-		SELECT 1
-		FROM "Nota_Operatoria"
-		WHERE id = @id
-		AND created_at::date > CURRENT_DATE - @dias::integer;
-	`
-
-	var one int
-	err := config.PsqlDB.QueryRow(context.Background(), query,
-		pgx.NamedArgs{"id": id, "dias": PlazoEdicionDias()}).Scan(&one)
-	if err != nil {
-		log.Printf("\n\nNota is outside the %d-day edit window or not found: %v", PlazoEdicionDias(), err)
-		return err
-	}
-	return nil
-}
-
 // EstaLegalizada dice si la nota tiene el interruptor de legalización puesto.
 // Una nota inexistente cuenta como no legalizada: el 404 lo decide Existe.
 func EstaLegalizada(db *pgxpool.Pool, id int) (bool, error) {
@@ -438,8 +392,7 @@ func EstaLegalizada(db *pgxpool.Pool, id int) (bool, error) {
 
 // SetLegalizada pone o quita la marca de legalización. Al ponerla deja
 // constancia de quién y cuándo; al quitarla limpia ambos. No toca ningún otro
-// campo ni pasa por el plazo de edición: el trámite físico puede ocurrir
-// semanas después de la cirugía.
+// campo: el trámite físico puede ocurrir semanas después de la cirugía.
 func SetLegalizada(db *pgxpool.Pool, id int, legalizada bool, usuarioID string) error {
 	query := `
 		UPDATE "Nota_Operatoria"
@@ -465,8 +418,8 @@ func SetLegalizada(db *pgxpool.Pool, id int, legalizada bool, usuarioID string) 
 
 // MarcarTuvoBiopsia pone la casilla "se tomó biopsia" en TRUE. Se llama al
 // vincular una biopsia de origen: es una corrección derivada de un hecho ya
-// registrado, así que no pasa por el plazo de edición ni por la legalización,
-// igual que la propia legalización. Nunca la pone en FALSE: la declaración del
+// registrado, así que no pasa por la legalización, igual que la propia
+// legalización. Nunca la pone en FALSE: la declaración del
 // cirujano se respeta (PRD 0.5.0, D3).
 func MarcarTuvoBiopsia(db *pgxpool.Pool, id int) error {
 	_, err := db.Exec(context.Background(),
@@ -550,8 +503,8 @@ func (n *Notas) Create(db *pgxpool.Pool) error {
 		return err
 	}
 
-	// Se relee entera: así el JSON de respuesta trae `created_at`,
-	// `editable_hasta` y el resto de lo calculado, igual que un GET.
+	// Se relee entera: así el JSON de respuesta trae `created_at` y el resto
+	// de lo calculado, igual que un GET.
 	return n.Get(db)
 }
 
@@ -625,7 +578,7 @@ func (n *Notas) Update(db *pgxpool.Pool) error {
 	}
 
 	// Releer devuelve la nota tal como quedó, con lo que el body no trae
-	// (created_at, legalización, plazo).
+	// (created_at, legalización).
 	return n.Get(db)
 }
 

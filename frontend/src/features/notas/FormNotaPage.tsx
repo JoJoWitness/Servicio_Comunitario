@@ -33,7 +33,7 @@ import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
 import { CedulaPaciente } from "@/features/pacientes/CedulaPaciente";
 import { motivoBloqueo } from "@/components/EstadoNota";
 import { useCrearBiopsia } from "@/hooks/useBiopsias";
-import { TEJIDOS_BIOPSIA } from "@/features/biopsias/tejidos";
+// import { TEJIDOS_BIOPSIA } from "@/features/biopsias/tejidos"; // bloque de biopsia comentado
 import type { Biopsia } from "@/domain/models";
 import {
   NotaFormSchema,
@@ -143,10 +143,17 @@ export default function FormNotaPage() {
     porque es el momento: el médico acaba de sacar la muestra. En edición las
     biopsias se gestionan desde el detalle de la nota. Si el bloque queda sin
     tejido no se crea nada y el detalle avisa que falta registrarla.
+
+    El bloque de captura está comentado más abajo (a pedido de los médicos), así
+    que por ahora estos valores quedan vacíos y nunca se crea la biopsia desde
+    aquí. Al reactivar el bloque hay que recuperar los setters:
+      const [biopsiaTejido, setBiopsiaTejido] = useState("");
+      const [biopsiaOjo, setBiopsiaOjo] = useState("");
+      const [biopsiaDescripcion, setBiopsiaDescripcion] = useState("");
   */
-  const [biopsiaTejido, setBiopsiaTejido] = useState("");
-  const [biopsiaOjo, setBiopsiaOjo] = useState("");
-  const [biopsiaDescripcion, setBiopsiaDescripcion] = useState("");
+  const [biopsiaTejido] = useState("");
+  const [biopsiaOjo] = useState("");
+  const [biopsiaDescripcion] = useState("");
   const capturaBiopsia = !esEdicion && !esPendiente;
 
   const {
@@ -939,10 +946,11 @@ export default function FormNotaPage() {
                 </div>
 
                 {/*
-                  Datos mínimos de la muestra (PRD 0.5.0). Opcionales: si se
-                  dejan vacíos, la nota igual se guarda y el detalle recuerda
-                  que la biopsia está por registrar.
+                  Datos mínimos de la muestra (PRD 0.5.0). Bloque desactivado a
+                  pedido de los médicos: la biopsia se registra después desde
+                  el detalle de la nota. Se conserva comentado por si vuelve.
                 */}
+                {/*
                 {capturaBiopsia && watch("tuvoBiopsia") && (
                   <div className="mt-2 space-y-3 rounded-md border border-border bg-muted/40 p-3">
                     <p className="text-sm font-medium">Datos de la biopsia (opcional)</p>
@@ -986,6 +994,7 @@ export default function FormNotaPage() {
                     </p>
                   </div>
                 )}
+                */}
               </div>
               {BACKEND_SUPPORTS_OJO_ESTADO && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

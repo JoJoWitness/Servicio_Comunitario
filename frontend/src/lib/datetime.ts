@@ -149,19 +149,17 @@ export function formatFechaUI(date: Date): string {
 }
 
 /**
- * Días que quedan hasta `editableHasta`, ambos contados como fechas de
- * calendario en la zona local: 0 significa "vence hoy", negativo que ya venció.
+ * Días que quedan hasta `limite`, ambos contados como fechas de calendario en
+ * la zona local: 0 significa "vence hoy", negativo que ya pasó.
  *
- * `editableHasta` viene del servidor como medianoche UTC del último día
- * editable; se compara con el día civil local de este equipo. Si el reloj del
- * cliente discrepa del servidor el texto puede fallar por un día, pero el
- * veredicto que manda es `puedeEditar`, que lo calcula el servidor.
+ * `limite` viene del servidor como medianoche UTC; se compara con el día civil
+ * local de este equipo.
  */
-export function diasRestantes(editableHasta: Date, hoy: Date = new Date()): number {
+export function diasRestantes(fechaLimite: Date, hoy: Date = new Date()): number {
   const limite = Date.UTC(
-    editableHasta.getUTCFullYear(),
-    editableHasta.getUTCMonth(),
-    editableHasta.getUTCDate()
+    fechaLimite.getUTCFullYear(),
+    fechaLimite.getUTCMonth(),
+    fechaLimite.getUTCDate()
   );
   const hoyLocal = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
   return Math.round((limite - hoyLocal) / 86_400_000);

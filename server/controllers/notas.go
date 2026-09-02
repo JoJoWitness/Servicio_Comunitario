@@ -209,23 +209,9 @@ func puedeModificar(w http.ResponseWriter, r *http.Request, notaID int) bool {
 // cabecera X-Motivo para que el cliente no tenga que adivinar leyendo el texto.
 const (
 	CabeceraMotivo       = "X-Motivo"
-	MotivoFueraDePlazo   = "fuera_de_plazo"
 	MotivoNoParticipante = "no_participante"
 	MotivoLegalizada     = "legalizada"
 )
-
-// enPlazo responde 403 si la nota ya está fuera de la ventana de edición.
-// `accion` es el verbo del mensaje ("editar", "eliminar"). Escribe la respuesta
-// de error cuando devuelve false.
-func enPlazo(w http.ResponseWriter, notaID int, accion string) bool {
-	if err := notas2.CheckNotasDate(notaID); err != nil {
-		w.Header().Set(CabeceraMotivo, MotivoFueraDePlazo)
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprintf(w, "la nota solo se puede %s dentro de los %d dias siguientes a su registro", accion, notas2.PlazoEdicionDias())
-		return false
-	}
-	return true
-}
 
 // noLegalizada responde 403 si la nota ya está legalizada: una nota firmada,
 // sellada y archivada no se corrige ni se elimina; primero hay que quitar la
@@ -425,9 +411,9 @@ func UpdateNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Una nota legalizada está cerrada; solo se corrige dentro del plazo de
-	// edición; y solo la corrige quien participó (o el admin).
-	if !noLegalizada(w, id) || !enPlazo(w, id, "editar") || !puedeModificar(w, r, id) {
+	// Una nota legalizada está cerrada; y solo la corrige quien participó (o
+	// el admin). No hay plazo de edición.
+	if !noLegalizada(w, id) || !puedeModificar(w, r, id) {
 		return
 	}
 
@@ -491,7 +477,7 @@ func DeleteNota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !noLegalizada(w, notas.ID) || !enPlazo(w, notas.ID, "eliminar") || !puedeModificar(w, r, notas.ID) {
+	if !noLegalizada(w, notas.ID) || !puedeModificar(w, r, notas.ID) {
 		return
 	}
 

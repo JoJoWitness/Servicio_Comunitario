@@ -49,22 +49,14 @@ type Notas struct {
 	LegalizadaEn  *time.Time `json:"legalizada_en,omitempty"`
 	LegalizadaPor string     `json:"legalizada_por,omitempty"`
 
-	// CreatedAt es el momento del registro en el servidor: la referencia del
-	// plazo de edición. Para una nota redactada sin conexión es cuando subió,
-	// no cuando se escribió.
+	// CreatedAt es el momento del registro en el servidor. Para una nota
+	// redactada sin conexión es cuando subió, no cuando se escribió.
 	CreatedAt time.Time `json:"created_at"`
-	// EditableHasta es el último día calendario (YYYY-MM-DD, zona del servidor)
-	// en que la nota admite cambios según el plazo vigente. Se calcula en SQL
-	// para que coincida exactamente con lo que CheckNotasDate va a decidir.
-	EditableHasta string `json:"editable_hasta"`
 	// PuedeEditar resume, para el usuario de la sesión, si PUT/DELETE van a
-	// pasar: vigente, no legalizada, en plazo, y admin o participante. Lo
-	// calcula CompletarPermisos por petición; así el cliente no tiene que
-	// replicar la regla de participación.
+	// pasar: vigente, no legalizada, y admin o participante. Lo calcula
+	// CompletarPermisos por petición; así el cliente no tiene que replicar la
+	// regla de participación.
 	PuedeEditar bool `json:"puede_editar"`
-	// enPlazo es el veredicto del plazo tal como lo dio la base. No viaja: al
-	// cliente le basta con `puede_editar` y `editable_hasta`.
-	enPlazo bool
 }
 
 // FiltroNotas acota la vista global del servicio (HU-16, HU-17). Los campos en

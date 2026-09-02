@@ -161,11 +161,10 @@ traen, además de las columnas de la tabla:
 | `legalizada`     | bool              | La nota impresa ya se firmó, selló y archivó. Solo cambia por `PATCH /notas/{id}/legalizada`; `PUT` lo ignora. |
 | `legalizada_en`  | RFC3339 \| ausente | Cuándo se puso la marca. |
 | `legalizada_por` | UUID \| ausente    | Quién la puso. |
-| `created_at`     | RFC3339           | Registro en el servidor; referencia del plazo de edición. |
-| `editable_hasta` | `YYYY-MM-DD`      | Último día calendario en que la nota admite cambios (`created_at::date + plazo - 1`, zona del servidor). |
-| `puede_editar`   | bool              | Para **el usuario de la sesión**: vigente, no legalizada, en plazo, y admin o participante. Es lo que la interfaz usa para habilitar "Editar" y "Eliminar" antes del clic. |
+| `created_at`     | RFC3339           | Registro en el servidor. |
+| `puede_editar`   | bool              | Para **el usuario de la sesión**: vigente, no legalizada, y admin o participante. Es lo que la interfaz usa para habilitar "Editar" y "Eliminar" antes del clic. |
 
-El plazo sale de la variable de entorno `PLAZO_EDICION_DIAS` (entero ≥ 1; sin ella, 7).
+No hay plazo de edición: una nota se puede corregir mientras no esté legalizada.
 
 ### `GET /notas/medics/export` — record quirúrgico en Excel
 
@@ -436,10 +435,9 @@ médico activo, responde `400`.
 > relato: al mostrar o exportar la nota va al final del resumen, tras `Observaciones:`.
 
 ### `PUT /notas/{id}` — UpdateNota
-El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota dentro
-del plazo de edición (por defecto **7 días calendario** desde `created_at`, incluido el día
-del registro; ver `PLAZO_EDICION_DIAS`) y mientras **no esté legalizada**. En ambos casos
-responde `403` con `X-Motivo: fuera_de_plazo` o `X-Motivo: legalizada`. Los campos
+El `id` va en el **URL** (el body ya no lo necesita). Solo se permite editar una nota
+mientras **no esté legalizada**; en ese caso responde `403` con `X-Motivo: legalizada`. No
+hay plazo de edición. Los campos
 `legalizada`, `legalizada_en` y `legalizada_por` se ignoran si vienen en el body.
 ```json
 {
@@ -636,12 +634,9 @@ Request:
   (usuarios, pacientes, notas, diagnosticos, procedimientos, tecnicas). El `GET` de lista y
   el `POST` usan `/{recurso}` sin id. En notas, las rutas específicas (`/notas/medics`,
   `/notas/pacientes/{id}`, `.../dates`) se registran **antes** del comodín `/notas/{id}`.
-- **Regla de edición de notas**: `PUT`/`DELETE` de notas solo funcionan dentro del plazo
-  de edición contado desde `created_at DEFAULT NOW()` (incluido el día del registro) y
-  mientras la nota no esté legalizada. El plazo se lee una vez de `PLAZO_EDICION_DIAS`
-  (`config.PlazoEdicionDias()`, por defecto 7) y el mensaje de error se arma con él. El
-  mismo cálculo viaja en cada nota como `editable_hasta` y `puede_editar`. Como los datos
-  de prueba se cargan en cada arranque, quedan editables.
+- **Regla de edición de notas**: `PUT`/`DELETE` de notas funcionan mientras la nota no
+  esté legalizada y quien pide sea admin o participante. No hay plazo de edición. El
+  veredicto viaja en cada nota como `puede_editar`.
 
 - **Autorización**: cada handler de escritura se envuelve individualmente
   (`r.Handle(path, auth.Medicos(http.HandlerFunc(h)))`) en vez de usar un subrouter con

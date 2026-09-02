@@ -3,6 +3,8 @@ package notas
 import (
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"server/config"
 )
 
@@ -17,7 +19,7 @@ const condicionParticipa = `(
 		)`
 
 func GetNotasFromMedic(id string) ([]Notas, error) {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	args["id"] = id
 	return consultarNotas(config.PsqlDB, `
 		SELECT `+columnas+`
@@ -29,7 +31,7 @@ func GetNotasFromMedic(id string) ([]Notas, error) {
 }
 
 func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, error) {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	args["id"] = id
 	args["from"] = from
 	args["to"] = to
@@ -44,7 +46,7 @@ func GetNotasFromMedicDates(id string, from time.Time, to time.Time) ([]Notas, e
 }
 
 func GetNotasFromPaciente(id string) ([]Notas, error) {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	args["id"] = id
 	return consultarNotas(config.PsqlDB, `
 		SELECT `+columnas+`
@@ -56,7 +58,7 @@ func GetNotasFromPaciente(id string) ([]Notas, error) {
 }
 
 func GetNotasFromPacienteDates(id string, from time.Time, to time.Time) ([]Notas, error) {
-	args := argsConPlazo()
+	args := pgx.NamedArgs{}
 	args["id"] = id
 	args["from"] = from
 	args["to"] = to
