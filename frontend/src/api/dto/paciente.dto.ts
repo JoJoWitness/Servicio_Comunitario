@@ -26,6 +26,7 @@ export interface PacienteDTO {
   direccion?: string;
   eliminado: boolean;
   /** Antecedentes para la solicitud de biopsia (v0.5.0). */
+  telefono_alternativo?: string;
   ocupacion?: string;
   raza?: string;
   antecedentes_oncologicos?: string;
@@ -61,6 +62,7 @@ export function pacienteToDomain(dto: PacienteDTO): Paciente {
     telefono: dto.telefono,
     direccion: dto.direccion,
     eliminado: dto.eliminado,
+    telefonoAlternativo: dto.telefono_alternativo || undefined,
     ocupacion: dto.ocupacion || undefined,
     raza: dto.raza || undefined,
     antecedentesOncologicos: dto.antecedentes_oncologicos || undefined,
@@ -87,6 +89,7 @@ export function pacienteToWriteDto(paciente: Paciente): PacienteWriteDTO {
     telefono: paciente.telefono,
     direccion: paciente.direccion,
     eliminado: paciente.eliminado,
+    telefono_alternativo: paciente.telefonoAlternativo ?? "",
     ocupacion: paciente.ocupacion ?? "",
     raza: paciente.raza ?? "",
     antecedentes_oncologicos: paciente.antecedentesOncologicos ?? "",

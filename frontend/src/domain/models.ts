@@ -53,6 +53,8 @@ export interface Paciente {
   genero: Genero;
   fechaNacimiento: Date;
   telefono?: string;
+  /** Segundo teléfono; el papel de la solicitud de biopsia pide dos. */
+  telefonoAlternativo?: string;
   direccion?: string;
   eliminado: boolean;
   /**

@@ -47,16 +47,16 @@ import {
 
 const MARGEN = 28;
 
-// Medidas de la cédula en la hoja (ISO ID-1 al 90 %) y de una línea de firma:
-// borde de 1 pt + 3 pt de aire + 12 pt de rótulo.
-const ANCHO_CEDULA = 219;
-const ALTO_CEDULA = 138;
-const ALTO_LINEA_FIRMA = 16;
+// Medidas de la cédula en la hoja (ISO ID-1 a tamaño real, 85,6 × 54 mm) y
+// de una línea de firma: borde de 1 pt + 3 pt de aire + 11 pt de rótulo.
+const ANCHO_CEDULA = 243;
+const ALTO_CEDULA = 153;
+const ALTO_LINEA_FIRMA = 15;
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 9.5,
     paddingTop: 20,
     // Deja sitio al pie con los datos del hospital, que va en posición
     // absoluta y no empuja el contenido.
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderLeftColor: NEGRO,
   },
-  etiqueta: { fontSize: 10 },
+  etiqueta: { fontSize: 9.5 },
   // El contenido va en redonda: en el formulario lo que distingue al dato del
   // rótulo es que el rótulo está en mayúsculas, no el grosor. Poner en negrita
   // todo lo escrito deja la hoja sin jerarquía y cuesta leer los párrafos.
@@ -136,11 +136,11 @@ const styles = StyleSheet.create({
   },
   // `lineHeight: 1` es necesario: con el interlineado por defecto la X mide
   // más que la casilla y el renderizador la recorta entera.
-  casillaMarca: { fontSize: 10, fontFamily: "Helvetica-Bold", lineHeight: 1 },
+  casillaMarca: { fontSize: 9.5, fontFamily: "Helvetica-Bold", lineHeight: 1 },
 
   // ── Equipo quirúrgico ─────────────────────────────────────────────────
   tituloEquipo: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
     paddingVertical: 3,
@@ -156,14 +156,14 @@ const styles = StyleSheet.create({
 
   // ── Resumen ───────────────────────────────────────────────────────────
   tituloResumen: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
     marginTop: 2,
     marginBottom: 4,
   },
   parrafoResumen: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: "justify",
     lineHeight: 1.35,
   },
@@ -179,9 +179,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   columnaCedula: { width: "50%" },
-  // Cédula venezolana (ISO ID-1, 85,6 × 54 mm) al 90 % de su tamaño real:
-  // 243 × 153 pt no dejaba sitio a las firmas con un resumen largo y la hoja
-  // se partía en dos. El borde fino delimita el espacio como lo haría el filo
+  // Cédula venezolana (ISO ID-1, 85,6 × 54 mm) a tamaño real, para que se lea
+  // como la fotocopia. Cabe con un resumen largo porque la letra de la hoja
+  // es algo menor. El borde fino delimita el espacio como lo haría el filo
   // de la fotocopia.
   cajaCedula: {
     width: ANCHO_CEDULA,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   segundaFirmaConCedula: {
     marginTop: ALTO_CEDULA - 50 - 2 * ALTO_LINEA_FIRMA,
   },
-  pieFirma: { fontSize: 12, textAlign: "center" },
+  pieFirma: { fontSize: 11, textAlign: "center" },
 });
 
 // ---------------------------------------------------------------------------

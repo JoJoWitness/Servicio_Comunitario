@@ -156,10 +156,16 @@ export function PacienteForm({
         )}
       </div>
 
-      {/* Teléfono (opcional) */}
-      <div className="space-y-1">
-        <Label htmlFor="telefono">Teléfono</Label>
-        <Input id="telefono" type="tel" {...register("telefono")} />
+      {/* Teléfonos (opcionales); el papel de la solicitud de biopsia pide dos */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor="telefono">Teléfono</Label>
+          <Input id="telefono" type="tel" {...register("telefono")} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="telefonoAlternativo">Segundo teléfono</Label>
+          <Input id="telefonoAlternativo" type="tel" {...register("telefonoAlternativo")} />
+        </div>
       </div>
 
       {/* Dirección (opcional) */}
@@ -251,6 +257,7 @@ export function pacienteAFormInput(p: Paciente): PacienteFormInput {
     // ISO date string para <input type="date">
     fechaNacimiento: p.fechaNacimiento.toISOString().split("T")[0],
     telefono: p.telefono,
+    telefonoAlternativo: p.telefonoAlternativo ?? "",
     direccion: p.direccion,
     ocupacion: p.ocupacion ?? "",
     raza: p.raza ?? "",
@@ -267,6 +274,7 @@ export function antecedentesDesdeFormulario(
   d: PacienteFormInput
 ): Pick<
   Paciente,
+  | "telefonoAlternativo"
   | "ocupacion"
   | "raza"
   | "antecedentesOncologicos"
@@ -278,6 +286,7 @@ export function antecedentesDesdeFormulario(
   const numero = (v?: string) => (v?.trim() ? Number(v.trim()) : undefined);
   const texto = (v?: string) => (v?.trim() ? v.trim() : undefined);
   return {
+    telefonoAlternativo: texto(d.telefonoAlternativo),
     ocupacion: texto(d.ocupacion),
     raza: texto(d.raza),
     antecedentesOncologicos: texto(d.antecedentesOncologicos),

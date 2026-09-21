@@ -13,8 +13,10 @@ type Pacientes struct {
 	Genero                 string    `json:"genero"`
 	Fecha_Nacimiento       time.Time `json:"fecha_nacimiento"`
 	Telefono               string    `json:"telefono"`
-	Direccion              string    `json:"direccion"`
-	Eliminado              bool      `json:"eliminado"`
+	// Segundo teléfono, como pide la solicitud de biopsia (v0.5.0).
+	Telefono_Alternativo string `json:"telefono_alternativo"`
+	Direccion            string `json:"direccion"`
+	Eliminado            bool   `json:"eliminado"`
 	// Antecedentes para la "Solicitud de biopsia o citología" (v0.5.0).
 	// Todos opcionales. Estudios_Imagenes admite rx, tc, rm y eco.
 	Ocupacion                string   `json:"ocupacion"`

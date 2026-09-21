@@ -35,6 +35,15 @@ export const SIN_DESCRIPTORES: Descriptores = {
   cambiosAsociados: [],
 };
 
+/** Con lo que arranca el formulario cuando no hay nada cargado. */
+export const FORMULARIO_BIOPSIA_VACIO: Partial<BiopsiaFormInput> = {
+  ojo: "",
+  centroToma: "hcsc",
+  ubicacion: [],
+  color: [],
+  cambiosAsociados: [],
+};
+
 const oNada = (s?: string) => (s?.trim() ? s.trim() : undefined);
 
 /** Del formulario al dominio. */

@@ -153,11 +153,11 @@ export default function BiopsiaPanelPage() {
         ...biopsia,
         tejido: v.tejido,
         ojo: v.ojo ? v.ojo : undefined,
-        descripcionMacroscopica: v.descripcionMacroscopica ?? "",
+        descripcionMacroscopica: biopsia.descripcionMacroscopica,
         diagnosticoPresuntivo: v.diagnosticoPresuntivo ?? "",
         fechaToma: new Date(v.fechaToma),
         idMedicoResponsable: v.idMedicoResponsable,
-        observaciones: v.observaciones ?? "",
+        observaciones: biopsia.observaciones,
         ...descriptoresDesdeFormulario(v),
       });
       setEditarDatos(false);
@@ -266,44 +266,25 @@ export default function BiopsiaPanelPage() {
           </CardContent>
         </Card>
 
-        {/* Muestra */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Muestra</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-              <Campo label="Tejido" valor={biopsia.tejido} />
-              <Campo label="Ojo" valor={biopsia.ojo} />
-              <Campo label="Fecha de toma" valor={formatFechaUI(biopsia.fechaToma)} />
-              <Campo label="Médico responsable" valor={responsable} />
-              <div className="sm:col-span-2">
-                <Campo label="Diagnóstico presuntivo" valor={biopsia.diagnosticoPresuntivo} />
-              </div>
-              <div className="sm:col-span-2">
-                <Campo label="Descripción macroscópica" valor={biopsia.descripcionMacroscopica} />
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-
-        {/* Solicitud de biopsia (v0.5.0): lo que se imprime en la hoja. */}
+        {/* Datos de la solicitud, en el orden del formulario en papel. */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Solicitud de biopsia</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-              <Campo label="Tipo de biopsia" valor={etiqueta(TIPOS_BIOPSIA, biopsia.tipoBiopsia)} />
+              <Campo label="Biopsia" valor={etiqueta(TIPOS_BIOPSIA, biopsia.tipoBiopsia)} />
               <Campo label="Citología" valor={etiqueta(TIPOS_CITOLOGIA, biopsia.tipoCitologia)} />
               <Campo
-                label="Centro donde se tomó"
+                label="Centro médico donde se tomó la muestra"
                 valor={
                   biopsia.centroToma === "otro"
                     ? biopsia.centroTomaOtro || "Otro"
                     : etiqueta(CENTROS_TOMA, biopsia.centroToma)
                 }
               />
+              <Campo label="Fecha de toma de la muestra" valor={formatFechaUI(biopsia.fechaToma)} />
+              <Campo label="Tejido" valor={biopsia.tejido} />
               <Campo
                 label="Tipo de muestra"
                 valor={
@@ -312,17 +293,8 @@ export default function BiopsiaPanelPage() {
                     : etiqueta(TIPOS_MUESTRA, biopsia.tipoMuestra)
                 }
               />
-              <Campo
-                label="Ubicación"
-                valor={
-                  [
-                    etiquetas(UBICACIONES, biopsia.ubicacion),
-                    biopsia.ojo === "OD" ? "Derecho" : biopsia.ojo === "OI" ? "Izquierdo" : biopsia.ojo === "AO" ? "Derecho e izquierdo" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(", ") || undefined
-                }
-              />
+              <Campo label="Ubicación" valor={etiquetas(UBICACIONES, biopsia.ubicacion) || undefined} />
+              <Campo label="Ojo" valor={biopsia.ojo} />
               <Campo label="Bordes" valor={etiqueta(BORDES, biopsia.bordes)} />
               <Campo
                 label="Color"
@@ -339,22 +311,24 @@ export default function BiopsiaPanelPage() {
                 label="Cambios asociados"
                 valor={etiquetas(CAMBIOS_ASOCIADOS, biopsia.cambiosAsociados) || undefined}
               />
+              <Campo
+                label="Recibió la lesión tratamientos previos"
+                valor={
+                  biopsia.tratamientosPrevios === true
+                    ? `Sí${biopsia.tratamientosPreviosCual ? `: ${biopsia.tratamientosPreviosCual}` : ""}`
+                    : biopsia.tratamientosPrevios === false
+                      ? "No"
+                      : undefined
+                }
+              />
               <div className="sm:col-span-2">
-                <Campo
-                  label="Tratamientos previos de la lesión"
-                  valor={
-                    biopsia.tratamientosPrevios === true
-                      ? `Sí${biopsia.tratamientosPreviosCual ? `: ${biopsia.tratamientosPreviosCual}` : ""}`
-                      : biopsia.tratamientosPrevios === false
-                        ? "No"
-                        : undefined
-                  }
-                />
+                <Campo label="Diagnóstico presuntivo" valor={biopsia.diagnosticoPresuntivo} />
               </div>
+              <Campo label="Cirujano responsable de tomar la muestra" valor={responsable} />
             </dl>
             {!biopsia.tipoBiopsia && !biopsia.tipoMuestra && !biopsia.bordes && biopsia.color.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Sin datos de la solicitud. La hoja se imprime con esas casillas en blanco para llenarlas a mano.
+              <p className="mt-3 text-sm text-muted-foreground">
+                Sin datos de la lesión. La hoja se imprime con esas casillas en blanco para llenarlas a mano.
               </p>
             )}
           </CardContent>
@@ -384,16 +358,6 @@ export default function BiopsiaPanelPage() {
           </Card>
         )}
 
-        {biopsia.observaciones && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Observaciones</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-wrap text-sm">{biopsia.observaciones}</p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Notas vinculadas */}
         <Card>
@@ -439,7 +403,6 @@ export default function BiopsiaPanelPage() {
         valorInicial={{
           tejido: biopsia.tejido,
           ojo: biopsia.ojo ?? "",
-          descripcionMacroscopica: biopsia.descripcionMacroscopica,
           diagnosticoPresuntivo: biopsia.diagnosticoPresuntivo,
           fechaToma: aISOLocal(new Date(
             biopsia.fechaToma.getUTCFullYear(),
@@ -447,7 +410,6 @@ export default function BiopsiaPanelPage() {
             biopsia.fechaToma.getUTCDate()
           )),
           idMedicoResponsable: biopsia.idMedicoResponsable,
-          observaciones: biopsia.observaciones,
           ...descriptoresAFormulario(biopsia),
         }}
         onSubmit={alEditarDatos}

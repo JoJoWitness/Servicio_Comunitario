@@ -5,7 +5,7 @@
 BEGIN;
 
 UPDATE "Biopsia" SET
-  tipo_biopsia = 'excisional', tipo_muestra = 'conjuntiva', ubicacion = '{}',
+  tipo_biopsia = 'excisional', tipo_muestra = 'conjuntiva', ubicacion = '{derecho}',
   bordes = 'definidos', color = '{salmon,homogenea}', tamano = 'otro', tamano_otro = '5 x 3 mm',
   altura = 'sobreelevada', cambios_asociados = '{telangiectasias}', tratamientos_previos = FALSE
 WHERE tejido = 'Pterigión' AND estado = 'enviada' AND eliminado = FALSE;
@@ -17,14 +17,14 @@ UPDATE "Biopsia" SET
 WHERE tejido = 'Lesión conjuntival' AND eliminado = FALSE;
 
 UPDATE "Biopsia" SET
-  tipo_biopsia = 'incisional', tipo_muestra = 'parpado', ubicacion = '{inferior}',
+  tipo_biopsia = 'incisional', tipo_muestra = 'parpado', ubicacion = '{inferior,izquierdo}',
   bordes = 'irregulares', color = '{nacarada}', tamano = '2_5mm', altura = 'sobreelevada',
   cambios_asociados = '{telangiectasias,queratosis}', tratamientos_previos = TRUE,
   tratamientos_previos_cual = 'Antibiótico tópico dos semanas, sin respuesta'
 WHERE tejido = 'Lesión palpebral' AND estado = 'enviada' AND eliminado = FALSE;
 
 UPDATE "Biopsia" SET
-  tipo_biopsia = 'excisional', tipo_muestra = 'parpado', ubicacion = '{superior}',
+  tipo_biopsia = 'excisional', tipo_muestra = 'parpado', ubicacion = '{superior,derecho}',
   bordes = 'definidos', color = '{amarilla}', tamano = 'otro', tamano_otro = '6 mm',
   altura = 'sobreelevada', tratamientos_previos = TRUE,
   tratamientos_previos_cual = 'Compresas tibias y drenaje previo'

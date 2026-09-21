@@ -324,7 +324,7 @@ ALTER TABLE "Biopsia"
 			'mejilla', 'nariz', 'ceja', 'frente', 'cornea', 'otro'));
 ALTER TABLE "Biopsia"
 	ADD COLUMN IF NOT EXISTS "tipo_muestra_otro" VARCHAR(255) NOT NULL DEFAULT '';
--- Superior / inferior; derecho e izquierdo salen de `ojo`.
+-- superior, inferior, derecho, izquierdo (las cuatro casillas del papel).
 ALTER TABLE "Biopsia"
 	ADD COLUMN IF NOT EXISTS "ubicacion" TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE "Biopsia"
@@ -350,6 +350,9 @@ ALTER TABLE "Biopsia"
 ALTER TABLE "Biopsia"
 	ADD COLUMN IF NOT EXISTS "tratamientos_previos_cual" TEXT NOT NULL DEFAULT '';
 
+-- El papel pide dos teléfonos.
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "telefono_alternativo" VARCHAR(255) NOT NULL DEFAULT '';
 ALTER TABLE "Paciente"
 	ADD COLUMN IF NOT EXISTS "ocupacion" VARCHAR(255) NOT NULL DEFAULT '';
 ALTER TABLE "Paciente"

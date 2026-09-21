@@ -52,6 +52,8 @@ export const PacienteFormSchema = z.object({
   telefono: z.string().optional(),
   /** Opcional */
   direccion: z.string().optional(),
+  /** Segundo teléfono, opcional */
+  telefonoAlternativo: z.string().optional(),
 
   // Antecedentes para la solicitud de biopsia (v0.5.0). Todo opcional. Los
   // ciclos se escriben como texto en el formulario y se convierten al guardar.

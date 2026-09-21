@@ -46,10 +46,12 @@ export const TIPOS_MUESTRA = [
 ] as const satisfies readonly Opcion[];
 export type TipoMuestra = (typeof TIPOS_MUESTRA)[number]["value"];
 
-/** Superior / inferior. Derecho e izquierdo salen del ojo. */
+/** Las cuatro casillas de "Ubicación" del papel. */
 export const UBICACIONES = [
   { value: "superior", label: "Superior" },
   { value: "inferior", label: "Inferior" },
+  { value: "derecho", label: "Derecho" },
+  { value: "izquierdo", label: "Izquierdo" },
 ] as const satisfies readonly Opcion[];
 export type Ubicacion = (typeof UBICACIONES)[number]["value"];
 

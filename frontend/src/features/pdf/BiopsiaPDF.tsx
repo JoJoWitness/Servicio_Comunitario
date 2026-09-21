@@ -11,15 +11,13 @@
  * tipo de biopsia y la descripción clínica de la lesión.
  *
  * Se descarga sola desde el panel de la biopsia, y va anexa a la hoja de la
- * nota operatoria a la que está ligada. Cuando ya hay informe de anatomía
- * patológica se agrega un bloque con el resultado, para archivar con la
- * historia.
+ * nota operatoria a la que está ligada. Es la solicitud tal cual: el
+ * resultado de anatomía patológica no se imprime aquí, vive en el panel.
  */
 
 import {
   Circle,
   Document,
-  Ellipse,
   Image,
   Page,
   Path,
@@ -55,8 +53,8 @@ const LABORATORIOS_RECOMENDADOS = [
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 9.5,
-    paddingTop: 18,
+    fontSize: 10.5,
+    paddingTop: 20,
     // Deja sitio al pie con los datos del hospital, que va en posición
     // absoluta y no empuja el contenido.
     paddingBottom: 34,
@@ -71,40 +69,40 @@ const styles = StyleSheet.create({
   logoServicio: { width: 104, marginLeft: "auto" },
   membrete: {
     width: "50%",
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
   },
   titulo: {
-    fontSize: 12.5,
+    fontSize: 14,
     fontFamily: "Helvetica-Bold",
     textAlign: "center",
-    marginTop: 8,
-    marginBottom: 6,
+    marginTop: 12,
+    marginBottom: 10,
   },
   continuacion: {
     fontSize: 8,
     textAlign: "center",
-    marginTop: 2,
-    marginBottom: 6,
+    marginTop: -6,
+    marginBottom: 4,
   },
 
   // ── Secciones y filas ─────────────────────────────────────────────────
   seccion: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Helvetica-Bold",
-    marginTop: 8,
-    marginBottom: 5,
+    marginTop: 12,
+    marginBottom: 8,
   },
   fila: {
     flexDirection: "row",
     alignItems: "flex-end",
-    marginBottom: 6,
+    marginBottom: 10,
   },
   filaCasillas: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 10,
   },
   etiqueta: { fontFamily: "Helvetica-Bold" },
   etiquetaSubrayada: { fontFamily: "Helvetica-Bold", textDecoration: "underline" },
@@ -117,7 +115,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginRight: 10,
     paddingHorizontal: 2,
-    minHeight: 12,
+    minHeight: 14,
     justifyContent: "flex-end",
   },
   lineaFija: { flexGrow: 0 },
@@ -129,8 +127,8 @@ const styles = StyleSheet.create({
   renglon: {
     borderBottomWidth: 0.8,
     borderBottomColor: NEGRO,
-    minHeight: 13,
-    marginBottom: 6,
+    minHeight: 15,
+    marginBottom: 9,
     marginRight: 10,
     justifyContent: "flex-end",
     paddingHorizontal: 2,
@@ -138,10 +136,10 @@ const styles = StyleSheet.create({
   parrafo: { textAlign: "justify", marginBottom: 4 },
 
   // ── Casillas ──────────────────────────────────────────────────────────
-  opcion: { flexDirection: "row", alignItems: "center", marginRight: 12 },
+  opcion: { flexDirection: "row", alignItems: "center", marginRight: 14 },
   casilla: {
-    width: 11,
-    height: 11,
+    width: 12,
+    height: 12,
     borderWidth: 0.8,
     borderColor: NEGRO,
     marginLeft: 4,
@@ -150,21 +148,14 @@ const styles = StyleSheet.create({
   },
   // `lineHeight: 1` es necesario: con el interlineado por defecto la X mide
   // más que la casilla y el renderizador la recorta entera.
-  casillaMarca: { fontSize: 8.5, fontFamily: "Helvetica-Bold", lineHeight: 1 },
+  casillaMarca: { fontSize: 9, fontFamily: "Helvetica-Bold", lineHeight: 1 },
 
   // ── Muestra: casillas a la izquierda, esquema de la cara a la derecha ──
+  // La cara ocupa el tercio derecho desde "Tipo de muestra" hasta el pie,
+  // como en el papel, para que quepa un dibujo de la lesión.
   muestra: { flexDirection: "row", alignItems: "flex-start" },
-  muestraCasillas: { width: "72%" },
-  cara: { width: "28%", alignItems: "center", paddingTop: 2 },
-
-  // ── Resultado (solo con informe) ──────────────────────────────────────
-  cajaResultado: {
-    borderWidth: 0.8,
-    borderColor: NEGRO,
-    padding: 6,
-    marginBottom: 6,
-  },
-  resultadoTexto: { marginTop: 2 },
+  muestraCasillas: { width: "66%" },
+  cara: { width: "34%", alignItems: "center", paddingTop: 4 },
 
   // ── Recomendaciones ───────────────────────────────────────────────────
   // Un solo `Text` por viñeta: en una fila flex el texto que envuelve se mide
@@ -238,24 +229,40 @@ function Renglones({ n, texto }: { n: number; texto?: string }) {
  * lesión. El ojo de la muestra se dibuja con trazo grueso: el derecho del
  * paciente queda a la izquierda de quien mira, como en el papel.
  */
-function Cara({ ojo }: { ojo?: Biopsia["ojo"] }) {
-  const derecho = ojo === "OD" || ojo === "AO";
-  const izquierdo = ojo === "OI" || ojo === "AO";
-  const trazo = (marcado: boolean) => (marcado ? 2.2 : 0.8);
+function Cara({ derecho, izquierdo }: { derecho: boolean; izquierdo: boolean }) {
+  const trazo = (marcado: boolean) => (marcado ? 2.2 : 0.9);
+  // Proporciones de una cara real sobre un lienzo de 160 × 200: la cabeza es
+  // un óvalo algo más ancho arriba, los ojos van a media altura y separados
+  // un ojo entre sí, la nariz termina a dos tercios y la boca a cuatro
+  // quintos. El derecho del paciente queda a la izquierda de quien mira.
   return (
-    <Svg width={118} height={148} viewBox="0 0 120 150">
-      <Ellipse cx={60} cy={76} rx={46} ry={64} stroke={NEGRO} strokeWidth={0.9} fill="none" />
+    <Svg width={168} height={210} viewBox="0 0 160 200">
+      {/* Cabeza: más ancha a la altura de las sienes, mentón más estrecho */}
+      <Path
+        d="M80 8 C124 8 142 48 142 92 C142 140 116 192 80 192 C44 192 18 140 18 92 C18 48 36 8 80 8 Z"
+        stroke={NEGRO}
+        strokeWidth={1}
+        fill="none"
+      />
+      {/* Orejas, entre la línea de los ojos y la base de la nariz */}
+      <Path d="M18 96 C8 92 8 118 20 122" stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      <Path d="M142 96 C152 92 152 118 140 122" stroke={NEGRO} strokeWidth={0.9} fill="none" />
       {/* Cejas */}
-      <Path d="M24 54 Q38 45 52 53" stroke={NEGRO} strokeWidth={1.2} fill="none" />
-      <Path d="M68 53 Q82 45 96 54" stroke={NEGRO} strokeWidth={1.2} fill="none" />
-      {/* Ojos: el derecho del paciente a la izquierda */}
-      <Ellipse cx={39} cy={66} rx={13} ry={7} stroke={NEGRO} strokeWidth={trazo(derecho)} fill="none" />
-      <Ellipse cx={81} cy={66} rx={13} ry={7} stroke={NEGRO} strokeWidth={trazo(izquierdo)} fill="none" />
-      <Circle cx={39} cy={66} r={3.5} fill={NEGRO} />
-      <Circle cx={81} cy={66} r={3.5} fill={NEGRO} />
-      {/* Nariz y boca */}
-      <Path d="M60 74 L54 96 Q60 100 66 96" stroke={NEGRO} strokeWidth={0.9} fill="none" />
-      <Path d="M44 114 Q60 124 76 114" stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      <Path d="M36 82 Q54 72 72 82" stroke={NEGRO} strokeWidth={1.3} fill="none" />
+      <Path d="M88 82 Q106 72 124 82" stroke={NEGRO} strokeWidth={1.3} fill="none" />
+      {/* Ojos a media altura; el derecho del paciente a la izquierda */}
+      <Path d="M38 100 Q54 88 70 100 Q54 112 38 100 Z" stroke={NEGRO} strokeWidth={trazo(derecho)} fill="none" />
+      <Path d="M90 100 Q106 88 122 100 Q106 112 90 100 Z" stroke={NEGRO} strokeWidth={trazo(izquierdo)} fill="none" />
+      <Circle cx={54} cy={100} r={5.5} stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      <Circle cx={106} cy={100} r={5.5} stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      <Circle cx={54} cy={100} r={2.4} fill={NEGRO} />
+      <Circle cx={106} cy={100} r={2.4} fill={NEGRO} />
+      {/* Nariz: puente y base con las alas */}
+      <Path d="M80 104 L76 130" stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      <Path d="M66 136 Q72 142 80 138 Q88 142 94 136" stroke={NEGRO} strokeWidth={0.9} fill="none" />
+      {/* Boca */}
+      <Path d="M58 158 Q80 168 102 158" stroke={NEGRO} strokeWidth={1} fill="none" />
+      <Path d="M62 156 Q80 152 98 156" stroke={NEGRO} strokeWidth={0.7} fill="none" />
     </Svg>
   );
 }
@@ -305,13 +312,27 @@ function tipoDeMuestra(b: Biopsia): TipoMuestra | undefined {
   return undefined;
 }
 
-/** "Superior" / "Inferior": lo cargado, o lo que digan tejido y descripción. */
-function ubicacionVertical(b: Biopsia): { superior: boolean; inferior: boolean } {
-  if (b.ubicacion.length > 0) {
-    return { superior: b.ubicacion.includes("superior"), inferior: b.ubicacion.includes("inferior") };
-  }
+/**
+ * Las cuatro casillas de "Ubicación". Lo marcado manda; a falta de lado, se
+ * toma del ojo de la muestra, y a falta de altura, de lo que digan el tejido
+ * y la descripción (biopsias anteriores al campo).
+ */
+function ubicacion(b: Biopsia): {
+  superior: boolean;
+  inferior: boolean;
+  derecho: boolean;
+  izquierdo: boolean;
+} {
+  const u = new Set<string>(b.ubicacion);
   const texto = `${b.tejido} ${b.descripcionMacroscopica}`.toLowerCase();
-  return { superior: texto.includes("superior"), inferior: texto.includes("inferior") };
+  const hayAltura = u.has("superior") || u.has("inferior");
+  const hayLado = u.has("derecho") || u.has("izquierdo");
+  return {
+    superior: hayAltura ? u.has("superior") : texto.includes("superior"),
+    inferior: hayAltura ? u.has("inferior") : texto.includes("inferior"),
+    derecho: hayLado ? u.has("derecho") : b.ojo === "OD" || b.ojo === "AO",
+    izquierdo: hayLado ? u.has("izquierdo") : b.ojo === "OI" || b.ojo === "AO",
+  };
 }
 
 const numero = (n?: number) => (n === undefined ? undefined : String(n));
@@ -369,11 +390,10 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
     .filter((m) => m.id !== b.idMedicoResponsable)
     .map(nombreCompleto);
   const tipo = tipoDeMuestra(b);
-  const { superior, inferior } = ubicacionVertical(b);
+  const { superior, inferior, derecho, izquierdo } = ubicacion(b);
   const colores = new Set<string>(b.color);
   const cambios = new Set<string>(b.cambiosAsociados);
   const estudios = new Set<string>(paciente.estudiosImagenes);
-  const hayInforme = Boolean(b.laboratorio || b.numeroPatologia || b.fechaEnvio || b.resultado);
   const referencia = `${paciente.nombre} · ${b.tejido} · tomada el ${formatFechaUI(b.fechaToma)}`;
 
   return (
@@ -407,7 +427,7 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
         </View>
         <View style={styles.fila}>
           <Linea etiqueta="Teléfonos:" valor={paciente.telefono} ancho={170} />
-          <Linea etiqueta="/" />
+          <Linea etiqueta="/" valor={paciente.telefonoAlternativo} />
         </View>
 
         <Text style={styles.etiqueta}>
@@ -456,8 +476,7 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
           <Linea etiqueta="Otro:" valor={b.centroToma === "otro" ? b.centroTomaOtro : undefined} ancho={90} />
         </View>
         <View style={styles.fila}>
-          <Linea etiqueta="Fecha toma de la muestra:" valor={fecha(b.fechaToma)} ancho={110} />
-          <Linea etiqueta="Tejido:" valor={b.tejido} />
+          <Linea etiqueta="Fecha toma de la muestra:" valor={fecha(b.fechaToma)} ancho={130} />
         </View>
 
         <View style={styles.muestra}>
@@ -489,12 +508,12 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
               <Opcion etiqueta="Inferior" marcada={inferior} />
             </View>
             <View style={styles.filaCasillas}>
-              <Opcion etiqueta="Derecho" marcada={b.ojo === "OD" || b.ojo === "AO"} />
-              <Opcion etiqueta="Izquierdo" marcada={b.ojo === "OI" || b.ojo === "AO"} />
+              <Opcion etiqueta="Derecho" marcada={derecho} />
+              <Opcion etiqueta="Izquierdo" marcada={izquierdo} />
             </View>
           </View>
           <View style={styles.cara}>
-            <Cara ojo={b.ojo} />
+            <Cara derecho={derecho} izquierdo={izquierdo} />
           </View>
         </View>
 
@@ -504,7 +523,7 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
       {/* ── Hoja 2: descripción de la lesión, responsables y laboratorios ── */}
       <Page size="LETTER" style={styles.page}>
         <Encabezado continuacion />
-        <Text style={[styles.etiqueta, { fontSize: 8, marginBottom: 6 }]}>{referencia}</Text>
+        <Text style={[styles.etiqueta, { fontSize: 8, marginBottom: 2 }]}>{referencia}</Text>
 
         <Text style={styles.seccion}>Descripción de la lesión:</Text>
         <View style={styles.filaCasillas}>
@@ -568,53 +587,25 @@ export function PaginasBiopsia({ biopsia, paciente, nota, anteriores }: DatosBio
           <Linea etiqueta="¿Cuál?" valor={b.tratamientosPrevios ? b.tratamientosPreviosCual : undefined} />
         </View>
 
-        <Text style={[styles.etiquetaSubrayada, { marginBottom: 4 }]}>Descripción macroscópica:</Text>
-        <Renglones n={b.descripcionMacroscopica.trim() ? 1 : 2} texto={b.descripcionMacroscopica} />
-
         <Text style={[styles.etiquetaSubrayada, { marginBottom: 4 }]}>Diagnóstico presuntivo:</Text>
-        <Renglones n={2} texto={b.diagnosticoPresuntivo} />
+        <Renglones n={3} texto={b.diagnosticoPresuntivo} />
 
         <Text style={styles.seccion}>Datos del Responsable de tomar la muestra:</Text>
+        {/* Renglones cortos: la mitad derecha queda libre para el sello. */}
         <View style={styles.fila}>
-          <Linea etiqueta="Cirujano:" valor={responsable} />
+          <Linea etiqueta="Cirujano:" valor={responsable} ancho={230} />
         </View>
         <View style={styles.fila}>
-          <Linea etiqueta="Ayudante:" valor={ayudantes[0]} />
+          <Linea etiqueta="Ayudante:" valor={ayudantes[0]} ancho={230} />
         </View>
         <View style={styles.fila}>
-          <Linea etiqueta="Ayudante:" valor={ayudantes[1]} />
+          <Linea etiqueta="Ayudante:" valor={ayudantes[1]} ancho={230} />
         </View>
         <View style={styles.fila}>
-          <Linea etiqueta="Sello:" ancho={220} />
+          <Linea etiqueta="Sello:" ancho={200} />
         </View>
 
-        {/* Solo cuando el trámite ya avanzó: la solicitud original no lo trae. */}
-        {hayInforme && (
-          <View wrap={false}>
-            <Text style={styles.seccion}>Anatomía patológica</Text>
-            <View style={styles.cajaResultado}>
-              <View style={styles.fila}>
-                <Linea etiqueta="Laboratorio:" valor={b.laboratorio} />
-                <Linea etiqueta="N.° de patología:" valor={b.numeroPatologia} ancho={110} />
-              </View>
-              <View style={styles.fila}>
-                <Linea etiqueta="Enviada el:" valor={fecha(b.fechaEnvio)} ancho={70} />
-                <Linea etiqueta="Resultado el:" valor={fecha(b.fechaResultado)} ancho={70} />
-                <Linea etiqueta="Entregado al paciente el:" valor={fecha(b.fechaEntrega)} ancho={70} />
-              </View>
-              <Text style={styles.etiqueta}>Resultado:</Text>
-              <Text style={styles.resultadoTexto}>{b.resultado?.trim() || "Pendiente."}</Text>
-              {b.observaciones.trim() !== "" && (
-                <>
-                  <Text style={[styles.etiqueta, { marginTop: 4 }]}>Observaciones:</Text>
-                  <Text style={styles.resultadoTexto}>{b.observaciones}</Text>
-                </>
-              )}
-            </View>
-          </View>
-        )}
-
-        <Text style={[styles.parrafo, { marginTop: 8 }]}>
+        <Text style={[styles.parrafo, { marginTop: 10, marginBottom: 4 }]}>
           Puede procesar su muestra en el laboratorio de patología de su preferencia.
         </Text>
         <Text style={[styles.etiquetaSubrayada, { marginBottom: 4 }]}>Nosotros recomendamos:</Text>

@@ -29,6 +29,7 @@ const columnas = `
 	direccion,
 	eliminado,
 	EXISTS (SELECT 1 FROM "Paciente_Cedula" c WHERE c.id_paciente = "Paciente".id),
+	telefono_alternativo,
 	ocupacion,
 	raza,
 	antecedentes_oncologicos,
@@ -44,6 +45,7 @@ var EstudiosImagenes = []string{"rx", "tc", "rm", "eco"}
 // normalizarAntecedentes recorta los textos, descarta estudios desconocidos y
 // ciclos negativos, y deja la lista sin nil para que el JSON sea `[]`.
 func (u *Pacientes) normalizarAntecedentes() {
+	u.Telefono_Alternativo = strings.TrimSpace(u.Telefono_Alternativo)
 	u.Ocupacion = strings.TrimSpace(u.Ocupacion)
 	u.Raza = strings.TrimSpace(u.Raza)
 	u.Antecedentes_Oncologicos = strings.TrimSpace(u.Antecedentes_Oncologicos)
@@ -88,7 +90,7 @@ func (u *Pacientes) Get(db *pgxpool.Pool) error {
 
 	row := db.QueryRow(context.Background(), query, args)
 	err := row.Scan(&u.ID, &u.Historia_Medica, &u.Numero_Indentificacion, &u.Tipo_Documento, &u.Nombre, &u.Genero, &u.Fecha_Nacimiento, &u.Telefono, &u.Direccion, &u.Eliminado, &u.Tiene_Cedula,
-		&u.Ocupacion, &u.Raza, &u.Antecedentes_Oncologicos, &u.Quimioterapia_Ciclos, &u.Radioterapia_Ciclos, &u.Estudios_Imagenes, &u.Hallazgo_Estudios)
+		&u.Telefono_Alternativo, &u.Ocupacion, &u.Raza, &u.Antecedentes_Oncologicos, &u.Quimioterapia_Ciclos, &u.Radioterapia_Ciclos, &u.Estudios_Imagenes, &u.Hallazgo_Estudios)
 	if err != nil {
 		log.Printf("Error scanning pacientes: %v", err)
 		return err
@@ -113,10 +115,10 @@ func (u *Pacientes) Create(db *pgxpool.Pool) error {
 	query := `
 		INSERT INTO "Paciente"
 			(id, historia_medica, numero_identifiacion, tipo_documento, nombre, genero, fecha_nacimiento, numero_telefono, direccion,
-			 ocupacion, raza, antecedentes_oncologicos, quimioterapia_ciclos, radioterapia_ciclos, estudios_imagenes, hallazgo_estudios)
+			 telefono_alternativo, ocupacion, raza, antecedentes_oncologicos, quimioterapia_ciclos, radioterapia_ciclos, estudios_imagenes, hallazgo_estudios)
 		VALUES
 			(@id, @historia_medica, @numero_identificacion, @tipo_documento, @nombre, @genero, @fecha_nacimiento, @telefono, @direccion,
-			 @ocupacion, @raza, @antecedentes_oncologicos, @quimioterapia_ciclos, @radioterapia_ciclos, @estudios_imagenes, @hallazgo_estudios)
+			 @telefono_alternativo, @ocupacion, @raza, @antecedentes_oncologicos, @quimioterapia_ciclos, @radioterapia_ciclos, @estudios_imagenes, @hallazgo_estudios)
 	`
 
 	args := u.args()
@@ -142,6 +144,7 @@ func (u *Pacientes) Update(db *pgxpool.Pool) error {
 			fecha_nacimiento = @fecha_nacimiento,
 			numero_telefono = @telefono,
 			direccion = @direccion,
+			telefono_alternativo = @telefono_alternativo,
 			ocupacion = @ocupacion,
 			raza = @raza,
 			antecedentes_oncologicos = @antecedentes_oncologicos,
@@ -177,6 +180,7 @@ func (u *Pacientes) args() pgx.NamedArgs {
 		"fecha_nacimiento":         u.Fecha_Nacimiento,
 		"telefono":                 u.Telefono,
 		"direccion":                u.Direccion,
+		"telefono_alternativo":     u.Telefono_Alternativo,
 		"ocupacion":                u.Ocupacion,
 		"raza":                     u.Raza,
 		"antecedentes_oncologicos": u.Antecedentes_Oncologicos,
@@ -224,7 +228,7 @@ func GetAllPacientes() ([]Pacientes, error) {
 		var paciente Pacientes
 
 		err := rows.Scan(&paciente.ID, &paciente.Historia_Medica, &paciente.Numero_Indentificacion, &paciente.Tipo_Documento, &paciente.Nombre, &paciente.Genero, &paciente.Fecha_Nacimiento, &paciente.Telefono, &paciente.Direccion, &paciente.Eliminado, &paciente.Tiene_Cedula,
-			&paciente.Ocupacion, &paciente.Raza, &paciente.Antecedentes_Oncologicos, &paciente.Quimioterapia_Ciclos, &paciente.Radioterapia_Ciclos, &paciente.Estudios_Imagenes, &paciente.Hallazgo_Estudios)
+			&paciente.Telefono_Alternativo, &paciente.Ocupacion, &paciente.Raza, &paciente.Antecedentes_Oncologicos, &paciente.Quimioterapia_Ciclos, &paciente.Radioterapia_Ciclos, &paciente.Estudios_Imagenes, &paciente.Hallazgo_Estudios)
 		if err != nil {
 			log.Printf("Error scanning paciente: %v", paciente)
 			log.Printf("Error fetching pacientes: %v", err)
@@ -295,7 +299,7 @@ func GetAllPacientesPaged(f FiltrosPacientes, p pagination.Params) ([]Pacientes,
 		if err := rows.Scan(&pac.ID, &pac.Historia_Medica, &pac.Numero_Indentificacion,
 			&pac.Tipo_Documento, &pac.Nombre, &pac.Genero,
 			&pac.Fecha_Nacimiento, &pac.Telefono, &pac.Direccion, &pac.Eliminado, &pac.Tiene_Cedula,
-			&pac.Ocupacion, &pac.Raza, &pac.Antecedentes_Oncologicos, &pac.Quimioterapia_Ciclos, &pac.Radioterapia_Ciclos, &pac.Estudios_Imagenes, &pac.Hallazgo_Estudios); err != nil {
+			&pac.Telefono_Alternativo, &pac.Ocupacion, &pac.Raza, &pac.Antecedentes_Oncologicos, &pac.Quimioterapia_Ciclos, &pac.Radioterapia_Ciclos, &pac.Estudios_Imagenes, &pac.Hallazgo_Estudios); err != nil {
 			log.Printf("Error scanning paciente: %v", err)
 			return pacientes, total, err
 		}

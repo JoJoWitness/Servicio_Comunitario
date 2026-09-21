@@ -13,7 +13,7 @@ var (
 	TiposCitologia   = []string{"impronta", "respronta", "aspiracion_aguja_fina"}
 	CentrosToma      = []string{"hcsc", "ivss", "otro"}
 	TiposMuestra     = []string{"cavidad_orbitaria", "globo_ocular", "conjuntiva", "parpado", "mejilla", "nariz", "ceja", "frente", "cornea", "otro"}
-	Ubicaciones      = []string{"superior", "inferior"}
+	Ubicaciones      = []string{"superior", "inferior", "derecho", "izquierdo"}
 	Bordes           = []string{"definidos", "indefinidos", "irregulares"}
 	Colores          = []string{"hiperpigmentada", "hipopigmentada", "aframbuesada", "salmon", "negra", "violacea", "amarilla", "nacarada", "blanca", "homogenea", "heterogenea"}
 	Tamanos          = []string{"menor_0_5mm", "0_5_1mm", "1_2mm", "2_5mm", "otro"}

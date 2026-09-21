@@ -67,6 +67,140 @@ INSERT INTO "Diagnosticos" (procedimientos, resumen) VALUES
   ('Postoperatorio tardío de EECC + vitrectomía manual anterior + afaquia', 'Postquirúrgico')
 ON CONFLICT (procedimientos) DO NOTHING;
 
+-- ---------------------------------------------------------------------
+-- Diagnósticos añadidos en v0.5.0 (112): lo que faltaba del capítulo VII
+-- del CIE-10 (H00–H59, enfermedades del ojo y sus anexos) y los tumores
+-- oculares y de anexos (C, D) que motivan las biopsias del servicio. La
+-- familia va en `resumen`, como en el bloque anterior. Se agrupan por el
+-- rango CIE-10 que los cubre.
+-- ---------------------------------------------------------------------
+INSERT INTO "Diagnosticos" (procedimientos, resumen) VALUES
+  -- Párpados (H00–H02)
+  ('Orzuelo', 'Anexos'),
+  ('Chalazión recidivante', 'Anexos'),
+  ('Blefaritis', 'Anexos'),
+  ('Entropión', 'Anexos'),
+  ('Ectropión', 'Anexos'),
+  ('Triquiasis', 'Anexos'),
+  ('Ptosis palpebral', 'Anexos'),
+  ('Ptosis palpebral congénita', 'Anexos'),
+  ('Dermatocalasia', 'Anexos'),
+  ('Blefaroespasmo', 'Anexos'),
+  ('Lagoftalmos', 'Anexos'),
+  ('Retracción palpebral', 'Anexos'),
+  ('Xantelasma', 'Anexos'),
+  ('Lesión palpebral', 'Anexos'),
+  ('Papiloma palpebral', 'Anexos'),
+  ('Nevus palpebral', 'Anexos'),
+  ('Hidrocistoma palpebral', 'Anexos'),
+  ('Quiste de inclusión epidérmica palpebral', 'Anexos'),
+  ('Molusco contagioso palpebral', 'Anexos'),
+  ('Herida palpebral', 'Trauma'),
+  -- Vía lagrimal (H04)
+  ('Dacriocistitis aguda', 'Vía lagrimal'),
+  ('Dacriocistitis crónica', 'Vía lagrimal'),
+  ('Obstrucción congénita del conducto nasolagrimal', 'Vía lagrimal'),
+  ('Obstrucción adquirida del conducto nasolagrimal', 'Vía lagrimal'),
+  ('Estenosis de puntos lagrimales', 'Vía lagrimal'),
+  ('Mucocele del saco lagrimal', 'Vía lagrimal'),
+  ('Laceración de canalículo lagrimal', 'Trauma'),
+  ('Síndrome de ojo seco', 'Vía lagrimal'),
+  -- Órbita (H05)
+  ('Celulitis preseptal', 'Anexos'),
+  ('Celulitis orbitaria', 'Anexos'),
+  ('Tumor orbitario', 'Tumores'),
+  ('Quiste dermoide orbitario', 'Tumores'),
+  ('Orbitopatía tiroidea', 'Anexos'),
+  ('Fractura de piso de órbita', 'Trauma'),
+  ('Exoftalmos', 'Anexos'),
+  ('Enoftalmos', 'Anexos'),
+  -- Conjuntiva (H10–H11)
+  ('Conjuntivitis', 'Conjuntiva'),
+  ('Pinguécula', 'Conjuntiva'),
+  ('Pterigión nasal', 'Pterigión'),
+  ('Pterigión temporal', 'Pterigión'),
+  ('Pterigión recidivante', 'Pterigión'),
+  ('Pterigión nasal grado I', 'Pterigión'),
+  ('Pterigión nasal grado IV', 'Pterigión'),
+  ('Pterigión temporal grado I', 'Pterigión'),
+  ('Nevus conjuntival', 'Conjuntiva'),
+  ('Quiste conjuntival', 'Conjuntiva'),
+  ('Papiloma conjuntival', 'Conjuntiva'),
+  ('Hemorragia subconjuntival', 'Conjuntiva'),
+  ('Simbléfaron', 'Conjuntiva'),
+  ('Dermolipoma', 'Conjuntiva'),
+  ('Cuerpo extraño conjuntival', 'Trauma'),
+  -- Córnea (H16–H18)
+  ('Queratitis bacteriana', 'Córnea'),
+  ('Queratitis micótica', 'Córnea'),
+  ('Úlcera corneal', 'Córnea'),
+  ('Queratocono', 'Córnea'),
+  ('Leucoma corneal', 'Córnea'),
+  ('Distrofia endotelial de Fuchs', 'Córnea'),
+  ('Descompensación corneal', 'Córnea'),
+  ('Perforación corneal', 'Trauma'),
+  ('Cuerpo extraño corneal', 'Trauma'),
+  ('Quiste dermoide limbar', 'Tumores'),
+  -- Iris, cuerpo ciliar y uveítis (H20–H22)
+  ('Uveítis anterior', 'Uveítis'),
+  ('Iridociclitis', 'Uveítis'),
+  ('Hifema', 'Trauma'),
+  ('Sinequias posteriores', 'Uveítis'),
+  -- Cristalino (H25–H28)
+  ('Catarata congénita', 'Catarata'),
+  ('Catarata traumática', 'Catarata'),
+  ('Catarata subcapsular posterior', 'Catarata'),
+  ('Catarata hipermadura', 'Catarata'),
+  ('Subluxación de cristalino', 'Catarata'),
+  ('Luxación de cristalino', 'Catarata'),
+  ('Luxación de LIO', 'Catarata'),
+  ('Opacidad de cápsula posterior', 'Postquirúrgico'),
+  -- Retina y vítreo (H33–H35, H43)
+  ('Desprendimiento de retina regmatógeno', 'Retina'),
+  ('Desprendimiento de retina traccional', 'Retina'),
+  ('Retinopatía diabética no proliferativa', 'Retina'),
+  ('Retinopatía diabética proliferativa', 'Retina'),
+  ('Edema macular diabético', 'Retina'),
+  ('Oclusión de vena central de la retina', 'Retina'),
+  ('Degeneración macular asociada a la edad', 'Retina'),
+  ('Membrana epirretiniana', 'Retina'),
+  ('Agujero macular', 'Retina'),
+  ('Hemorragia vítrea', 'Retina'),
+  -- Glaucoma (H40)
+  ('Glaucoma pseudoexfoliativo', 'Glaucoma'),
+  ('Glaucoma pigmentario', 'Glaucoma'),
+  ('Glaucoma traumático', 'Glaucoma'),
+  ('Glaucoma uveítico', 'Glaucoma'),
+  ('Ojo ciego doloroso', 'Glaucoma'),
+  -- Globo ocular (H44)
+  ('Endoftalmitis', 'Globo ocular'),
+  ('Endoftalmitis postquirúrgica', 'Postquirúrgico'),
+  ('Ptisis bulbi', 'Globo ocular'),
+  ('Cuerpo extraño intraocular', 'Trauma'),
+  ('Ruptura de globo ocular', 'Trauma'),
+  ('Quemadura química ocular', 'Trauma'),
+  -- Estrabismo y motilidad (H49–H51, H55)
+  ('Exotropía intermitente', 'Estrabismo'),
+  ('Hipertropía', 'Estrabismo'),
+  ('Parálisis del III par craneal', 'Estrabismo'),
+  ('Parálisis del IV par craneal', 'Estrabismo'),
+  ('Parálisis del VI par craneal', 'Estrabismo'),
+  ('Nistagmo', 'Estrabismo'),
+  -- Tumores oculares y de anexos (C43–C44, C69, D09, D31)
+  ('Carcinoma basocelular (sospecha)', 'Tumores'),
+  ('Carcinoma basocelular de párpado', 'Tumores'),
+  ('Carcinoma escamocelular de párpado', 'Tumores'),
+  ('Carcinoma sebáceo de párpado', 'Tumores'),
+  ('Neoplasia escamosa de superficie ocular (OSSN)', 'Tumores'),
+  ('Carcinoma escamocelular de conjuntiva', 'Tumores'),
+  ('Melanoma conjuntival', 'Tumores'),
+  ('Melanoma uveal', 'Tumores'),
+  ('Retinoblastoma', 'Tumores'),
+  ('Hemangioma capilar palpebral', 'Tumores'),
+  ('Linfoma orbitario', 'Tumores'),
+  ('Tumor de glándula lagrimal', 'Tumores')
+ON CONFLICT (procedimientos) DO NOTHING;
+
 -- =====================================================================
 -- Procedimientos (42) — cómo se trató
 -- El resumen queda precargado y editable: es el ~80 % del texto que hoy

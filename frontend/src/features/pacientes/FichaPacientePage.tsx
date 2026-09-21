@@ -228,6 +228,12 @@ export default function FichaPacientePage() {
                     <dd>{paciente.telefono}</dd>
                   </div>
                 )}
+                {paciente.telefonoAlternativo && (
+                  <div>
+                    <dt className="text-muted-foreground">Segundo teléfono</dt>
+                    <dd>{paciente.telefonoAlternativo}</dd>
+                  </div>
+                )}
                 {paciente.direccion && (
                   <div className="sm:col-span-2">
                     <dt className="text-muted-foreground">Dirección</dt>

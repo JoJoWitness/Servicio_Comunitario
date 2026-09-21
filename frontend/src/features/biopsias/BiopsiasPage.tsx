@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { FilterX, Hourglass } from "lucide-react";
+import { FilterX, Hourglass, Plus } from "lucide-react";
 
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { aISOLocal } from "@/lib/datetime";
 import { ESTADOS_BIOPSIA, type EstadoBiopsia, type FiltrosBiopsia } from "@/domain/models";
 import { ETIQUETA_ESTADO } from "./BiopsiaBadge";
 import { ListaBiopsias } from "./ListaBiopsias";
+import { NuevaBiopsiaDialog } from "./NuevaBiopsiaDialog";
 
 const ESTADOS_ABIERTOS: EstadoBiopsia[] = ["tomada", "enviada", "con_resultado"];
 
@@ -43,6 +44,10 @@ export default function BiopsiasPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [soloAtrasadas, setSoloAtrasadas] = useState(false);
+  const [nueva, setNueva] = useState(false);
+  const [encolada, setEncolada] = useState(false);
+  // Registrar es escritura clínica: médicos y admin (el servidor lo exige igual).
+  const puedeRegistrar = perfil?.rol === "medico" || perfil?.rol === "admin";
 
   const paginacion = useServerPaginacion("fecha_toma", "DESC", 20);
   useEffect(() => { paginacion.resetear(); }, [medico, paciente, estados, from, to, soloAtrasadas]);
@@ -108,17 +113,33 @@ export default function BiopsiasPage() {
       <div className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold">Biopsias</h1>
-          {data && (
-            <p className="text-sm text-muted-foreground" role="status">
-              <span className="font-medium text-foreground">{data.sinResultado}</span> sin resultado
-              {data.atrasadas > 0 && (
-                <>
-                  , <span className="font-medium text-amber-600 dark:text-amber-400">{data.atrasadas}</span> con más de {data.diasAtraso} días
-                </>
-              )}
-            </p>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            {data && (
+              <p className="text-sm text-muted-foreground" role="status">
+                <span className="font-medium text-foreground">{data.sinResultado}</span> sin resultado
+                {data.atrasadas > 0 && (
+                  <>
+                    , <span className="font-medium text-amber-600 dark:text-amber-400">{data.atrasadas}</span> con más de {data.diasAtraso} días
+                  </>
+                )}
+              </p>
+            )}
+            {puedeRegistrar && (
+              <Button size="sm" onClick={() => setNueva(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva biopsia
+              </Button>
+            )}
+          </div>
         </div>
+
+        {encolada && (
+          <Alert role="status">
+            <AlertDescription>
+              La biopsia quedó guardada en este equipo y se subirá con la próxima sincronización.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filtros */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -204,6 +225,12 @@ export default function BiopsiasPage() {
         )}
         <ControlsPaginacion {...paginacion} />
       </div>
+
+      <NuevaBiopsiaDialog
+        open={nueva}
+        onOpenChange={setNueva}
+        onEncolada={() => setEncolada(true)}
+      />
     </AppLayout>
   );
 }

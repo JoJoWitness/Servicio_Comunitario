@@ -33,9 +33,15 @@ import { SelectorPacienteDialog } from "./SelectorPacienteDialog";
 import { CedulaPaciente } from "@/features/pacientes/CedulaPaciente";
 import { motivoBloqueo } from "@/components/EstadoNota";
 import { useCrearBiopsia } from "@/hooks/useBiopsias";
-// import { TEJIDOS_BIOPSIA } from "@/features/biopsias/tejidos"; // bloque de biopsia comentado
 import type { Biopsia } from "@/domain/models";
-import { SIN_DESCRIPTORES } from "@/features/biopsias/descriptoresForm";
+import { CamposBiopsia } from "@/features/biopsias/CamposBiopsia";
+import { FORMULARIO_BIOPSIA_VACIO } from "@/features/biopsias/descriptoresForm";
+import { biopsiaDesdeFormulario } from "@/features/biopsias/TarjetaBiopsiasNota";
+import {
+  BiopsiaFormSchema,
+  type BiopsiaFormInput,
+  type BiopsiaFormValues,
+} from "@/domain/validation/biopsia.validation";
 import {
   NotaFormSchema,
   normalizarAnestesia,
@@ -140,21 +146,18 @@ export default function FormNotaPage() {
   const isPending = creando || editando || guardandoPendiente;
 
   /*
-    Datos mínimos de la biopsia, solo al crear (PRD 0.5.0). Se capturan aquí
-    porque es el momento: el médico acaba de sacar la muestra. En edición las
-    biopsias se gestionan desde el detalle de la nota. Si el bloque queda sin
-    tejido no se crea nada y el detalle avisa que falta registrarla.
-
-    El bloque de captura está comentado más abajo (a pedido de los médicos), así
-    que por ahora estos valores quedan vacíos y nunca se crea la biopsia desde
-    aquí. Al reactivar el bloque hay que recuperar los setters:
-      const [biopsiaTejido, setBiopsiaTejido] = useState("");
-      const [biopsiaOjo, setBiopsiaOjo] = useState("");
-      const [biopsiaDescripcion, setBiopsiaDescripcion] = useState("");
+    La biopsia se describe al crear la nota (PRD 0.5.0), porque es el momento:
+    el médico acaba de sacar la muestra. Va en un formulario aparte del de la
+    nota (react-hook-form no anida formularios) con los mismos campos que el
+    diálogo del detalle. Fecha y médico no se preguntan: son los de la nota y
+    se copian al guardar. El ojo sí, porque la nota no lo guarda. En edición las biopsias se gestionan desde el
+    detalle de la nota. Si se marca la casilla pero no se escribe el tejido,
+    no se crea nada y el detalle avisa que falta registrarla.
   */
-  const [biopsiaTejido] = useState("");
-  const [biopsiaOjo] = useState("");
-  const [biopsiaDescripcion] = useState("");
+  const biopsiaForm = useForm<BiopsiaFormInput>({
+    resolver: zodResolver(BiopsiaFormSchema),
+    defaultValues: FORMULARIO_BIOPSIA_VACIO,
+  });
   const capturaBiopsia = !esEdicion && !esPendiente;
 
   const {
@@ -352,7 +355,7 @@ export default function FormNotaPage() {
   }, [pacientesData, watchedIdPaciente, pacienteSeleccionado]);
 
   const onSubmit = useCallback(
-    (data: NotaFormValues) => {
+    async (data: NotaFormValues) => {
       setErrorMsg(null);
       setExito(false);
       const medicoEncargadoId = data.medicoEncargado ?? encargadoPorDefecto;
@@ -402,24 +405,21 @@ export default function FormNotaPage() {
         );
       };
       // La biopsia que acompaña a la nota nueva, si el médico la describió.
-      const biopsia: Biopsia | null =
-        capturaBiopsia && data.tuvoBiopsia && biopsiaTejido.trim()
-          ? {
-              idPaciente: data.idPaciente,
-              idMedicoResponsable: medicoEncargadoId,
-              ojo: biopsiaOjo === "OD" || biopsiaOjo === "OI" || biopsiaOjo === "AO" ? biopsiaOjo : undefined,
-              tejido: biopsiaTejido.trim(),
-              descripcionMacroscopica: biopsiaDescripcion.trim(),
-              diagnosticoPresuntivo: data.dxPostOperatorio || data.dxPreOperatorio || "",
-              fechaToma: new Date(data.fechaComienzo),
-              ...SIN_DESCRIPTORES,
-              estado: "tomada",
-              observaciones: "",
-              notas: [],
-              puedeEditar: true,
-              puedeTramitar: true,
-            }
-          : null;
+      let biopsia: Biopsia | null = null;
+      if (capturaBiopsia && data.tuvoBiopsia && biopsiaForm.getValues("tejido")?.trim()) {
+        // Lo que no se pregunta se copia de la nota antes de validar.
+        biopsiaForm.setValue("fechaToma", data.fechaComienzo);
+        biopsiaForm.setValue("idMedicoResponsable", medicoEncargadoId ?? "");
+        if (!(await biopsiaForm.trigger())) {
+          setErrorMsg("Revisa los datos de la biopsia: hay campos con error.");
+          return;
+        }
+        const valores = BiopsiaFormSchema.parse(biopsiaForm.getValues()) as BiopsiaFormValues;
+        if (!valores.diagnosticoPresuntivo?.trim()) {
+          valores.diagnosticoPresuntivo = data.dxPostOperatorio || data.dxPreOperatorio || "";
+        }
+        biopsia = biopsiaDesdeFormulario(valores, data.idPaciente);
+      }
 
       if (esPendiente && clientUuid) {
         // Sigue en la cola: se corrige donde está y vuelve a quedar en espera.
@@ -477,9 +477,7 @@ export default function FormNotaPage() {
       guardarPendiente,
       navigate,
       capturaBiopsia,
-      biopsiaTejido,
-      biopsiaOjo,
-      biopsiaDescripcion,
+      biopsiaForm,
     ]
   );
 
@@ -948,55 +946,26 @@ export default function FormNotaPage() {
                 </div>
 
                 {/*
-                  Datos mínimos de la muestra (PRD 0.5.0). Bloque desactivado a
-                  pedido de los médicos: la biopsia se registra después desde
-                  el detalle de la nota. Se conserva comentado por si vuelve.
+                  Datos de la muestra (PRD 0.5.0), solo al crear. Es opcional:
+                  sin tejido no se crea nada y la biopsia se puede registrar
+                  después desde el detalle de la nota.
                 */}
-                {/*
                 {capturaBiopsia && watch("tuvoBiopsia") && (
-                  <div className="mt-2 space-y-3 rounded-md border border-border bg-muted/40 p-3">
-                    <p className="text-sm font-medium">Datos de la biopsia (opcional)</p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="biopsia-tejido">Tejido</Label>
-                        <AutocompleteInput
-                          id="biopsia-tejido"
-                          value={biopsiaTejido}
-                          onChange={setBiopsiaTejido}
-                          opciones={TEJIDOS_BIOPSIA}
-                          permitirExplorar
-                          placeholder="Pterigión, lesión palpebral…"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="biopsia-ojo">Ojo</Label>
-                        <Select value={biopsiaOjo} onValueChange={setBiopsiaOjo}>
-                          <SelectTrigger id="biopsia-ojo"><SelectValue placeholder="Sin indicar" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="">Sin indicar</SelectItem>
-                            <SelectItem value="OD">OD</SelectItem>
-                            <SelectItem value="OI">OI</SelectItem>
-                            <SelectItem value="AO">AO</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                  <div className="mt-2 space-y-4 rounded-md border border-border bg-muted/40 p-3">
+                    <div>
+                      <p className="text-sm font-medium">Datos de la biopsia</p>
+                      <p className="text-xs text-muted-foreground">
+                        La fecha y el médico responsable se toman de la nota. Si no la
+                        describes ahora, podrás registrarla desde el detalle de la nota.
+                      </p>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="biopsia-desc">Descripción macroscópica</Label>
-                      <Textarea
-                        id="biopsia-desc"
-                        rows={2}
-                        value={biopsiaDescripcion}
-                        onChange={(e) => setBiopsiaDescripcion(e.target.value)}
-                        placeholder="Tamaño, aspecto, número de fragmentos"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      El envío al laboratorio y el resultado se cargan después desde la nota.
-                    </p>
+                    <CamposBiopsia
+                      form={biopsiaForm}
+                      idPrefijo="nb"
+                      ocultar={{ fechaToma: true, medico: true }}
+                    />
                   </div>
                 )}
-                */}
               </div>
               {BACKEND_SUPPORTS_OJO_ESTADO && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
