@@ -9,6 +9,20 @@
 // ---------------------------------------------------------------------------
 export type Rol = "admin" | "medico" | "secretaria";
 
+import type {
+  Altura,
+  Bordes,
+  CambioAsociado,
+  CentroToma,
+  Color,
+  EstudioImagen,
+  Tamano,
+  TipoBiopsia,
+  TipoCitologia,
+  TipoMuestra,
+  Ubicacion,
+} from "./catalogosBiopsia";
+
 // ---------------------------------------------------------------------------
 // Usuario
 // ---------------------------------------------------------------------------
@@ -41,6 +55,17 @@ export interface Paciente {
   telefono?: string;
   direccion?: string;
   eliminado: boolean;
+  /**
+   * Antecedentes para la "Solicitud de biopsia o citología" (v0.5.0). Todos
+   * opcionales; se imprimen en la sección 1 de la solicitud.
+   */
+  ocupacion?: string;
+  raza?: string;
+  antecedentesOncologicos?: string;
+  quimioterapiaCiclos?: number;
+  radioterapiaCiclos?: number;
+  estudiosImagenes: EstudioImagen[];
+  hallazgoEstudios?: string;
   /**
    * Si hay una imagen de la cédula guardada en el servidor. El binario nunca
    * viaja con el paciente: se pide aparte (`obtenerCedula`) y se imprime en la
@@ -172,6 +197,30 @@ export interface Biopsia {
   descripcionMacroscopica: string;
   diagnosticoPresuntivo: string;
   fechaToma: Date;
+
+  /**
+   * Campos de la "Solicitud de biopsia o citología" (v0.5.0). Todos
+   * opcionales: lo que no se cargue sale en blanco en la hoja para llenarlo a
+   * mano. Los vocabularios están en `catalogosBiopsia.ts`.
+   */
+  tipoBiopsia?: TipoBiopsia;
+  tipoCitologia?: TipoCitologia;
+  centroToma: CentroToma;
+  centroTomaOtro?: string;
+  tipoMuestra?: TipoMuestra;
+  tipoMuestraOtro?: string;
+  ubicacion: Ubicacion[];
+  bordes?: Bordes;
+  color: Color[];
+  colorOtro?: string;
+  tamano?: Tamano;
+  tamanoOtro?: string;
+  altura?: Altura;
+  cambiosAsociados: CambioAsociado[];
+  /** `undefined`: no se preguntó. */
+  tratamientosPrevios?: boolean;
+  tratamientosPreviosCual?: string;
+
   laboratorio?: string;
   fechaEnvio?: Date;
   numeroPatologia?: string;

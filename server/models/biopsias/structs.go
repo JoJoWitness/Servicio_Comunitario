@@ -58,6 +58,26 @@ type Biopsia struct {
 	DiagnosticoPresuntivo   string    `json:"diagnostico_presuntivo"`
 	FechaToma               time.Time `json:"fecha_toma"`
 
+	// Campos de la "Solicitud de biopsia o citología" (docs/Biopsia.pdf).
+	// Todos opcionales; los vocabularios están en descriptores.go. Las listas
+	// (ubicación, color, cambios) nunca van nil en las lecturas.
+	TipoBiopsia             string   `json:"tipo_biopsia,omitempty"`
+	TipoCitologia           string   `json:"tipo_citologia,omitempty"`
+	CentroToma              string   `json:"centro_toma"`
+	CentroTomaOtro          string   `json:"centro_toma_otro"`
+	TipoMuestra             string   `json:"tipo_muestra,omitempty"`
+	TipoMuestraOtro         string   `json:"tipo_muestra_otro"`
+	Ubicacion               []string `json:"ubicacion"`
+	Bordes                  string   `json:"bordes,omitempty"`
+	Color                   []string `json:"color"`
+	ColorOtro               string   `json:"color_otro"`
+	Tamano                  string   `json:"tamano,omitempty"`
+	TamanoOtro              string   `json:"tamano_otro"`
+	Altura                  string   `json:"altura,omitempty"`
+	CambiosAsociados        []string `json:"cambios_asociados"`
+	TratamientosPrevios     *bool    `json:"tratamientos_previos"`
+	TratamientosPreviosCual string   `json:"tratamientos_previos_cual"`
+
 	Laboratorio     string     `json:"laboratorio,omitempty"`
 	FechaEnvio      *time.Time `json:"fecha_envio"`
 	NumeroPatologia string     `json:"numero_patologia,omitempty"`

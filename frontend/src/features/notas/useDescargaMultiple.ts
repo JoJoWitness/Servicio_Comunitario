@@ -10,6 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { descargarNotasPDF } from "@/features/pdf/NotaPDF";
 import { cedulaParaPDF } from "@/features/pdf/cedulaParaPDF";
+import { biopsiasDelPacienteParaPDF, biopsiasParaPDF } from "@/features/pdf/biopsiasParaPDF";
 import { obtenerNota } from "@/api/endpoints/notas";
 import { obtenerPaciente } from "@/api/endpoints/pacientes";
 import type { Nota } from "@/domain/models";
@@ -67,13 +68,19 @@ export function useDescargaMultiple(notas: Nota[]) {
     setGenerando(true);
     setError(null);
     try {
-      // De a pocas a la vez: cada nota trae hasta tres peticiones (nota,
-      // paciente, cédula) y veinte notas de golpe saturan la red del hospital.
+      // De a pocas a la vez: cada nota trae hasta cuatro peticiones (nota,
+      // paciente, cédula, biopsias) y veinte notas de golpe saturan la red
+      // del hospital.
       const items = await enLotes(seleccionadas, 4, async (id) => {
         const nota = await obtenerNota(id);
         const paciente = await obtenerPaciente(nota.idPaciente);
-        const cedula = await cedulaParaPDF(paciente);
-        return { nota, paciente, cedula };
+        const [cedula, biopsias] = await Promise.all([
+          cedulaParaPDF(paciente),
+          biopsiasParaPDF(id),
+        ]);
+        const biopsiasDelPaciente =
+          biopsias.length > 0 ? await biopsiasDelPacienteParaPDF(paciente.id) : undefined;
+        return { nota, paciente, cedula, biopsias, biopsiasDelPaciente };
       });
       await descargarNotasPDF(items);
       setSeleccion([]);

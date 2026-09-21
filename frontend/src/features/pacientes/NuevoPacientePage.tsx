@@ -10,7 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PacienteForm } from "./PacienteForm";
+import { PacienteForm, antecedentesDesdeFormulario } from "./PacienteForm";
 import { useCrearPaciente } from "@/hooks/usePacientes";
 import { isApiError } from "@/api/errors";
 import type { PacienteFormInput } from "@/domain/validation/paciente.validation";
@@ -38,6 +38,7 @@ export default function NuevoPacientePage() {
       fechaNacimiento: new Date(data.fechaNacimiento),
       telefono: data.telefono,
       direccion: data.direccion,
+      ...antecedentesDesdeFormulario(data),
       eliminado: false,
       tieneCedula: false,
     };

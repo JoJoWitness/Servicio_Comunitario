@@ -86,7 +86,8 @@ func escribirErrorBiopsia(w http.ResponseWriter, err error) {
 		w.WriteHeader(http.StatusForbidden)
 	case errors.Is(err, biopsias2.ErrEstado), errors.Is(err, biopsias2.ErrEnviadaSinFecha),
 		errors.Is(err, biopsias2.ErrResultadoVacio), errors.Is(err, biopsias2.ErrEntregaSinFecha),
-		errors.Is(err, biopsias2.ErrRol), errors.Is(err, biopsias2.ErrPacienteDistinto):
+		errors.Is(err, biopsias2.ErrRol), errors.Is(err, biopsias2.ErrPacienteDistinto),
+		errors.Is(err, biopsias2.ErrDescriptor):
 		w.WriteHeader(http.StatusBadRequest)
 	case errors.Is(err, pgx.ErrNoRows):
 		w.WriteHeader(http.StatusNotFound)

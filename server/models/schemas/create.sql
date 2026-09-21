@@ -300,3 +300,68 @@ CREATE TABLE IF NOT EXISTS "Nota_Biopsia" (
 CREATE INDEX IF NOT EXISTS "Biopsia_estado_idx"       ON "Biopsia" ("estado") WHERE "eliminado" = FALSE;
 CREATE INDEX IF NOT EXISTS "Biopsia_paciente_idx"     ON "Biopsia" ("id_paciente");
 CREATE INDEX IF NOT EXISTS "Nota_Biopsia_biopsia_idx" ON "Nota_Biopsia" ("id_biopsia");
+
+-- ---------------------------------------------------------------------------
+-- v0.5.0: campos de la "Solicitud de biopsia o citología" (docs/Biopsia.pdf).
+-- Los de la muestra y la lesión van en la biopsia; los antecedentes del
+-- paciente, en el paciente. Todos opcionales: el formulario se puede seguir
+-- completando a mano en lo que no se cargó.
+-- ---------------------------------------------------------------------------
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tipo_biopsia" VARCHAR(20)
+		CHECK ("tipo_biopsia" IN ('incisional', 'excisional', 'trucut'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tipo_citologia" VARCHAR(30)
+		CHECK ("tipo_citologia" IN ('impronta', 'respronta', 'aspiracion_aguja_fina'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "centro_toma" VARCHAR(10) NOT NULL DEFAULT 'hcsc'
+		CHECK ("centro_toma" IN ('hcsc', 'ivss', 'otro'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "centro_toma_otro" VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tipo_muestra" VARCHAR(30)
+		CHECK ("tipo_muestra" IN ('cavidad_orbitaria', 'globo_ocular', 'conjuntiva', 'parpado',
+			'mejilla', 'nariz', 'ceja', 'frente', 'cornea', 'otro'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tipo_muestra_otro" VARCHAR(255) NOT NULL DEFAULT '';
+-- Superior / inferior; derecho e izquierdo salen de `ojo`.
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "ubicacion" TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "bordes" VARCHAR(20)
+		CHECK ("bordes" IN ('definidos', 'indefinidos', 'irregulares'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "color" TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "color_otro" VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tamano" VARCHAR(20)
+		CHECK ("tamano" IN ('menor_0_5mm', '0_5_1mm', '1_2mm', '2_5mm', 'otro'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tamano_otro" VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "altura" VARCHAR(20)
+		CHECK ("altura" IN ('plana', 'sobreelevada', 'ulcerada', 'pediculada'));
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "cambios_asociados" TEXT[] NOT NULL DEFAULT '{}';
+-- NULL: no se preguntó. TRUE/FALSE: sí / no recibió tratamientos previos.
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tratamientos_previos" BOOLEAN;
+ALTER TABLE "Biopsia"
+	ADD COLUMN IF NOT EXISTS "tratamientos_previos_cual" TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "ocupacion" VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "raza" VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "antecedentes_oncologicos" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "quimioterapia_ciclos" INTEGER CHECK ("quimioterapia_ciclos" >= 0);
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "radioterapia_ciclos" INTEGER CHECK ("radioterapia_ciclos" >= 0);
+-- rx, tc, rm, eco
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "estudios_imagenes" TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE "Paciente"
+	ADD COLUMN IF NOT EXISTS "hallazgo_estudios" TEXT NOT NULL DEFAULT '';

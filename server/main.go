@@ -47,9 +47,14 @@ func main() {
 	models.LoadSeed(config.PsqlDB)
 
 	// Los datos de muestra son cuentas y pacientes inventados, con contraseñas
-	// conocidas: no tienen nada que hacer en el servidor real.
-	if !enProduccion {
+	// conocidas: no tienen nada que hacer en el servidor real. El servidor de
+	// pruebas desplegado los pide con DATOS_PRUEBA=true, y ahí se cargan sin
+	// borrar nada y sin duplicar lo que ya estaba.
+	switch {
+	case !enProduccion:
 		models.LoadSampleData(config.PsqlDB)
+	case os.Getenv("DATOS_PRUEBA") == "true":
+		models.LoadSampleDataIdempotente(config.PsqlDB)
 	}
 
 	router := mux.NewRouter()

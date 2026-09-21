@@ -15,6 +15,10 @@
  * Desde v0.4.0, si el paciente tiene la cédula digitalizada, se imprime abajo
  * a la izquierda, a tamaño real de carnet, con su base alineada a la línea de
  * firma del médico tratante: exactamente donde se pegaba la fotocopia.
+ *
+ * Desde v0.5.0, detrás de la hoja van las solicitudes de biopsia de las
+ * muestras ligadas a la nota (`BiopsiaPDF.tsx`), para que el legajo salga
+ * completo en una sola descarga.
  */
 
 import {
@@ -26,29 +30,38 @@ import {
   View,
   pdf,
 } from "@react-pdf/renderer";
-import type { Nota, Paciente } from "@/domain/models";
+import type { Biopsia, Nota, Paciente } from "@/domain/models";
 import { formatFechaUI } from "@/lib/datetime";
 import { resumenConObservaciones } from "@/lib/resumen";
+import { PaginasBiopsia } from "./BiopsiaPDF";
+import { anterioresDe } from "./biopsiasParaPDF";
+import {
+  NEGRO,
+  PieHospital,
+  descargarBlob,
+  edadEnLaFecha,
+  logoHospital,
+  logoServicio,
+  nombreCompleto,
+} from "./comun";
 
-/*
- * Los logos se incrustan como data URI (`?inline`) en vez de referenciarse por
- * URL: el PDF se arma en el cliente y así no depende de que la imagen siga
- * descargable en el momento de generarlo. `Image` de react-pdf no admite SVG,
- * de ahí que el logo del servicio se use rasterizado aquí y en vectorial en la
- * interfaz.
- */
-import logoHospital from "@/assets/logo-hospital.png?inline";
-import logoServicio from "@/assets/logo-servicio.png?inline";
+const MARGEN = 28;
 
-const NEGRO = "#000";
+// Medidas de la cédula en la hoja (ISO ID-1 al 90 %) y de una línea de firma:
+// borde de 1 pt + 3 pt de aire + 12 pt de rótulo.
+const ANCHO_CEDULA = 219;
+const ALTO_CEDULA = 138;
+const ALTO_LINEA_FIRMA = 16;
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
     fontSize: 10,
     paddingTop: 20,
-    paddingBottom: 18,
-    paddingHorizontal: 28,
+    // Deja sitio al pie con los datos del hospital, que va en posición
+    // absoluta y no empuja el contenido.
+    paddingBottom: 34,
+    paddingHorizontal: MARGEN,
     color: NEGRO,
   },
 
@@ -166,11 +179,13 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   columnaCedula: { width: "50%" },
-  // Tamaño real de la cédula venezolana (ISO ID-1, 85,6 × 54 mm) en puntos.
-  // El borde fino delimita el espacio como lo haría el filo de la fotocopia.
+  // Cédula venezolana (ISO ID-1, 85,6 × 54 mm) al 90 % de su tamaño real:
+  // 243 × 153 pt no dejaba sitio a las firmas con un resumen largo y la hoja
+  // se partía en dos. El borde fino delimita el espacio como lo haría el filo
+  // de la fotocopia.
   cajaCedula: {
-    width: 243,
-    height: 153,
+    width: ANCHO_CEDULA,
+    height: ALTO_CEDULA,
     borderWidth: 0.5,
     borderColor: NEGRO,
     padding: 1,
@@ -183,10 +198,15 @@ const styles = StyleSheet.create({
     paddingTop: 3,
     marginTop: 48,
   },
-  // Con cédula, la línea del médico tratante baja hasta la base de la imagen
-  // (153 pt), que es la alineación del formulario en papel.
-  lineaFirmaConCedula: { marginTop: 153 },
   segundaFirma: { marginTop: 52 },
+  // Con cédula, las dos firmas van al lado de la imagen y reparten su misma
+  // altura: la del anestesiólogo queda alineada con la base de la cédula. Así
+  // el bloque no mide más que la cédula y la hoja sigue cabiendo en una carta.
+  columnaFirmasConCedula: { height: ALTO_CEDULA },
+  lineaFirmaConCedula: { marginTop: 50 },
+  segundaFirmaConCedula: {
+    marginTop: ALTO_CEDULA - 50 - 2 * ALTO_LINEA_FIRMA,
+  },
   pieFirma: { fontSize: 12, textAlign: "center" },
 });
 
@@ -263,28 +283,6 @@ function Bloque({
 }
 
 // ---------------------------------------------------------------------------
-// Helpers de datos
-// ---------------------------------------------------------------------------
-
-/**
- * Edad del paciente el día de la operación, que es la que registra el
- * formulario, no la edad actual.
- */
-function edadEnLaFecha(nacimiento: Date, fecha: Date): number {
-  let edad = fecha.getUTCFullYear() - nacimiento.getUTCFullYear();
-  const cumpleAun =
-    fecha.getUTCMonth() < nacimiento.getUTCMonth() ||
-    (fecha.getUTCMonth() === nacimiento.getUTCMonth() &&
-      fecha.getUTCDate() < nacimiento.getUTCDate());
-  if (cumpleAun) edad -= 1;
-  return Math.max(edad, 0);
-}
-
-function nombreCompleto(m: { nombres: string; apellidos: string }): string {
-  return `${m.nombres} ${m.apellidos}`.trim();
-}
-
-// ---------------------------------------------------------------------------
 // Documento PDF — Req 25.3
 // ---------------------------------------------------------------------------
 
@@ -296,6 +294,16 @@ interface NotaDocumentProps {
    * Ausente, la hoja sale con el hueco en blanco para la fotocopia.
    */
   cedula?: string;
+  /**
+   * Biopsias ligadas a la nota. Cada una agrega su solicitud detrás de la
+   * hoja; sin ninguna, el documento es la hoja sola, como siempre.
+   */
+  biopsias?: Biopsia[];
+  /**
+   * Todas las biopsias del paciente, para marcar "Biopsias anteriores" en
+   * cada solicitud. Ausente, esas casillas quedan en blanco.
+   */
+  biopsiasDelPaciente?: Biopsia[];
 }
 
 /** Una hoja de nota operatoria, reutilizable en documentos de varias notas. */
@@ -510,27 +518,48 @@ function PaginaNota({ nota, paciente, cedula }: NotaDocumentProps) {
               </View>
             )}
           </View>
-          <View style={styles.columnaFirmas}>
+          <View style={[styles.columnaFirmas, cedula ? styles.columnaFirmasConCedula : {}]}>
             <View style={[styles.lineaFirma, cedula ? styles.lineaFirmaConCedula : {}]}>
               <Text style={styles.pieFirma}>MÉDICO TRATANTE</Text>
             </View>
-            <View style={[styles.lineaFirma, styles.segundaFirma]}>
+            <View style={[styles.lineaFirma, cedula ? styles.segundaFirmaConCedula : styles.segundaFirma]}>
               <Text style={styles.pieFirma}>ANESTESIÓLOGO</Text>
             </View>
           </View>
         </View>
+
+        {/* ── Pie: dirección y contacto del hospital ── */}
+        <PieHospital margen={MARGEN} />
     </Page>
   );
 }
 
+/** La hoja de la nota seguida de la solicitud de cada biopsia ligada. */
+function HojasNota({ nota, paciente, cedula, biopsias = [], biopsiasDelPaciente }: NotaDocumentProps) {
+  return (
+    <>
+      <PaginaNota nota={nota} paciente={paciente} cedula={cedula} />
+      {biopsias.map((b) => (
+        <PaginasBiopsia
+          key={b.id ?? b.clientUuid ?? `${b.tejido}-${b.fechaToma.getTime()}`}
+          biopsia={b}
+          paciente={paciente}
+          nota={nota}
+          anteriores={anterioresDe(b, biopsiasDelPaciente)}
+        />
+      ))}
+    </>
+  );
+}
+
 /** Documento de una sola nota. */
-function NotaDocument({ nota, paciente, cedula }: NotaDocumentProps) {
+function NotaDocument(props: NotaDocumentProps) {
   return (
     <Document
-      title={`Nota operatoria — ${paciente.nombre}`}
+      title={`Nota operatoria — ${props.paciente.nombre}`}
       author="HCSC Oftalmología"
     >
-      <PaginaNota nota={nota} paciente={paciente} cedula={cedula} />
+      <HojasNota {...props} />
     </Document>
   );
 }
@@ -545,14 +574,23 @@ function NotaDocument({ nota, paciente, cedula }: NotaDocumentProps) {
  * @param nota     - Objeto Nota completo con medicos[]
  * @param paciente - Objeto Paciente correspondiente
  * @param cedula   - Imagen de la cédula como data URI, si la hay
+ * @param biopsias - Biopsias ligadas a la nota; cada una anexa su solicitud
  */
 export async function descargarNotaPDF(
   nota: Nota,
   paciente: Paciente,
-  cedula?: string
+  cedula?: string,
+  biopsias: Biopsia[] = [],
+  biopsiasDelPaciente?: Biopsia[]
 ): Promise<void> {
   const blob = await pdf(
-    <NotaDocument nota={nota} paciente={paciente} cedula={cedula} />
+    <NotaDocument
+      nota={nota}
+      paciente={paciente}
+      cedula={cedula}
+      biopsias={biopsias}
+      biopsiasDelPaciente={biopsiasDelPaciente}
+    />
   ).toBlob();
   descargarBlob(blob, `nota-${nota.id ?? "nueva"}-${paciente.historiaMedica}.pdf`);
 }
@@ -566,6 +604,10 @@ export interface NotaConPaciente {
   paciente: Paciente;
   /** Cédula del paciente como data URI, si está digitalizada. */
   cedula?: string;
+  /** Biopsias ligadas a la nota, si las hay. */
+  biopsias?: Biopsia[];
+  /** Todas las del paciente, para "Biopsias anteriores". */
+  biopsiasDelPaciente?: Biopsia[];
 }
 
 /**
@@ -576,12 +618,14 @@ export interface NotaConPaciente {
 function NotasDocument({ items }: { items: NotaConPaciente[] }) {
   return (
     <Document title="Notas operatorias" author="HCSC Oftalmología">
-      {items.map(({ nota, paciente, cedula }) => (
-        <PaginaNota
+      {items.map(({ nota, paciente, cedula, biopsias, biopsiasDelPaciente }) => (
+        <HojasNota
           key={nota.id ?? `${paciente.id}-${nota.fechaComienzo.getTime()}`}
           nota={nota}
           paciente={paciente}
           cedula={cedula}
+          biopsias={biopsias}
+          biopsiasDelPaciente={biopsiasDelPaciente}
         />
       ))}
     </Document>
@@ -606,17 +650,6 @@ export async function descargarNotasPDF(
       ? `nota-${ordenados[0]!.nota.id ?? "nueva"}`
       : `${items.length}-notas`;
   descargarBlob(blob, `notas-operatorias-${sufijo}.pdf`);
-}
-
-function descargarBlob(blob: Blob, nombreArchivo: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nombreArchivo;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 export { NotaDocument };

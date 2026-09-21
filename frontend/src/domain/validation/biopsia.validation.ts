@@ -5,6 +5,29 @@
  */
 
 import { z } from "zod";
+import {
+  ALTURAS,
+  BORDES,
+  CAMBIOS_ASOCIADOS,
+  CENTROS_TOMA,
+  COLORES,
+  TAMANOS,
+  TIPOS_BIOPSIA,
+  TIPOS_CITOLOGIA,
+  TIPOS_MUESTRA,
+  UBICACIONES,
+} from "../catalogosBiopsia";
+
+/** Enum de Zod con "" como "sin indicar", para los `Select` del formulario. */
+function opcional<V extends string>(lista: readonly { value: V }[]) {
+  const valores = ["", ...lista.map((o) => o.value)] as [string, ...string[]];
+  return z.enum(valores).optional().default("");
+}
+
+function lista<V extends string>(opciones: readonly { value: V }[]) {
+  const valores = opciones.map((o) => o.value) as [V, ...V[]];
+  return z.array(z.enum(valores)).optional().default([]);
+}
 
 export const BiopsiaFormSchema = z.object({
   tejido: z
@@ -22,6 +45,28 @@ export const BiopsiaFormSchema = z.object({
     .string({ required_error: "Indica el médico responsable" })
     .min(1, "Indica el médico responsable"),
   observaciones: z.string().optional().default(""),
+
+  // Solicitud de biopsia (v0.5.0). Todo opcional.
+  tipoBiopsia: opcional(TIPOS_BIOPSIA),
+  tipoCitologia: opcional(TIPOS_CITOLOGIA),
+  centroToma: z
+    .enum(CENTROS_TOMA.map((o) => o.value) as [string, ...string[]])
+    .optional()
+    .default("hcsc"),
+  centroTomaOtro: z.string().optional().default(""),
+  tipoMuestra: opcional(TIPOS_MUESTRA),
+  tipoMuestraOtro: z.string().optional().default(""),
+  ubicacion: lista(UBICACIONES),
+  bordes: opcional(BORDES),
+  color: lista(COLORES),
+  colorOtro: z.string().optional().default(""),
+  tamano: opcional(TAMANOS),
+  tamanoOtro: z.string().optional().default(""),
+  altura: opcional(ALTURAS),
+  cambiosAsociados: lista(CAMBIOS_ASOCIADOS),
+  /** "" sin indicar, "si" o "no". */
+  tratamientosPrevios: z.enum(["", "si", "no"]).optional().default(""),
+  tratamientosPreviosCual: z.string().optional().default(""),
 });
 
 export type BiopsiaFormInput = z.input<typeof BiopsiaFormSchema>;

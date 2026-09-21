@@ -4,14 +4,17 @@
  */
 
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { GrupoCasillas } from "@/components/GrupoCasillas";
+import { ESTUDIOS_IMAGENES } from "@/domain/catalogosBiopsia";
 import {
   Select,
   SelectContent,
@@ -42,6 +45,7 @@ export function PacienteForm({
   submitLabel = "Guardar",
 }: PacienteFormProps) {
   const {
+    control,
     register,
     handleSubmit,
     setValue,
@@ -164,6 +168,68 @@ export function PacienteForm({
         <Input id="direccion" {...register("direccion")} />
       </div>
 
+      {/* Antecedentes para la solicitud de biopsia (v0.5.0), todos opcionales */}
+      <fieldset className="space-y-4 rounded-md border p-3">
+        <legend className="px-1 text-sm font-medium">Antecedentes (solicitud de biopsia)</legend>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="ocupacion">Ocupación</Label>
+            <Input id="ocupacion" {...register("ocupacion")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="raza">Raza</Label>
+            <Input id="raza" {...register("raza")} />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="antecedentesOncologicos">
+            Antecedentes oncológicos del paciente o familiares (padres, hijos, hermanos) u otros de importancia
+          </Label>
+          <Textarea id="antecedentesOncologicos" rows={2} {...register("antecedentesOncologicos")} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="quimioterapiaCiclos">Quimioterapia (ciclos)</Label>
+            <Input id="quimioterapiaCiclos" inputMode="numeric" {...register("quimioterapiaCiclos")} />
+            {errors.quimioterapiaCiclos && (
+              <p className="text-sm text-destructive">{errors.quimioterapiaCiclos.message}</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="radioterapiaCiclos">Radioterapia (ciclos)</Label>
+            <Input id="radioterapiaCiclos" inputMode="numeric" {...register("radioterapiaCiclos")} />
+            {errors.radioterapiaCiclos && (
+              <p className="text-sm text-destructive">{errors.radioterapiaCiclos.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label id="estudios-label">Estudios de imágenes</Label>
+          <Controller
+            name="estudiosImagenes"
+            control={control}
+            render={({ field }) => (
+              <GrupoCasillas
+                idPrefijo="estudio"
+                aria-labelledby="estudios-label"
+                opciones={ESTUDIOS_IMAGENES}
+                value={field.value ?? []}
+                onChange={field.onChange}
+              />
+            )}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="hallazgoEstudios">Hallazgo de importancia en los estudios</Label>
+          <Textarea id="hallazgoEstudios" rows={2} {...register("hallazgoEstudios")} />
+        </div>
+      </fieldset>
+
       <Button type="submit" disabled={isPending}>
         {isPending ? "Guardando..." : submitLabel}
       </Button>
@@ -186,5 +252,38 @@ export function pacienteAFormInput(p: Paciente): PacienteFormInput {
     fechaNacimiento: p.fechaNacimiento.toISOString().split("T")[0],
     telefono: p.telefono,
     direccion: p.direccion,
+    ocupacion: p.ocupacion ?? "",
+    raza: p.raza ?? "",
+    antecedentesOncologicos: p.antecedentesOncologicos ?? "",
+    quimioterapiaCiclos: p.quimioterapiaCiclos?.toString() ?? "",
+    radioterapiaCiclos: p.radioterapiaCiclos?.toString() ?? "",
+    estudiosImagenes: p.estudiosImagenes ?? [],
+    hallazgoEstudios: p.hallazgoEstudios ?? "",
+  };
+}
+
+/** Los antecedentes del formulario, ya en la forma del dominio. */
+export function antecedentesDesdeFormulario(
+  d: PacienteFormInput
+): Pick<
+  Paciente,
+  | "ocupacion"
+  | "raza"
+  | "antecedentesOncologicos"
+  | "quimioterapiaCiclos"
+  | "radioterapiaCiclos"
+  | "estudiosImagenes"
+  | "hallazgoEstudios"
+> {
+  const numero = (v?: string) => (v?.trim() ? Number(v.trim()) : undefined);
+  const texto = (v?: string) => (v?.trim() ? v.trim() : undefined);
+  return {
+    ocupacion: texto(d.ocupacion),
+    raza: texto(d.raza),
+    antecedentesOncologicos: texto(d.antecedentesOncologicos),
+    quimioterapiaCiclos: numero(d.quimioterapiaCiclos),
+    radioterapiaCiclos: numero(d.radioterapiaCiclos),
+    estudiosImagenes: d.estudiosImagenes ?? [],
+    hallazgoEstudios: texto(d.hallazgoEstudios),
   };
 }

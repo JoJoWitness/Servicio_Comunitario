@@ -29,7 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PacienteForm, pacienteAFormInput } from "./PacienteForm";
+import { PacienteForm, antecedentesDesdeFormulario, pacienteAFormInput } from "./PacienteForm";
+import { ESTUDIOS_IMAGENES, etiquetas } from "@/domain/catalogosBiopsia";
 import { CedulaPaciente } from "./CedulaPaciente";
 import { ListaBiopsias } from "@/features/biopsias/ListaBiopsias";
 import { useBiopsiasDePaciente } from "@/hooks/useBiopsias";
@@ -72,7 +73,12 @@ export default function FichaPacientePage() {
     return m ? `${m.nombres} ${m.apellidos}`.trim() : nota.medicoEncargado ?? "—";
   };
 
-  const { data: biopsias = [] } = useBiopsiasDePaciente(id ?? "");
+  // Biopsias del paciente (PRD 0.5.0): GET /pacientes/{id}/biopsias
+  const {
+    data: biopsias = [],
+    isLoading: cargandoBiopsias,
+    isError: errorBiopsias,
+  } = useBiopsiasDePaciente(id ?? "");
   const { mutate: editarPaciente, isPending: guardando } = useEditarPaciente(id ?? "");
   const { mutate: darDeBaja, isPending: dandoBaja } = useDarDeBajaPaciente();
 
@@ -95,6 +101,7 @@ export default function FichaPacientePage() {
       fechaNacimiento: new Date(data.fechaNacimiento),
       telefono: data.telefono,
       direccion: data.direccion,
+      ...antecedentesDesdeFormulario(data),
     };
 
     editarPaciente(actualizado, {
@@ -227,6 +234,48 @@ export default function FichaPacientePage() {
                     <dd>{paciente.direccion}</dd>
                   </div>
                 )}
+                {paciente.ocupacion && (
+                  <div>
+                    <dt className="text-muted-foreground">Ocupación</dt>
+                    <dd>{paciente.ocupacion}</dd>
+                  </div>
+                )}
+                {paciente.raza && (
+                  <div>
+                    <dt className="text-muted-foreground">Raza</dt>
+                    <dd>{paciente.raza}</dd>
+                  </div>
+                )}
+                {paciente.antecedentesOncologicos && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Antecedentes oncológicos</dt>
+                    <dd className="whitespace-pre-wrap">{paciente.antecedentesOncologicos}</dd>
+                  </div>
+                )}
+                {paciente.quimioterapiaCiclos !== undefined && (
+                  <div>
+                    <dt className="text-muted-foreground">Quimioterapia</dt>
+                    <dd>{paciente.quimioterapiaCiclos} ciclos</dd>
+                  </div>
+                )}
+                {paciente.radioterapiaCiclos !== undefined && (
+                  <div>
+                    <dt className="text-muted-foreground">Radioterapia</dt>
+                    <dd>{paciente.radioterapiaCiclos} ciclos</dd>
+                  </div>
+                )}
+                {paciente.estudiosImagenes.length > 0 && (
+                  <div>
+                    <dt className="text-muted-foreground">Estudios de imágenes</dt>
+                    <dd>{etiquetas(ESTUDIOS_IMAGENES, paciente.estudiosImagenes)}</dd>
+                  </div>
+                )}
+                {paciente.hallazgoEstudios && (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Hallazgo de importancia en estudios</dt>
+                    <dd className="whitespace-pre-wrap">{paciente.hallazgoEstudios}</dd>
+                  </div>
+                )}
               </dl>
             )}
           </CardContent>
@@ -241,15 +290,42 @@ export default function FichaPacientePage() {
           </Card>
         )}
 
-        {/* Biopsias del paciente (PRD 0.5.0); solo si tiene. */}
-        {biopsias.length > 0 && (
-          <section aria-labelledby="biopsias-heading" className="space-y-3">
-            <h2 id="biopsias-heading" className="text-lg font-semibold">
-              Biopsias
-            </h2>
+        <Separator />
+
+        {/* Biopsias del paciente (PRD 0.5.0). La sección se ve siempre, con
+            o sin biopsias, para que quede claro que aquí se consultan. */}
+        <section aria-labelledby="biopsias-heading" className="space-y-3">
+          <h2 id="biopsias-heading" className="text-lg font-semibold">
+            Biopsias
+            {biopsias.length > 0 && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({biopsias.length})
+              </span>
+            )}
+          </h2>
+
+          {cargandoBiopsias && (
+            <p className="text-sm text-muted-foreground" role="status">Cargando biopsias…</p>
+          )}
+
+          {errorBiopsias && (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription>
+                No se pudieron cargar las biopsias del paciente. Verifica la conexión y recarga.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!cargandoBiopsias && !errorBiopsias && biopsias.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Este paciente no tiene biopsias registradas.
+            </p>
+          )}
+
+          {biopsias.length > 0 && (
             <ListaBiopsias biopsias={biopsias} mostrarPaciente={false} />
-          </section>
-        )}
+          )}
+        </section>
 
         <Separator />
 

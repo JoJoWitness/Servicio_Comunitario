@@ -52,6 +52,22 @@ export const PacienteFormSchema = z.object({
   telefono: z.string().optional(),
   /** Opcional */
   direccion: z.string().optional(),
+
+  // Antecedentes para la solicitud de biopsia (v0.5.0). Todo opcional. Los
+  // ciclos se escriben como texto en el formulario y se convierten al guardar.
+  ocupacion: z.string().optional(),
+  raza: z.string().optional(),
+  antecedentesOncologicos: z.string().optional(),
+  quimioterapiaCiclos: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^\d+$/.test(v.trim()), "Debe ser un número entero"),
+  radioterapiaCiclos: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^\d+$/.test(v.trim()), "Debe ser un número entero"),
+  estudiosImagenes: z.array(z.enum(["rx", "tc", "rm", "eco"])).optional(),
+  hallazgoEstudios: z.string().optional(),
 });
 
 export type PacienteFormInput = z.infer<typeof PacienteFormSchema>;

@@ -30,8 +30,24 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { aISOLocal, formatFechaUI } from "@/lib/datetime";
 import type { Biopsia, EstadoBiopsia } from "@/domain/models";
 import type { BiopsiaFormValues } from "@/domain/validation/biopsia.validation";
+import { BotonBiopsiaPDF } from "@/features/pdf/BotonBiopsiaPDF";
+import {
+  ALTURAS,
+  BORDES,
+  CAMBIOS_ASOCIADOS,
+  CENTROS_TOMA,
+  COLORES,
+  TAMANOS,
+  TIPOS_BIOPSIA,
+  TIPOS_CITOLOGIA,
+  TIPOS_MUESTRA,
+  UBICACIONES,
+  etiqueta,
+  etiquetas,
+} from "@/domain/catalogosBiopsia";
 import { BiopsiaBadge } from "./BiopsiaBadge";
 import { FormBiopsiaDialog } from "./FormBiopsiaDialog";
+import { descriptoresAFormulario, descriptoresDesdeFormulario } from "./descriptoresForm";
 import { LineaTiempoBiopsia, type AvanceBiopsia } from "./LineaTiempoBiopsia";
 
 function Campo({ label, valor }: { label: string; valor?: string | null }) {
@@ -142,6 +158,7 @@ export default function BiopsiaPanelPage() {
         fechaToma: new Date(v.fechaToma),
         idMedicoResponsable: v.idMedicoResponsable,
         observaciones: v.observaciones ?? "",
+        ...descriptoresDesdeFormulario(v),
       });
       setEditarDatos(false);
     } catch (err) {
@@ -184,6 +201,8 @@ export default function BiopsiaPanelPage() {
             Volver
           </Button>
           <div className="flex flex-wrap gap-2">
+            {/* Solicitud de biopsia en PDF, para cualquier sesión (v0.5.0). */}
+            <BotonBiopsiaPDF biopsia={biopsia} />
             {biopsia.puedeEditar && (
               <Button size="sm" variant="outline" onClick={() => setEditarDatos(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -265,6 +284,79 @@ export default function BiopsiaPanelPage() {
                 <Campo label="Descripción macroscópica" valor={biopsia.descripcionMacroscopica} />
               </div>
             </dl>
+          </CardContent>
+        </Card>
+
+        {/* Solicitud de biopsia (v0.5.0): lo que se imprime en la hoja. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Solicitud de biopsia</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+              <Campo label="Tipo de biopsia" valor={etiqueta(TIPOS_BIOPSIA, biopsia.tipoBiopsia)} />
+              <Campo label="Citología" valor={etiqueta(TIPOS_CITOLOGIA, biopsia.tipoCitologia)} />
+              <Campo
+                label="Centro donde se tomó"
+                valor={
+                  biopsia.centroToma === "otro"
+                    ? biopsia.centroTomaOtro || "Otro"
+                    : etiqueta(CENTROS_TOMA, biopsia.centroToma)
+                }
+              />
+              <Campo
+                label="Tipo de muestra"
+                valor={
+                  biopsia.tipoMuestra === "otro"
+                    ? biopsia.tipoMuestraOtro || "Otro"
+                    : etiqueta(TIPOS_MUESTRA, biopsia.tipoMuestra)
+                }
+              />
+              <Campo
+                label="Ubicación"
+                valor={
+                  [
+                    etiquetas(UBICACIONES, biopsia.ubicacion),
+                    biopsia.ojo === "OD" ? "Derecho" : biopsia.ojo === "OI" ? "Izquierdo" : biopsia.ojo === "AO" ? "Derecho e izquierdo" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(", ") || undefined
+                }
+              />
+              <Campo label="Bordes" valor={etiqueta(BORDES, biopsia.bordes)} />
+              <Campo
+                label="Color"
+                valor={
+                  [etiquetas(COLORES, biopsia.color), biopsia.colorOtro].filter(Boolean).join(", ") || undefined
+                }
+              />
+              <Campo
+                label="Tamaño"
+                valor={biopsia.tamano === "otro" ? biopsia.tamanoOtro || "Otro" : etiqueta(TAMANOS, biopsia.tamano)}
+              />
+              <Campo label="Altura" valor={etiqueta(ALTURAS, biopsia.altura)} />
+              <Campo
+                label="Cambios asociados"
+                valor={etiquetas(CAMBIOS_ASOCIADOS, biopsia.cambiosAsociados) || undefined}
+              />
+              <div className="sm:col-span-2">
+                <Campo
+                  label="Tratamientos previos de la lesión"
+                  valor={
+                    biopsia.tratamientosPrevios === true
+                      ? `Sí${biopsia.tratamientosPreviosCual ? `: ${biopsia.tratamientosPreviosCual}` : ""}`
+                      : biopsia.tratamientosPrevios === false
+                        ? "No"
+                        : undefined
+                  }
+                />
+              </div>
+            </dl>
+            {!biopsia.tipoBiopsia && !biopsia.tipoMuestra && !biopsia.bordes && biopsia.color.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Sin datos de la solicitud. La hoja se imprime con esas casillas en blanco para llenarlas a mano.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -356,6 +448,7 @@ export default function BiopsiaPanelPage() {
           )),
           idMedicoResponsable: biopsia.idMedicoResponsable,
           observaciones: biopsia.observaciones,
+          ...descriptoresAFormulario(biopsia),
         }}
         onSubmit={alEditarDatos}
         guardando={guardando}

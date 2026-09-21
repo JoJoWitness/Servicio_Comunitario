@@ -28,6 +28,7 @@ import type {
 import { BiopsiaBadge } from "./BiopsiaBadge";
 import { FormBiopsiaDialog } from "./FormBiopsiaDialog";
 import { VincularBiopsiaDialog } from "./VincularBiopsiaDialog";
+import { descriptoresDesdeFormulario } from "./descriptoresForm";
 
 /** Arma la biopsia de dominio a partir del formulario y de la nota. */
 export function biopsiaDesdeFormulario(
@@ -42,6 +43,7 @@ export function biopsiaDesdeFormulario(
     descripcionMacroscopica: v.descripcionMacroscopica ?? "",
     diagnosticoPresuntivo: v.diagnosticoPresuntivo ?? "",
     fechaToma: new Date(v.fechaToma),
+    ...descriptoresDesdeFormulario(v),
     estado: "tomada",
     observaciones: v.observaciones ?? "",
     notas: [],

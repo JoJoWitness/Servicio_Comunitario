@@ -38,7 +38,11 @@ const columnas = `
 	COALESCE(b.ojo, ''), b.tejido, b.descripcion_macroscopica, b.diagnostico_presuntivo, b.fecha_toma,
 	COALESCE(b.laboratorio, ''), b.fecha_envio, COALESCE(b.numero_patologia, ''),
 	COALESCE(b.resultado, ''), b.fecha_resultado, b.fecha_entrega,
-	b.estado, b.observaciones, b.eliminado, b.created_at, b.updated_at
+	b.estado, b.observaciones, b.eliminado, b.created_at, b.updated_at,
+	COALESCE(b.tipo_biopsia, ''), COALESCE(b.tipo_citologia, ''), b.centro_toma, b.centro_toma_otro,
+	COALESCE(b.tipo_muestra, ''), b.tipo_muestra_otro, b.ubicacion,
+	COALESCE(b.bordes, ''), b.color, b.color_otro, COALESCE(b.tamano, ''), b.tamano_otro,
+	COALESCE(b.altura, ''), b.cambios_asociados, b.tratamientos_previos, b.tratamientos_previos_cual
 `
 
 const desde = `
@@ -61,11 +65,18 @@ func leerBiopsia(f fila, b *Biopsia) error {
 		&b.Laboratorio, &b.FechaEnvio, &b.NumeroPatologia,
 		&b.Resultado, &b.FechaResultado, &b.FechaEntrega,
 		&b.Estado, &b.Observaciones, &b.Eliminado, &b.CreatedAt, &b.UpdatedAt,
+		&b.TipoBiopsia, &b.TipoCitologia, &b.CentroToma, &b.CentroTomaOtro,
+		&b.TipoMuestra, &b.TipoMuestraOtro, &b.Ubicacion,
+		&b.Bordes, &b.Color, &b.ColorOtro, &b.Tamano, &b.TamanoOtro,
+		&b.Altura, &b.CambiosAsociados, &b.TratamientosPrevios, &b.TratamientosPreviosCual,
 	); err != nil {
 		return err
 	}
 	u.ID = b.IDMedicoResponsable
 	b.MedicoResponsable = &u
+	b.Ubicacion = sinNil(b.Ubicacion)
+	b.Color = sinNil(b.Color)
+	b.CambiosAsociados = sinNil(b.CambiosAsociados)
 	return nil
 }
 
@@ -324,6 +335,23 @@ func (b *Biopsia) args() pgx.NamedArgs {
 		"estado":                   b.Estado,
 		"observaciones":            b.Observaciones,
 		"client_uuid":              nullSiVacio(b.ClientUUID),
+
+		"tipo_biopsia":              nullSiVacio(b.TipoBiopsia),
+		"tipo_citologia":            nullSiVacio(b.TipoCitologia),
+		"centro_toma":               b.CentroToma,
+		"centro_toma_otro":          b.CentroTomaOtro,
+		"tipo_muestra":              nullSiVacio(b.TipoMuestra),
+		"tipo_muestra_otro":         b.TipoMuestraOtro,
+		"ubicacion":                 sinNil(b.Ubicacion),
+		"bordes":                    nullSiVacio(b.Bordes),
+		"color":                     sinNil(b.Color),
+		"color_otro":                b.ColorOtro,
+		"tamano":                    nullSiVacio(b.Tamano),
+		"tamano_otro":               b.TamanoOtro,
+		"altura":                    nullSiVacio(b.Altura),
+		"cambios_asociados":         sinNil(b.CambiosAsociados),
+		"tratamientos_previos":      b.TratamientosPrevios,
+		"tratamientos_previos_cual": b.TratamientosPreviosCual,
 	}
 }
 
@@ -335,16 +363,25 @@ func (b *Biopsia) Create(db *pgxpool.Pool) error {
 	if err := b.ValidarEstado(); err != nil {
 		return err
 	}
+	if err := b.NormalizarDescriptores(); err != nil {
+		return err
+	}
 
 	query := `
 		INSERT INTO "Biopsia"
 			(id_paciente, id_medico_responsable, ojo, tejido, descripcion_macroscopica, diagnostico_presuntivo,
 			 fecha_toma, laboratorio, fecha_envio, numero_patologia, resultado, fecha_resultado, fecha_entrega,
-			 estado, observaciones, client_uuid)
+			 estado, observaciones, client_uuid,
+			 tipo_biopsia, tipo_citologia, centro_toma, centro_toma_otro, tipo_muestra, tipo_muestra_otro,
+			 ubicacion, bordes, color, color_otro, tamano, tamano_otro, altura, cambios_asociados,
+			 tratamientos_previos, tratamientos_previos_cual)
 		VALUES
 			(@id_paciente::uuid, @id_medico_responsable::uuid, @ojo, @tejido, @descripcion_macroscopica, @diagnostico_presuntivo,
 			 @fecha_toma, @laboratorio, @fecha_envio, @numero_patologia, @resultado, @fecha_resultado, @fecha_entrega,
-			 @estado, @observaciones, @client_uuid::uuid)
+			 @estado, @observaciones, @client_uuid::uuid,
+			 @tipo_biopsia, @tipo_citologia, @centro_toma, @centro_toma_otro, @tipo_muestra, @tipo_muestra_otro,
+			 @ubicacion, @bordes, @color, @color_otro, @tamano, @tamano_otro, @altura, @cambios_asociados,
+			 @tratamientos_previos, @tratamientos_previos_cual)
 		RETURNING id;
 	`
 	if err := db.QueryRow(context.Background(), query, b.args()).Scan(&b.ID); err != nil {
@@ -357,6 +394,9 @@ func (b *Biopsia) Create(db *pgxpool.Pool) error {
 // Update reescribe la biopsia. No toca id_paciente ni client_uuid.
 func (b *Biopsia) Update(db *pgxpool.Pool) error {
 	if err := b.ValidarEstado(); err != nil {
+		return err
+	}
+	if err := b.NormalizarDescriptores(); err != nil {
 		return err
 	}
 
@@ -376,6 +416,22 @@ func (b *Biopsia) Update(db *pgxpool.Pool) error {
 			fecha_entrega = @fecha_entrega,
 			estado = @estado,
 			observaciones = @observaciones,
+			tipo_biopsia = @tipo_biopsia,
+			tipo_citologia = @tipo_citologia,
+			centro_toma = @centro_toma,
+			centro_toma_otro = @centro_toma_otro,
+			tipo_muestra = @tipo_muestra,
+			tipo_muestra_otro = @tipo_muestra_otro,
+			ubicacion = @ubicacion,
+			bordes = @bordes,
+			color = @color,
+			color_otro = @color_otro,
+			tamano = @tamano,
+			tamano_otro = @tamano_otro,
+			altura = @altura,
+			cambios_asociados = @cambios_asociados,
+			tratamientos_previos = @tratamientos_previos,
+			tratamientos_previos_cual = @tratamientos_previos_cual,
 			updated_at = NOW()
 		WHERE id = @id AND eliminado = FALSE;
 	`

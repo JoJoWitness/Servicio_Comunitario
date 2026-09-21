@@ -35,6 +35,7 @@ import { motivoBloqueo } from "@/components/EstadoNota";
 import { useCrearBiopsia } from "@/hooks/useBiopsias";
 // import { TEJIDOS_BIOPSIA } from "@/features/biopsias/tejidos"; // bloque de biopsia comentado
 import type { Biopsia } from "@/domain/models";
+import { SIN_DESCRIPTORES } from "@/features/biopsias/descriptoresForm";
 import {
   NotaFormSchema,
   normalizarAnestesia,
@@ -411,6 +412,7 @@ export default function FormNotaPage() {
               descripcionMacroscopica: biopsiaDescripcion.trim(),
               diagnosticoPresuntivo: data.dxPostOperatorio || data.dxPreOperatorio || "",
               fechaToma: new Date(data.fechaComienzo),
+              ...SIN_DESCRIPTORES,
               estado: "tomada",
               observaciones: "",
               notas: [],
