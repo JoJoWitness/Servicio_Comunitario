@@ -1,7 +1,13 @@
 .git
+.env
+.env.*
 tmp
 app/tmp
 build-errors.log
 main
-.env
 *.md
+*_test.go
+.air.toml
+insomnia_collection.json
+Dockerfile
+.dockerignore

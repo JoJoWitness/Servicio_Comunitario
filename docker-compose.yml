@@ -1,0 +1,117 @@
+# Levanta el sistema completo: PostgreSQL, la API y la versión web del frontend.
+#
+#   cp .env.example .env      # ajustar la clave de la base y el modo
+#   docker compose up --build
+#
+# Frontend en http://localhost:3000, API en http://localhost:8080.
+#
+# Sin ENVIRONMENT=PROD en el .env la API arranca en modo desarrollo: borra la
+# base en cada arranque y carga las cuentas y pacientes de prueba. Para un
+# despliegue real hay que poner ENVIRONMENT=PROD (ver .env.example).
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-notas_operatorias}
+      POSTGRES_USER: ${POSTGRES_USER:-notas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Publicado solo en loopback, para conectarse con psql o un cliente gráfico
+    # desde la máquina. Quitar si no hace falta.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-notas} -d ${POSTGRES_DB:-notas_operatorias}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3 local para los adjuntos (en Railway lo reemplaza el Bucket). Versity
+  # Gateway con backend POSIX: cada carpeta de /data es un bucket, así que el
+  # mkdir del arranque lo crea sin necesitar un contenedor de inicialización.
+  s3:
+    image: versity/versitygw:latest
+    restart: unless-stopped
+    entrypoint: >
+      /bin/sh -c "mkdir -p /data/${S3_BUCKET:-notas-adjuntos} &&
+      exec versitygw --port :9000 --health /health posix /data"
+    environment:
+      ROOT_ACCESS_KEY: ${S3_ACCESS_KEY:-notas}
+      ROOT_SECRET_KEY: ${S3_SECRET_KEY:-notas12345}
+      VGW_REGION: us-east-1
+    volumes:
+      - s3data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+    environment:
+      DATABASE_URI: postgres://${POSTGRES_USER:-notas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-notas_operatorias}
+      PORT: "8080"
+      # Vacío = desarrollo (base reconstruida + datos de prueba).
+      ENVIRONMENT: ${ENVIRONMENT:-}
+      DATOS_PRUEBA: ${DATOS_PRUEBA:-}
+      # Los orígenes de vite y de Tauri ya vienen por defecto en routes/main.go.
+      # Aquí se suma el del frontend web de este compose y lo que ponga el .env.
+      ALLOWED_ORIGINS: http://localhost:3000${ALLOWED_ORIGINS:+,${ALLOWED_ORIGINS}}
+      COOKIE_CROSS_SITE: ${COOKIE_CROSS_SITE:-}
+      # Bucket de adjuntos. Mismos nombres que en Railway (ver .env.example).
+      AWS_ENDPOINT_URL: http://s3:9000
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-notas}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-notas12345}
+      AWS_REGION: us-east-1
+      BUCKET_NAME: ${S3_BUCKET:-notas-adjuntos}
+      AWS_S3_URL_STYLE: path
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      API_UPSTREAM: http://server:8080
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+  # Respaldo de la base al bucket. No arranca con `up`: se lanza a mano con
+  #   docker compose run --rm backup
+  # En Railway corre como cron (ver backup/railway.json).
+  backup:
+    build: ./backup
+    profiles: ["backup"]
+    depends_on:
+      db:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+    environment:
+      DATABASE_URI: postgres://${POSTGRES_USER:-notas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-notas_operatorias}
+      AWS_ENDPOINT_URL: http://s3:9000
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-notas}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-notas12345}
+      AWS_REGION: us-east-1
+      BUCKET_NAME: ${S3_BUCKET:-notas-adjuntos}
+      AWS_S3_URL_STYLE: path
+      BACKUP_PREFIX: ${BACKUP_PREFIX:-respaldos}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+
+volumes:
+  pgdata:
+  s3data:

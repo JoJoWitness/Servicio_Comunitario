@@ -230,17 +230,25 @@ ALTER TABLE "Nota_Operatoria"
 
 -- Imagen de la cédula del paciente (v0.4.0), para imprimirla en la hoja de la
 -- nota operatoria donde antes se pegaba la fotocopia. Va en tabla aparte para
--- que ningún listado de pacientes arrastre el binario, y en la base y no en
--- disco porque el hosting no conserva archivos entre despliegues. Una sola por
--- paciente: la cédula es del paciente, no de la cirugía.
+-- que ningún listado de pacientes arrastre el binario. Una sola por paciente:
+-- la cédula es del paciente, no de la cirugía.
+--
+-- Desde v0.6.0 los bytes viven en el bucket S3 (services/storage) y la fila
+-- guarda la "clave" del objeto; "imagen" queda NULL. Sin bucket configurado
+-- (desarrollo sin S3) se sigue guardando en "imagen", y al arrancar con bucket
+-- el servidor mueve lo que haya quedado en la base (MigrarCedulasAlBucket).
 CREATE TABLE IF NOT EXISTS "Paciente_Cedula" (
 	"id_paciente"  UUID PRIMARY KEY REFERENCES "Paciente"("id"),
-	"imagen"       BYTEA NOT NULL,
+	"imagen"       BYTEA,
+	"clave"        VARCHAR(512),
 	"content_type" VARCHAR(50) NOT NULL,
 	"tamano_bytes" INTEGER NOT NULL,
 	"subida_por"   UUID NOT NULL REFERENCES "Usuarios"("id"),
 	"subida_en"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Bases creadas con v0.4.0/v0.5.0: la imagen era obligatoria y no había clave.
+ALTER TABLE "Paciente_Cedula" ALTER COLUMN "imagen" DROP NOT NULL;
+ALTER TABLE "Paciente_Cedula" ADD COLUMN IF NOT EXISTS "clave" VARCHAR(512);
 
 
 -- =====================================================================

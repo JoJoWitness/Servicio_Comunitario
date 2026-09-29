@@ -1,0 +1,49 @@
+# Sirve el bundle de Vite y reenvía /api/* a la API Go.
+# ${API_UPSTREAM} lo sustituye el entrypoint de la imagen de nginx al arrancar
+# (valor por defecto en el Dockerfile: http://server:8080).
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    # Los adjuntos de pacientes pesan hasta 20 MB más el sobre del multipart.
+    client_max_body_size 25m;
+
+    # /api/notas/1 -> http://server:8080/notas/1. El upstream va en una variable
+    # para que nginx lo vuelva a resolver (ver 05-resolver.envsh); con variable no
+    # se recorta el prefijo solo, de ahí el rewrite.
+    location /api/ {
+        resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+        set $api_upstream ${API_UPSTREAM};
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass $api_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        # Los adjuntos van al bucket sin pasar por disco: no se bufferizan.
+        proxy_request_buffering off;
+    }
+
+    # Los assets llevan hash en el nombre: se pueden cachear indefinidamente.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA: cualquier ruta que no sea un archivo cae en index.html y decide
+    # react-router.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

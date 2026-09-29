@@ -362,7 +362,13 @@ Responde `201` con `{"tiene_cedula": true}`; `400` si el formato no es imagen; `
 pesa más de 1 MB; `404` si el paciente no existe. Reemplaza la anterior si la había.
 
 ### `DELETE /pacientes/{id}/cedula` — DeleteCedula
-**Sin body.** Quita la imagen. Responde `204`.
+**Sin body.** Quita la imagen (de la base y del bucket). Responde `204`.
+
+> Desde v0.6.0 la imagen se guarda en el bucket S3 del servidor (`BUCKET_NAME`, ver
+> `.env.example`) con la clave `cedulas/<id_paciente>.<ext>`; en la base queda solo la clave.
+> Sin bucket configurado se guarda en la base como antes, y al arrancar con bucket el servidor
+> mueve allá lo que hubiera quedado. La API no cambia: el cliente sigue hablando con estos
+> tres endpoints.
 
 > Toda lectura de paciente trae `"tiene_cedula": true|false`; el binario nunca viaja en
 > el JSON. En `POST /sync`, cada paciente del lote puede traer `cedula_base64` (sin prefijo

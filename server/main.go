@@ -9,6 +9,7 @@ import (
 
 	"server/config"
 	"server/models"
+	"server/models/pacientes"
 	"server/routes"
 
 	"github.com/gorilla/mux"
@@ -20,14 +21,17 @@ func main() {
 	// la base se reconstruye desde cero en cada arranque.
 	enProduccion := os.Getenv("ENVIRONMENT") == "PROD"
 
+	// El .env es una comodidad para correr el binario a mano; dentro de Docker
+	// las variables llegan por el entorno y no hay archivo, y eso no es un
+	// error: si falta algo, config.InitDB se queja de DATABASE_URI.
 	if !enProduccion {
-		err := godotenv.Load(".env")
-		if err != nil {
-			log.Fatal("Error loading .env file")
+		if err := godotenv.Load(".env"); err != nil {
+			log.Println("Sin .env: se usan las variables del entorno")
 		}
 	}
 
 	config.InitDB()
+	config.InitStorage()
 
 	// Empezar de cero es una comodidad de desarrollo, no algo que se le pueda
 	// hacer a la base del servicio: ahí viven las cuentas y las notas
@@ -56,6 +60,10 @@ func main() {
 	case os.Getenv("DATOS_PRUEBA") == "true":
 		models.LoadSampleDataIdempotente(config.PsqlDB)
 	}
+
+	// Las fotos de cédula guardadas en la base antes de tener bucket se mueven
+	// allá al arrancar. Sin bucket no hace nada.
+	pacientes.MigrarCedulasAlBucket(config.PsqlDB)
 
 	router := mux.NewRouter()
 	routes.Init(router)

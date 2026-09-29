@@ -1,0 +1,11 @@
+# El entrypoint de la imagen de nginx hace `source` de los *.envsh ejecutables
+# de /docker-entrypoint.d antes de pasar las plantillas por envsubst, así que
+# lo que se exporte aquí llega a default.conf.template.
+#
+# nginx resuelve el nombre del upstream una sola vez al arrancar. Si el
+# contenedor de la API se recrea con otra IP, nginx sigue apuntando a la vieja
+# y responde 502 hasta que alguien lo reinicie. Con `resolver` y una variable
+# en proxy_pass vuelve a preguntar; el DNS interno cambia según el motor
+# (127.0.0.11 en Docker, la puerta de enlace en Podman), así que se lee del
+# propio contenedor.
+export NGINX_RESOLVER="${NGINX_RESOLVER:-$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf)}"
