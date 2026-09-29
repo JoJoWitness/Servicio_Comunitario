@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "Nota_Operatoria" (
 	"ojo" VARCHAR(3) CHECK ("ojo" IN ('OD', 'OI', 'AO')),
 	"estado" VARCHAR(20) NOT NULL DEFAULT 'realizada'
 		CHECK ("estado" IN ('realizada', 'diferida')),
-    "tipo_lente" VARCHAR(255),
+	"tipo_lente" VARCHAR(255),
 	"created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	-- Identificador que genera el dispositivo antes de tener red. Es lo que
 	-- vuelve idempotente la subida: si el médico redactó la nota sin conexión y
@@ -138,29 +138,82 @@ CREATE TABLE IF NOT EXISTS "Procedimiento_Tecnica" (
 
 
 
-ALTER TABLE "Nota_Operatoria"
-ADD FOREIGN KEY("id_paciente") REFERENCES "Paciente"("id")
-ON UPDATE NO ACTION ON DELETE NO ACTION;
 
-ALTER TABLE "Nota_Operatoria"
-ADD FOREIGN KEY("id_medico_encargado") REFERENCES "Usuarios"("id")
-ON UPDATE NO ACTION ON DELETE NO ACTION;
+-- =====================================================================
+-- Llaves foráneas de las tablas originales
+--
+-- Antes eran seis ALTER TABLE ... ADD FOREIGN KEY sueltos. Postgres no
+-- rechaza una FK repetida: le da otro nombre (_fkey1, _fkey2...) y la
+-- agrega, así que cada arranque del servidor sumaba seis restricciones
+-- idénticas y cada escritura en esas tablas las comprobaba todas.
+-- =====================================================================
 
-ALTER TABLE "Equipo_Quirurgico"
-ADD FOREIGN KEY("id_nota_operatoria") REFERENCES "Nota_Operatoria"("id")
-ON UPDATE NO ACTION ON DELETE NO ACTION;
+-- 1) Quitar las copias que hayan dejado los arranques anteriores. Entre FK
+-- con la misma definición sobre la misma tabla se conserva la más antigua
+-- (la de menor oid, que es la del primer despliegue) y se borran las demás.
+-- Como siempre queda una igual, la integridad no se pierde en ningún momento.
+DO $$
+DECLARE
+	r RECORD;
+BEGIN
+	FOR r IN
+		SELECT c.conrelid::regclass AS tabla, c.conname
+		FROM pg_constraint c
+		JOIN pg_namespace n ON n.oid = c.connamespace
+		WHERE c.contype = 'f'
+		  AND n.nspname = current_schema()
+		  AND EXISTS (
+			SELECT 1 FROM pg_constraint o
+			WHERE o.contype = 'f'
+			  AND o.conrelid = c.conrelid
+			  AND o.oid < c.oid
+			  AND pg_get_constraintdef(o.oid) = pg_get_constraintdef(c.oid)
+		  )
+	LOOP
+		RAISE NOTICE 'Quitando FK duplicada % en %', r.conname, r.tabla;
+		EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.tabla, r.conname);
+	END LOOP;
+END
+$$;
 
-ALTER TABLE "Equipo_Quirurgico"
-ADD FOREIGN KEY("id_medico") REFERENCES "Usuarios"("id")
-ON UPDATE NO ACTION ON DELETE NO ACTION;
-
-ALTER TABLE "Procedimiento_Tecnica"
-ADD FOREIGN KEY("id_procedimiento") REFERENCES "Procedimientos"("id")
-ON UPDATE NO ACTION ON DELETE CASCADE;
-
-ALTER TABLE "Procedimiento_Tecnica"
-ADD FOREIGN KEY("id_tecnica") REFERENCES "Intervencion"("id")
-ON UPDATE NO ACTION ON DELETE CASCADE;
+-- 2) Crear cada FK solo si la columna todavía no tiene una hacia esa tabla.
+-- Se busca por columna y tabla destino, no por nombre, para reconocer
+-- también las que se crearon con otro nombre.
+DO $$
+DECLARE
+	fk RECORD;
+BEGIN
+	FOR fk IN
+		SELECT * FROM (VALUES
+			('Nota_Operatoria',       'id_paciente',         'Paciente',       'id', 'NO ACTION'),
+			('Nota_Operatoria',       'id_medico_encargado', 'Usuarios',       'id', 'NO ACTION'),
+			('Equipo_Quirurgico',     'id_nota_operatoria',  'Nota_Operatoria','id', 'NO ACTION'),
+			('Equipo_Quirurgico',     'id_medico',           'Usuarios',       'id', 'NO ACTION'),
+			('Procedimiento_Tecnica', 'id_procedimiento',    'Procedimientos', 'id', 'CASCADE'),
+			('Procedimiento_Tecnica', 'id_tecnica',          'Intervencion',   'id', 'CASCADE')
+		) AS t(tabla, columna, ref_tabla, ref_columna, al_borrar)
+	LOOP
+		IF NOT EXISTS (
+			SELECT 1
+			FROM pg_constraint c
+			JOIN pg_attribute a
+			  ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+			WHERE c.contype = 'f'
+			  AND c.conrelid  = format('%I', fk.tabla)::regclass
+			  AND c.confrelid = format('%I', fk.ref_tabla)::regclass
+			  AND cardinality(c.conkey) = 1
+			  AND a.attname = fk.columna
+		) THEN
+			EXECUTE format(
+				'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (%I) REFERENCES %I (%I) '
+				'ON UPDATE NO ACTION ON DELETE %s',
+				fk.tabla, fk.tabla || '_' || fk.columna || '_fkey',
+				fk.columna, fk.ref_tabla, fk.ref_columna, fk.al_borrar
+			);
+		END IF;
+	END LOOP;
+END
+$$;
 
 
 
@@ -376,3 +429,26 @@ ALTER TABLE "Paciente"
 	ADD COLUMN IF NOT EXISTS "estudios_imagenes" TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE "Paciente"
 	ADD COLUMN IF NOT EXISTS "hallazgo_estudios" TEXT NOT NULL DEFAULT '';
+
+
+-- =====================================================================
+-- Índices de llaves foráneas
+--
+-- Postgres no indexa por su cuenta las columnas que apuntan a otra tabla.
+-- Sin estos, "las notas de este paciente" o "el equipo de esta nota"
+-- recorren la tabla completa, y borrar o cambiar una fila referenciada
+-- también. Las de Biopsia y Nota_Biopsia ya están más arriba.
+-- =====================================================================
+CREATE INDEX IF NOT EXISTS "Nota_Operatoria_paciente_idx"
+	ON "Nota_Operatoria" ("id_paciente");
+CREATE INDEX IF NOT EXISTS "Nota_Operatoria_medico_idx"
+	ON "Nota_Operatoria" ("id_medico_encargado");
+CREATE INDEX IF NOT EXISTS "Equipo_Quirurgico_nota_idx"
+	ON "Equipo_Quirurgico" ("id_nota_operatoria");
+CREATE INDEX IF NOT EXISTS "Equipo_Quirurgico_medico_idx"
+	ON "Equipo_Quirurgico" ("id_medico");
+-- id_procedimiento ya está cubierto: es la primera columna de la llave primaria.
+CREATE INDEX IF NOT EXISTS "Procedimiento_Tecnica_tecnica_idx"
+	ON "Procedimiento_Tecnica" ("id_tecnica");
+CREATE INDEX IF NOT EXISTS "Biopsia_medico_idx"
+	ON "Biopsia" ("id_medico_responsable");
