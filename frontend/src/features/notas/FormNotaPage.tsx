@@ -168,6 +168,7 @@ export default function FormNotaPage() {
     reset,
     getValues,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<NotaFormValues>({
     resolver: zodResolver(NotaFormSchema),
@@ -922,7 +923,8 @@ export default function FormNotaPage() {
                   }
                   onValueChange={(v) => {
                     setValue("esElectiva", v === "electiva", { shouldValidate: true });
-                    setValue("esEmergencia", v === "emergencia", { shouldValidate: true });
+                    setValue("esEmergencia", v === "emergencia", { shouldValidate: true })
+                    void trigger(["esElectiva", "esEmergencia"]);
                   }}
                   className="grid grid-cols-1 sm:grid-cols-2"
                   options={[

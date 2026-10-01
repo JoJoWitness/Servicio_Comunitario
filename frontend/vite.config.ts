@@ -13,7 +13,7 @@ export default defineConfig(async ({ mode }) => {
   // proxy: se cae al backend desplegado y el servidor local nunca recibe nada.
   const env = loadEnv(mode, process.cwd(), "");
   const backend =
-    env.VITE_API_URL ?? "https://servicio-comunitario-7ye5.onrender.com";
+    env.VITE_API_URL ?? "serviciocomunitario-production.up.railway.app";
 
   return {
   plugins: [react(), tailwindcss()],
