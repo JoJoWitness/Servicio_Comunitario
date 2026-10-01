@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "serviciocomunitario-production.up.railway.app/:path*"
+      "destination": "https://serviciocomunitario-production.up.railway.app/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

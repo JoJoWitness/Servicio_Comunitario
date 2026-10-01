@@ -19,7 +19,7 @@
  * su configuración. El binario de Tauri sí necesita la URL absoluta (no hay
  * proxy delante), y la recibe por VITE_API_URL en el workflow de release.
  */
-const API_POR_DEFECTO = "serviciocomunitario-production.up.railway.app";
+const API_POR_DEFECTO = "https://serviciocomunitario-production.up.railway.app";
 
 function baseEnProduccion(): string {
   const configurada = import.meta.env.VITE_API_URL as string | undefined;
