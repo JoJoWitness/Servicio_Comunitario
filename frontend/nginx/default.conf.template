@@ -20,7 +20,7 @@ server {
     # para que nginx lo vuelva a resolver (ver 05-resolver.envsh); con variable no
     # se recorta el prefijo solo, de ahí el rewrite.
     location /api/ {
-        resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+        resolver ${NGINX_RESOLVER} valid=10s;
         set $api_upstream ${API_UPSTREAM};
         rewrite ^/api/(.*)$ /$1 break;
         proxy_pass $api_upstream;
