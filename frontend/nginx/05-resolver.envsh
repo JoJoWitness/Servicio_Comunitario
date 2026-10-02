@@ -8,4 +8,10 @@
 # en proxy_pass vuelve a preguntar; el DNS interno cambia según el motor
 # (127.0.0.11 en Docker, la puerta de enlace en Podman), así que se lee del
 # propio contenedor.
-export NGINX_RESOLVER="${NGINX_RESOLVER:-$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf)}"
+_resolver="${NGINX_RESOLVER:-$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf)}"
+case "$_resolver" in
+  \[*) ;;
+  *:*) _resolver="[$_resolver]" ;;
+esac
+export NGINX_RESOLVER="$_resolver"
+unset _resolver
